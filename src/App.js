@@ -72,8 +72,7 @@ const DriverVerificationApp = () => {
 
     setLoading(true);
     try {
-      // TODO: Implement email verification service
-      const response = await fetch('/api/verification/send-code', {
+      const response = await fetch('/.netlify/functions/send-verification-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -82,14 +81,21 @@ const DriverVerificationApp = () => {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to send verification email');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send verification email');
+      }
       
       setCurrentStep('email-verification');
       setError('');
+      
+      // In development, show the code in console
+      if (data.debugCode) {
+        console.log('Verification code (dev only):', data.debugCode);
+      }
     } catch (err) {
-      // Mock success for development
-      setCurrentStep('email-verification');
-      setError('');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -103,8 +109,7 @@ const DriverVerificationApp = () => {
 
     setLoading(true);
     try {
-      // TODO: Verify code with backend
-      const response = await fetch('/api/verification/verify-code', {
+      const response = await fetch('/.netlify/functions/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -114,13 +119,16 @@ const DriverVerificationApp = () => {
         })
       });
 
-      if (!response.ok) throw new Error('Invalid verification code');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid verification code');
+      }
       
       // Check driver status after email verification
       await checkDriverStatus();
     } catch (err) {
-      // Mock success for development
-      await checkDriverStatus();
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -128,8 +136,7 @@ const DriverVerificationApp = () => {
 
   const checkDriverStatus = async () => {
     try {
-      // TODO: Check against driver verification database
-      const response = await fetch(`/api/drivers/status?email=${encodeURIComponent(driverEmail)}`);
+      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
       
       if (response.ok) {
         const driverData = await response.json();
@@ -141,24 +148,9 @@ const DriverVerificationApp = () => {
       
       setCurrentStep('driver-status');
     } catch (err) {
-      // Mock driver status for development
-      const mockStatuses = {
-        'john.doe@example.com': {
-          name: 'John Doe',
-          status: 'verified',
-          documents: {
-            license: { valid: true, expiryDate: '2027-03-20' },
-            poa1: { valid: true, expiryDate: '2025-09-15', type: 'Bank Statement' },
-            poa2: { valid: false, expiryDate: '2025-06-15', type: 'Utility Bill' },
-            dvlaCheck: { valid: false, lastCheck: '2025-06-20' }
-          }
-        },
-        'new.driver@example.com': {
-          status: 'new'
-        }
-      };
-
-      setDriverStatus(mockStatuses[driverEmail] || { status: 'new' });
+      console.error('Error checking driver status:', err);
+      // Fallback to new driver
+      setDriverStatus({ status: 'new' });
       setCurrentStep('driver-status');
     }
   };
