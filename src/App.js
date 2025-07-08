@@ -189,10 +189,9 @@ const DriverVerificationApp = () => {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to create verification session');
-           
-      // Redirect to Idenfy verification
-      window.location.href = redirectUrl;
+      // TODO: Get redirect URL from response and redirect to Idenfy
+      // const { redirectUrl } = await response.json();
+      // window.location.href = redirectUrl;
       
     } catch (err) {
       // Mock for development
