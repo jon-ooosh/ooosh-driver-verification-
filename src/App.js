@@ -175,19 +175,19 @@ const DriverVerificationApp = () => {
     setLoading(true);
     try {
       // TODO: Create Idenfy verification session
-      const response = await fetch('/api/idenfy/create-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: `${jobId}-${driverEmail}`,
-          firstName: driverStatus?.name?.split(' ')[0] || '',
-          lastName: driverStatus?.name?.split(' ').slice(1).join(' ') || '',
-          email: driverEmail,
-          callbackUrl: `${window.location.origin}/api/idenfy/webhook`,
-          successUrl: `${window.location.origin}?job=${jobId}&status=processing`,
-          errorUrl: `${window.location.origin}?job=${jobId}&status=failed`
-        })
-      });
+      // const response = await fetch('/api/idenfy/create-session', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     clientId: `${jobId}-${driverEmail}`,
+      //     firstName: driverStatus?.name?.split(' ')[0] || '',
+      //     lastName: driverStatus?.name?.split(' ').slice(1).join(' ') || '',
+      //     email: driverEmail,
+      //     callbackUrl: `${window.location.origin}/api/idenfy/webhook`,
+      //     successUrl: `${window.location.origin}?job=${jobId}&status=processing`,
+      //     errorUrl: `${window.location.origin}?job=${jobId}&status=failed`
+      //   })
+      // });
 
       // TODO: Get redirect URL from response and redirect to Idenfy
       // const { redirectUrl } = await response.json();
