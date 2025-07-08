@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, User, Calendar, FileText, Shield, Mail, Clock, XCircle, Phone, Camera } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
