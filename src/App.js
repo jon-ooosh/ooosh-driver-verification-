@@ -190,9 +190,7 @@ const DriverVerificationApp = () => {
       });
 
       if (!response.ok) throw new Error('Failed to create verification session');
-      
-      const { authToken, redirectUrl } = await response.json();
-      
+           
       // Redirect to Idenfy verification
       window.location.href = redirectUrl;
       
@@ -295,10 +293,6 @@ const DriverVerificationApp = () => {
     if (!dvlaData.driverName || !dvlaData.licenseNumber || !dvlaData.checkCode) {
       return false;
     }
-    
-    // Check name similarity (basic check)
-    const extractedName = dvlaData.driverName.toLowerCase().replace(/mr |mrs |miss |ms /, '');
-    const expectedName = driverStatus?.name?.toLowerCase() || '';
     
     // TODO: Implement more sophisticated name matching
     return true; // For now, accept all valid extractions
