@@ -1,15 +1,18 @@
-// Netlify Function: Verify Email Code
-const mysql = require('mysql2/promise');
+// Netlify Function: Verify Email Code (Google Sheets)
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
 
-// Database connection
-const createConnection = async () => {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+// Initialize Google Sheets
+const initSheet = async () => {
+  const serviceAccountAuth = new JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/spreadsheets']
   });
+
+  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+  await doc.loadInfo();
+  return doc;
 };
 
 exports.handler = async (event, context) => {
@@ -40,31 +43,34 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const connection = await createConnection();
+    const doc = await initSheet();
+
+    // Get email verifications sheet
+    const emailSheet = doc.sheetsByTitle['EmailVerifications'];
+    if (!emailSheet) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'No verification codes found' })
+      };
+    }
 
     // Check verification code
-    const [codeRows] = await connection.execute(
-      `SELECT id, expires_at, verified 
-       FROM email_verifications 
-       WHERE email = ? AND code = ? AND job_id = ? 
-       ORDER BY created_at DESC 
-       LIMIT 1`,
-      [email, code, jobId]
-    );
+    const rows = await emailSheet.getRows();
+    const verification = rows
+      .filter(row => row.get('email') === email && 
+                    row.get('code') === code && 
+                    row.get('job_id') === jobId)
+      .sort((a, b) => new Date(b.get('created_at')) - new Date(a.get('created_at')))[0];
 
-    if (codeRows.length === 0) {
-      await connection.end();
+    if (!verification) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Invalid verification code' })
       };
     }
 
-    const verification = codeRows[0];
-
     // Check if already verified
-    if (verification.verified) {
-      await connection.end();
+    if (verification.get('verified') === 'TRUE') {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Code already used' })
@@ -73,10 +79,9 @@ exports.handler = async (event, context) => {
 
     // Check if expired
     const now = new Date();
-    const expiresAt = new Date(verification.expires_at);
+    const expiresAt = new Date(verification.get('expires_at'));
     
     if (now > expiresAt) {
-      await connection.end();
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'Verification code expired' })
@@ -84,32 +89,38 @@ exports.handler = async (event, context) => {
     }
 
     // Mark code as verified
-    await connection.execute(
-      'UPDATE email_verifications SET verified = TRUE WHERE id = ?',
-      [verification.id]
-    );
+    verification.set('verified', 'TRUE');
+    await verification.save();
 
     // Create or update driver record
-    let driverId;
-    
-    // Check if driver already exists
-    const [driverRows] = await connection.execute(
-      'SELECT id FROM drivers WHERE email = ?',
-      [email]
-    );
-
-    if (driverRows.length > 0) {
-      driverId = driverRows[0].id;
-    } else {
-      // Create new driver
-      const [insertResult] = await connection.execute(
-        'INSERT INTO drivers (email) VALUES (?)',
-        [email]
-      );
-      driverId = insertResult.insertId;
+    let driversSheet = doc.sheetsByTitle['Drivers'];
+    if (!driversSheet) {
+      driversSheet = await doc.addSheet({ 
+        title: 'Drivers',
+        headerValues: ['id', 'email', 'name', 'phone', 'created_at', 'updated_at']
+      });
     }
 
-    await connection.end();
+    let driverId;
+    const driverRows = await driversSheet.getRows();
+    const existingDriver = driverRows.find(row => row.get('email') === email);
+
+    if (existingDriver) {
+      driverId = existingDriver.get('id');
+      existingDriver.set('updated_at', new Date().toISOString());
+      await existingDriver.save();
+    } else {
+      // Generate new driver ID
+      driverId = Date.now().toString();
+      await driversSheet.addRow({
+        id: driverId,
+        email: email,
+        name: '',
+        phone: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    }
 
     return {
       statusCode: 200,
