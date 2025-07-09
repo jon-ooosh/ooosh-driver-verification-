@@ -1,15 +1,18 @@
-// Netlify Function: Get Driver Status
-const mysql = require('mysql2/promise');
+// Netlify Function: Get Driver Status (Google Sheets)
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
 
-// Database connection
-const createConnection = async () => {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+// Initialize Google Sheets
+const initSheet = async () => {
+  const serviceAccountAuth = new JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/spreadsheets']
   });
+
+  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+  await doc.loadInfo();
+  return doc;
 };
 
 exports.handler = async (event, context) => {
@@ -31,16 +34,11 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const connection = await createConnection();
+    const doc = await initSheet();
 
-    // Get driver info
-    const [driverRows] = await connection.execute(
-      'SELECT id, email, name, phone FROM drivers WHERE email = ?',
-      [email]
-    );
-
-    if (driverRows.length === 0) {
-      await connection.end();
+    // Get drivers sheet
+    const driversSheet = doc.sheetsByTitle['Drivers'];
+    if (!driversSheet) {
       return {
         statusCode: 200,
         headers: {
@@ -55,88 +53,85 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const driver = driverRows[0];
+    // Find driver
+    const driverRows = await driversSheet.getRows();
+    const driver = driverRows.find(row => row.get('email') === email);
 
-    // Get latest verification status for this driver
-    const [verificationRows] = await connection.execute(
-      `SELECT 
-        status,
-        license_valid,
-        license_expiry,
-        poa1_valid,
-        poa1_type,
-        poa1_expiry,
-        poa2_valid,
-        poa2_type,
-        poa2_expiry,
-        dvla_check_valid,
-        dvla_check_date,
-        points_count,
-        insurance_approved,
-        created_at,
-        updated_at
-       FROM driver_verifications 
-       WHERE driver_id = ? 
-       ORDER BY updated_at DESC 
-       LIMIT 1`,
-      [driver.id]
-    );
+    if (!driver) {
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        },
+        body: JSON.stringify({ 
+          status: 'new',
+          message: 'Driver not found in system'
+        })
+      };
+    }
 
-    await connection.end();
-
-    // Build response
+    // Build basic response
     const response = {
-      id: driver.id,
-      name: driver.name,
-      email: driver.email,
-      phone: driver.phone,
+      id: driver.get('id'),
+      name: driver.get('name') || null,
+      email: driver.get('email'),
+      phone: driver.get('phone') || null,
       status: 'new'
     };
 
-    if (verificationRows.length > 0) {
-      const verification = verificationRows[0];
-      
-      // Determine overall status
-      const hasValidDocs = verification.license_valid && 
-                          verification.poa1_valid && 
-                          verification.poa2_valid;
-      
-      const hasDVLA = verification.dvla_check_valid;
-      
-      if (hasValidDocs && hasDVLA && verification.insurance_approved) {
-        response.status = 'verified';
-      } else if (verification.status === 'rejected') {
-        response.status = 'rejected';
-      } else {
-        response.status = 'partial';
-      }
+    // Get verification status if exists
+    const verificationsSheet = doc.sheetsByTitle['DriverVerifications'];
+    if (verificationsSheet) {
+      const verificationRows = await verificationsSheet.getRows();
+      const latestVerification = verificationRows
+        .filter(row => row.get('driver_id') === driver.get('id'))
+        .sort((a, b) => new Date(b.get('updated_at')) - new Date(a.get('updated_at')))[0];
 
-      // Add document details
-      response.documents = {
-        license: {
-          valid: verification.license_valid,
-          expiryDate: verification.license_expiry
-        },
-        poa1: {
-          valid: verification.poa1_valid,
-          type: verification.poa1_type,
-          expiryDate: verification.poa1_expiry
-        },
-        poa2: {
-          valid: verification.poa2_valid,
-          type: verification.poa2_type,
-          expiryDate: verification.poa2_expiry
-        },
-        dvlaCheck: {
-          valid: verification.dvla_check_valid,
-          lastCheck: verification.dvla_check_date
+      if (latestVerification) {
+        // Determine overall status
+        const hasValidDocs = latestVerification.get('license_valid') === 'TRUE' && 
+                            latestVerification.get('poa1_valid') === 'TRUE' && 
+                            latestVerification.get('poa2_valid') === 'TRUE';
+        
+        const hasDVLA = latestVerification.get('dvla_check_valid') === 'TRUE';
+        
+        if (hasValidDocs && hasDVLA && latestVerification.get('insurance_approved') === 'TRUE') {
+          response.status = 'verified';
+        } else if (latestVerification.get('status') === 'rejected') {
+          response.status = 'rejected';
+        } else {
+          response.status = 'partial';
         }
-      };
 
-      // Add additional info
-      response.pointsCount = verification.points_count;
-      response.insuranceApproved = verification.insurance_approved;
-      response.lastUpdated = verification.updated_at;
+        // Add document details
+        response.documents = {
+          license: {
+            valid: latestVerification.get('license_valid') === 'TRUE',
+            expiryDate: latestVerification.get('license_expiry') || null
+          },
+          poa1: {
+            valid: latestVerification.get('poa1_valid') === 'TRUE',
+            type: latestVerification.get('poa1_type') || null,
+            expiryDate: latestVerification.get('poa1_expiry') || null
+          },
+          poa2: {
+            valid: latestVerification.get('poa2_valid') === 'TRUE',
+            type: latestVerification.get('poa2_type') || null,
+            expiryDate: latestVerification.get('poa2_expiry') || null
+          },
+          dvlaCheck: {
+            valid: latestVerification.get('dvla_check_valid') === 'TRUE',
+            lastCheck: latestVerification.get('dvla_check_date') || null
+          }
+        };
+
+        // Add additional info
+        response.pointsCount = parseInt(latestVerification.get('points_count')) || 0;
+        response.insuranceApproved = latestVerification.get('insurance_approved') === 'TRUE';
+        response.lastUpdated = latestVerification.get('updated_at');
+      }
     }
 
     return {
