@@ -1,15 +1,18 @@
-// Netlify Function: Send Email Verification Code
-const mysql = require('mysql2/promise');
+// Netlify Function: Send Email Verification Code (Google Sheets)
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
 
-// Database connection
-const createConnection = async () => {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+// Initialize Google Sheets
+const initSheet = async () => {
+  const serviceAccountAuth = new JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/spreadsheets']
   });
+
+  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+  await doc.loadInfo();
+  return doc;
 };
 
 // Generate 6-digit code
@@ -56,30 +59,27 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const connection = await createConnection();
+    const doc = await initSheet();
 
+    // Get jobs sheet
+    const jobsSheet = doc.sheetsByTitle['Jobs'] || await doc.addSheet({ title: 'Jobs' });
+    
     // Check if job exists and is active
-    const [jobRows] = await connection.execute(
-      'SELECT job_name, start_date, end_date, status FROM jobs WHERE id = ?',
-      [jobId]
-    );
+    const jobRows = await jobsSheet.getRows();
+    const job = jobRows.find(row => row.get('id') === jobId);
 
-    if (jobRows.length === 0) {
-      await connection.end();
+    if (!job) {
       return {
         statusCode: 404,
         body: JSON.stringify({ error: 'Job not found' })
       };
     }
 
-    const job = jobRows[0];
-    
     // Check if job is still active and hasn't ended
     const now = new Date();
-    const endDate = new Date(job.end_date);
+    const endDate = new Date(job.get('end_date'));
     
-    if (job.status !== 'active' || endDate < now) {
-      await connection.end();
+    if (job.get('status') !== 'active' || endDate < now) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: 'This job is no longer accepting verifications' })
@@ -90,22 +90,37 @@ exports.handler = async (event, context) => {
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
 
-    // Delete any existing unverified codes for this email/job combo
-    await connection.execute(
-      'DELETE FROM email_verifications WHERE email = ? AND job_id = ? AND verified = FALSE',
-      [email, jobId]
-    );
+    // Get or create email verifications sheet
+    let emailSheet = doc.sheetsByTitle['EmailVerifications'];
+    if (!emailSheet) {
+      emailSheet = await doc.addSheet({ 
+        title: 'EmailVerifications',
+        headerValues: ['email', 'code', 'job_id', 'verified', 'expires_at', 'created_at']
+      });
+    }
 
-    // Insert new verification code
-    await connection.execute(
-      'INSERT INTO email_verifications (email, code, job_id, expires_at) VALUES (?, ?, ?, ?)',
-      [email, code, jobId, expiresAt]
-    );
+    // Delete any existing unverified codes for this email/job combo
+    const existingRows = await emailSheet.getRows();
+    for (const row of existingRows) {
+      if (row.get('email') === email && 
+          row.get('job_id') === jobId && 
+          row.get('verified') !== 'TRUE') {
+        await row.delete();
+      }
+    }
+
+    // Add new verification code
+    await emailSheet.addRow({
+      email: email,
+      code: code,
+      job_id: jobId,
+      verified: 'FALSE',
+      expires_at: expiresAt.toISOString(),
+      created_at: new Date().toISOString()
+    });
 
     // Send email (in development, this just logs)
-    const emailSent = await sendEmail(email, code, job.job_name);
-
-    await connection.end();
+    const emailSent = await sendEmail(email, code, job.get('job_name'));
 
     if (!emailSent) {
       return {
@@ -128,7 +143,7 @@ exports.handler = async (event, context) => {
         // For development only - remove in production
         debugCode: process.env.NODE_ENV === 'development' ? code : undefined
       })
-    };
+    });
 
   } catch (error) {
     console.error('Email verification error:', error);
