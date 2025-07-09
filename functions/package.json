@@ -3,7 +3,5 @@
   "version": "1.0.0",
   "description": "Netlify Functions for OOOSH Driver Verification",
   "dependencies": {
-    "google-spreadsheet": "^4.1.2",
-    "google-auth-library": "^9.6.3"
   }
 }
