@@ -1,6 +1,8 @@
-// File: netlify/functions/driver-status.js
+// File: functions/driver-status.js
 // OOOSH Driver Verification - Get Driver Status Function
-// Replace your existing netlify/functions/driver-status.js with this content
+// Replace your existing functions/driver-status.js with this content
+
+const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   console.log('Driver status function called with method:', event.httpMethod);
