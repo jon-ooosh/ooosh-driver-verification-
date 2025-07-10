@@ -1,3 +1,7 @@
+# File: netlify.toml
+# OOOSH Driver Verification - Netlify Configuration
+# Replace your existing netlify.toml with this content
+
 [build]
   publish = "build"
   command = "npm run build"
