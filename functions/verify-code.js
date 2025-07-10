@@ -1,6 +1,8 @@
-// File: netlify/functions/verify-code.js
+// File: functions/verify-code.js
 // OOOSH Driver Verification - Verify Email Code Function
-// Replace your existing netlify/functions/verify-code.js with this content
+// Replace your existing functions/verify-code.js with this content
+
+const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   console.log('Verify code function called with method:', event.httpMethod);
