@@ -3,27 +3,14 @@
   command = "npm run build"
 
 [build.environment]
-  REACT_APP_API_BASE_URL = "https://your-api-domain.com"
   NODE_VERSION = "18"
-
-[[redirects]]
-  from = "/api/*"
-  to = "https://your-backend-domain.com/api/:splat"
-  status = 200
-  force = true
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-[context.deploy-preview.environment]
-  REACT_APP_API_BASE_URL = "https://staging-api.your-domain.com"
-
-[context.branch-deploy.environment]
-  REACT_APP_API_BASE_URL = "https://staging-api.your-domain.com"
-
-# Security headers
+# Security headers with proper CSP for Tailwind CSS
 [[headers]]
   for = "/*"
   [headers.values]
@@ -31,4 +18,8 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://ivs.idenfy.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://ivs.idenfy.com https://api.claude.ai; frame-src https://ivs.idenfy.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://ivs.idenfy.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://ivs.idenfy.com https://api.claude.ai https://script.google.com https://script.googleusercontent.com; frame-src https://ivs.idenfy.com;"
+
+# Function-specific configuration (if needed)
+[functions]
+  directory = "netlify/functions"
