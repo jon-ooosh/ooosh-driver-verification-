@@ -1,6 +1,8 @@
-// File: netlify/functions/send-verification-code.js
+// File: functions/send-verification-code.js
 // OOOSH Driver Verification - Send Email Verification Code Function
-// Replace your existing netlify/functions/send-verification-code.js with this content
+// Replace your existing functions/send-verification-code.js with this content
+
+const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   console.log('Function called with method:', event.httpMethod);
@@ -56,7 +58,7 @@ exports.handler = async (event, context) => {
 
     // Check if Google Apps Script URL is configured
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
-      console.error('GOOGLE_APPS_SCRIPT_URL not configured');
+      console.log('GOOGLE_APPS_SCRIPT_URL not configured, using mock response');
       
       // Return mock response for development
       const debugCode = Math.floor(100000 + Math.random() * 900000).toString();
