@@ -1,7 +1,7 @@
 // File: functions/send-verification-code.js
 // OOOSH Driver Verification - Send Email Verification Code Function
 // Replace your existing functions/send-verification-code.js with this content
-
+ 
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
