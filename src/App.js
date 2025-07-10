@@ -1,3 +1,7 @@
+// File: src/App.js
+// OOOSH Driver Verification - Main React Application
+// Replace your existing src/App.js with this content
+
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 
