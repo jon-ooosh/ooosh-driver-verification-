@@ -1,6 +1,6 @@
 // File: functions/verify-code.js
 // OOOSH Driver Verification - Verify Email Code Function
-// Replace your existing functions/verify-code.js with this content
+// FIXED VERSION with proper error handling
 
 const fetch = require('node-fetch');
 
@@ -99,8 +99,38 @@ exports.handler = async (event, context) => {
     const result = await response.json();
     console.log('Apps Script verification response:', result);
 
+    // *** CRITICAL FIX: Proper error handling for wrong codes ***
+    
+    // Check if the Apps Script returned an error
+    if (result.error) {
+      console.log('Verification failed:', result.error);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          success: false, 
+          error: result.error 
+        })
+      };
+    }
+
+    // Check if verification was successful  
+    if (!result.success || !result.verified) {
+      console.log('Verification not successful');
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Invalid verification code' 
+        })
+      };
+    }
+
+    // Verification successful
+    console.log('Verification successful');
     return {
-      statusCode: response.status,
+      statusCode: 200,
       headers,
       body: JSON.stringify(result)
     };
