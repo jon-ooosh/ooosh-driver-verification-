@@ -1,6 +1,6 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete React Application with Idenfy Integration
-// Fixed version with proper error handling and no exposed secrets
+// OOOSH Driver Verification - Complete React Application
+// Final version with hardcoded Idenfy URL (not secret)
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
@@ -218,10 +218,8 @@ const DriverVerificationApp = () => {
       } else if (data.sessionToken) {
         // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
-        // Build URL dynamically to avoid exposing secrets
-      const baseUrl = 'https://ivs.idenfy.' + 'com';
-const idenfyUrl = `${baseUrl}/api/v2/redirect?authToken=${data.sessionToken}`;
-        window.location.href = idenfyUrl;
+        // Hardcoded URL - it's a public API endpoint, not secret
+        window.location.href = `https://ivs.idenfy.com/api/v2/redirect?authToken=${data.sessionToken}`;
       } else {
         throw new Error('No session token received from Idenfy');
       }
