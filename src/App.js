@@ -101,52 +101,56 @@ const DriverVerificationApp = () => {
     }
   };
 
-  const verifyEmailCode = async () => {
-    if (!verificationCode || verificationCode.length < 6) {
-      setError('Please enter the 6-digit code from your email');
-      return;
-    }
+ const verifyEmailCode = async () => {
+  if (!verificationCode || verificationCode.length < 6) {
+    setError('Please enter the 6-digit code from your email');
+    return;
+  }
 
-    setLoading(true);
-    setError('');
+  setLoading(true);
+  setError('');
+  
+  try {
+    console.log('Verifying code:', verificationCode, 'for email:', driverEmail);
     
-    try {
-      console.log('Verifying code:', verificationCode, 'for email:', driverEmail);
-      
-      const response = await fetch('/.netlify/functions/verify-code', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ 
-          email: driverEmail, 
-          code: verificationCode,
-          jobId: jobId 
-        })
-      });
+    const response = await fetch('/.netlify/functions/verify-code', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ 
+        email: driverEmail, 
+        code: verificationCode,
+        jobId: jobId 
+      })
+    });
 
-      const data = await response.json();
-      console.log('Verify response:', data);
+    const data = await response.json();
+    console.log('Verify response:', data);
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Verification failed');
-      }
-      
-      // Only proceed if verification was successful
-      if (data.verified) {
-        await checkDriverStatus();
-      } else {
-        throw new Error('Invalid verification code');
-      }
-      
-    } catch (err) {
-      console.error('Verify code error:', err);
-      setError(`Verification failed: ${err.message}`);
-    } finally {
-      setLoading(false);
+    // FIXED: Check response status first, then handle data
+    if (!response.ok) {
+      // This handles 400 status responses (invalid codes)
+      throw new Error(data.error || 'Verification failed');
     }
-  };
+
+    // Only proceed if we have a successful response AND verification succeeded
+    if (data.success && data.verified) {
+      console.log('Verification successful, checking driver status');
+      await checkDriverStatus();
+    } else {
+      // This handles edge cases where status is 200 but verification failed
+      throw new Error(data.error || 'Invalid verification code');
+    }
+    
+  } catch (err) {
+    console.error('Verify code error:', err);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const checkDriverStatus = async () => {
     try {
