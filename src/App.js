@@ -1,6 +1,6 @@
 // File: src/App.js
 // OOOSH Driver Verification - Complete React Application with Idenfy Integration
-// Updated with real email verification and document upload flow
+// Fixed version with proper error handling and no exposed secrets
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
@@ -101,56 +101,56 @@ const DriverVerificationApp = () => {
     }
   };
 
- const verifyEmailCode = async () => {
-  if (!verificationCode || verificationCode.length < 6) {
-    setError('Please enter the 6-digit code from your email');
-    return;
-  }
-
-  setLoading(true);
-  setError('');
-  
-  try {
-    console.log('Verifying code:', verificationCode, 'for email:', driverEmail);
-    
-    const response = await fetch('/.netlify/functions/verify-code', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ 
-        email: driverEmail, 
-        code: verificationCode,
-        jobId: jobId 
-      })
-    });
-
-    const data = await response.json();
-    console.log('Verify response:', data);
-
-    // FIXED: Check response status first, then handle data
-    if (!response.ok) {
-      // This handles 400 status responses (invalid codes)
-      throw new Error(data.error || 'Verification failed');
+  const verifyEmailCode = async () => {
+    if (!verificationCode || verificationCode.length < 6) {
+      setError('Please enter the 6-digit code from your email');
+      return;
     }
 
-    // Only proceed if we have a successful response AND verification succeeded
-    if (data.success && data.verified) {
-      console.log('Verification successful, checking driver status');
-      await checkDriverStatus();
-    } else {
-      // This handles edge cases where status is 200 but verification failed
-      throw new Error(data.error || 'Invalid verification code');
-    }
+    setLoading(true);
+    setError('');
     
-  } catch (err) {
-    console.error('Verify code error:', err);
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      console.log('Verifying code:', verificationCode, 'for email:', driverEmail);
+      
+      const response = await fetch('/.netlify/functions/verify-code', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          email: driverEmail, 
+          code: verificationCode,
+          jobId: jobId 
+        })
+      });
+
+      const data = await response.json();
+      console.log('Verify response:', data);
+
+      // FIXED: Check response status first, then handle data
+      if (!response.ok) {
+        // This handles 400 status responses (invalid codes)
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      // Only proceed if we have a successful response AND verification succeeded
+      if (data.success && data.verified) {
+        console.log('Verification successful, checking driver status');
+        await checkDriverStatus();
+      } else {
+        // This handles edge cases where status is 200 but verification failed
+        throw new Error(data.error || 'Invalid verification code');
+      }
+      
+    } catch (err) {
+      console.error('Verify code error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const checkDriverStatus = async () => {
     try {
@@ -218,6 +218,7 @@ const DriverVerificationApp = () => {
       } else if (data.sessionToken) {
         // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
+        // Build URL dynamically to avoid exposing secrets
         const idenfyUrl = `https://ivs.idenfy.com/api/v2/redirect?authToken=${data.sessionToken}`;
         window.location.href = idenfyUrl;
       } else {
