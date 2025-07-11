@@ -1,13 +1,11 @@
 // File: functions/create-idenfy-session.js
-// OOOSH Driver Verification - Create Idenfy Verification Session
-// FIXED VERSION - Remove callback URL for basic accounts
+// FIXED VERSION - Based on learnings from JotForm integration
 
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   console.log('Create Idenfy session called with method:', event.httpMethod);
   
-  // Add CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -15,16 +13,10 @@ exports.handler = async (event, context) => {
     'Content-Type': 'application/json'
   };
 
-  // Handle CORS preflight request
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
+    return { statusCode: 200, headers, body: '' };
   }
 
-  // Only allow POST requests
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -57,7 +49,6 @@ exports.handler = async (event, context) => {
     if (!process.env.IDENFY_API_KEY || !process.env.IDENFY_API_SECRET) {
       console.log('Idenfy credentials not configured, using mock response');
       
-      // Return mock response for development
       const mockResponse = {
         success: true,
         sessionToken: 'mock_session_' + Date.now(),
@@ -67,16 +58,10 @@ exports.handler = async (event, context) => {
         message: 'Mock Idenfy session created for development'
       };
       
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(mockResponse)
-      };
+      return { statusCode: 200, headers, body: JSON.stringify(mockResponse) };
     }
 
-    // Create Idenfy verification session
-    console.log('Calling Idenfy API to create session');
-    
+    // FIXED: Create Idenfy session with correct parameters
     const idenfyResponse = await createIdenfySession(email, jobId, driverName);
     
     if (!idenfyResponse.success) {
@@ -118,50 +103,55 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Create Idenfy verification session using their API - FIXED VERSION (No Callback)
+// FIXED: Create Idenfy session with proper country handling and document selection
 async function createIdenfySession(email, jobId, driverName) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
     
-    // Official Idenfy API endpoint
     const IDENFY_BASE_URL = 'https://ivs.idenfy.com';
-
-    // Generate unique client ID
     const clientId = `ooosh_${jobId}_${email.replace('@', '_').replace('.', '_')}_${Date.now()}`;
-    
-    // Create authentication header
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-    // FIXED: Remove callback URL for basic accounts
+    // FIXED: Use proper parameters based on JotForm learnings
     const requestBody = {
       clientId: clientId,
       firstName: driverName?.split(' ')[0] || 'Driver',
       lastName: driverName?.split(' ').slice(1).join(' ') || 'Verification',
       
-      // Redirect URLs for different outcomes
-      successUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=success&job=${jobId}`,
-      errorUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=error&job=${jobId}`,
-      unverifiedUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=unverified&job=${jobId}`,
+      // FIXED: Use your domain for callbacks
+      successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}`,
+      errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}`,
+      unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}`,
       
-      // Basic settings
+      // FIXED: Add webhook URL for result processing
+      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
+      
       locale: 'en',
       
-      // Session management
-      expiryTime: 3600, // 1 hour to complete verification
-      sessionLength: 1800, // 30 minutes per verification session
+      // FIXED: Set UK as default country (from JotForm script)
+      country: 'GB',
       
-      // Token type - IDENTIFICATION includes document + selfie verification
+      // FIXED: Specify required documents (driving license + POA)
+      documents: ['DRIVER_LICENSE'],
+      
+      // FIXED: Add POA extraction (from JotForm script)
+      additionalSteps: {
+        UTILITY_BILL: 'EXTRACT',
+        POA2: 'EXTRACT'
+      },
+      
+      // Session settings
+      expiryTime: 3600,
+      sessionLength: 1800,
       tokenType: 'IDENTIFICATION',
+      showInstructions: true,
       
-      // REMOVED: callbackUrl - Not allowed on basic accounts
-      // callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
-      
-      // Optional: Additional settings for better verification
-      showInstructions: true
+      // FIXED: Add signature extraction
+      extractSignature: true
     };
 
-    console.log('Sending request to Idenfy (no callback):', JSON.stringify(requestBody, null, 2));
+    console.log('FIXED: Sending request to Idenfy with proper parameters:', JSON.stringify(requestBody, null, 2));
 
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
@@ -177,10 +167,36 @@ async function createIdenfySession(email, jobId, driverName) {
     console.log('Idenfy API response:', JSON.stringify(result, null, 2));
 
     if (!response.ok) {
+      // FIXED: Better error handling for country issues
+      if (result.message && result.message.includes('country')) {
+        console.log('Country error detected, retrying with null country...');
+        
+        // Retry without country specification
+        const retryBody = { ...requestBody, country: null };
+        const retryResponse = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(retryBody)
+        });
+
+        if (retryResponse.ok) {
+          const retryResult = await retryResponse.json();
+          return {
+            success: true,
+            sessionToken: retryResult.authToken,
+            scanRef: retryResult.scanRef,
+            clientId: clientId,
+            redirectUrl: `https://ui.idenfy.com/session?authToken=${retryResult.authToken}`
+          };
+        }
+      }
+      
       throw new Error(`Idenfy API error (${response.status}): ${result.message || result.error || response.statusText}`);
     }
 
-    // Check if we got the expected response format
     if (!result.authToken || !result.scanRef) {
       throw new Error(`Invalid Idenfy response: missing authToken or scanRef`);
     }
