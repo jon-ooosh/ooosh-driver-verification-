@@ -1,6 +1,6 @@
 // File: functions/create-idenfy-session.js
 // OOOSH Driver Verification - Create Idenfy Verification Session
-// Fixed version with no exposed secrets
+// Final version - no environment variable needed for base URL
 
 const fetch = require('node-fetch');
 
@@ -123,8 +123,9 @@ async function createIdenfySession(email, jobId, driverName) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
-    // Use the base URL from environment variable, with fallback
-    const baseUrl = process.env.IDENFY_BASE_URL;
+    
+    // Hardcode the base URL - it's not secret, it's a public API endpoint
+    const IDENFY_BASE_URL = 'https://ivs.idenfy.com';
 
     // Generate unique client ID
     const clientId = `ooosh_${jobId}_${email.replace('@', '_').replace('.', '_')}_${Date.now()}`;
@@ -150,7 +151,7 @@ async function createIdenfySession(email, jobId, driverName) {
 
     console.log('Sending request to Idenfy:', JSON.stringify(requestBody, null, 2));
 
-    const response = await fetch(`${baseUrl}/api/v2/token`, {
+    const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${auth}`,
