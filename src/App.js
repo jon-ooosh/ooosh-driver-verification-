@@ -218,7 +218,6 @@ const DriverVerificationApp = () => {
       } else if (data.sessionToken) {
         // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
-        // Hardcoded URL - it's a public API endpoint, not secret
         window.location.href = `https://ivs.idenfy.com/api/v2/redirect?authToken=${data.sessionToken}`;
       } else {
         throw new Error('No session token received from Idenfy');
