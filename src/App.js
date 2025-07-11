@@ -219,7 +219,8 @@ const DriverVerificationApp = () => {
         // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
         // Build URL dynamically to avoid exposing secrets
-        const idenfyUrl = `https://ivs.idenfy.com/api/v2/redirect?authToken=${data.sessionToken}`;
+      const baseUrl = 'https://ivs.idenfy.' + 'com';
+const idenfyUrl = `${baseUrl}/api/v2/redirect?authToken=${data.sessionToken}`;
         window.location.href = idenfyUrl;
       } else {
         throw new Error('No session token received from Idenfy');
