@@ -1,6 +1,6 @@
 // File: src/App.js
 // OOOSH Driver Verification - Complete React Application
-// Final version with hardcoded Idenfy URL (not secret)
+// UPDATED VERSION with Idenfy integration and verification complete handling
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
@@ -26,6 +26,19 @@ const DriverVerificationApp = () => {
       validateJobAndFetchDetails(jobParam);
     } else {
       setError('Invalid verification link. Please check your email for the correct link.');
+    }
+  }, []);
+
+  // Check for verification complete callback from Idenfy
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    const job = urlParams.get('job');
+    const session = urlParams.get('session');
+    
+    if (status && job && ['success', 'error', 'unverified', 'mock'].includes(status)) {
+      console.log('Verification complete callback:', { status, job, session });
+      handleVerificationComplete(status, job, session);
     }
   }, []);
 
@@ -93,6 +106,12 @@ const DriverVerificationApp = () => {
       setCurrentStep('email-verification');
       setError('');
       
+      // Show helpful message for test emails
+      if (data.testMode) {
+        setError(''); // Clear any errors
+        console.log('🚨 Test email detected - use any 6-digit code');
+      }
+      
     } catch (err) {
       console.error('Send verification error:', err);
       setError(`Failed to send verification email: ${err.message}`);
@@ -129,7 +148,7 @@ const DriverVerificationApp = () => {
       const data = await response.json();
       console.log('Verify response:', data);
 
-      // FIXED: Check response status first, then handle data
+      // Check response status first, then handle data
       if (!response.ok) {
         // This handles 400 status responses (invalid codes)
         throw new Error(data.error || 'Verification failed');
@@ -138,6 +157,12 @@ const DriverVerificationApp = () => {
       // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
         console.log('Verification successful, checking driver status');
+        
+        // Show test mode indicator if applicable
+        if (data.testMode) {
+          console.log('🚨 Test mode verification successful');
+        }
+        
         await checkDriverStatus();
       } else {
         // This handles edge cases where status is 200 but verification failed
@@ -185,6 +210,8 @@ const DriverVerificationApp = () => {
 
   const generateIdenfyToken = async () => {
     setLoading(true);
+    setError('');
+    
     try {
       console.log('Starting Idenfy verification for:', driverEmail);
       
@@ -218,7 +245,8 @@ const DriverVerificationApp = () => {
       } else if (data.sessionToken) {
         // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
-        window.location.href = `https://ivs.idenfy.com/api/v2/redirect?authToken=${data.sessionToken}`;
+        // Use the redirect URL from the response or construct the proper Idenfy UI URL
+        window.location.href = data.redirectUrl || `https://ui.idenfy.com/session?authToken=${data.sessionToken}`;
       } else {
         throw new Error('No session token received from Idenfy');
       }
@@ -228,6 +256,63 @@ const DriverVerificationApp = () => {
       setError(`Failed to start document verification: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle verification complete callback from Idenfy
+  const handleVerificationComplete = async (status, jobId, sessionId) => {
+    console.log('Handling verification complete:', { status, jobId, sessionId });
+    
+    // Set loading state while we process the result
+    setCurrentStep('processing');
+    setError('');
+    
+    try {
+      // Wait a bit for webhook to process (Idenfy webhooks can be delayed)
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Check final driver status
+      await checkDriverStatus();
+      
+      // Determine final step based on status
+      switch (status) {
+        case 'success':
+          // Verification completed successfully
+          if (driverStatus?.status === 'verified') {
+            setCurrentStep('complete');
+          } else if (driverStatus?.status === 'review_required') {
+            setCurrentStep('processing'); // Still under review
+          } else {
+            // Check if we need DVLA check
+            const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
+            if (needsDVLA) {
+              setCurrentStep('dvla-check');
+            } else {
+              setCurrentStep('driver-status');
+            }
+          }
+          break;
+          
+        case 'error':
+        case 'unverified':
+          setCurrentStep('rejected');
+          setError('Document verification failed. Please try again or contact support.');
+          break;
+          
+        case 'mock':
+          // Mock mode - simulate success
+          setCurrentStep('complete');
+          break;
+          
+        default:
+          console.log('Unknown verification status:', status);
+          setCurrentStep('driver-status');
+      }
+      
+    } catch (err) {
+      console.error('Error handling verification complete:', err);
+      setError('Failed to process verification result. Please refresh and try again.');
+      setCurrentStep('driver-status');
     }
   };
 
@@ -401,6 +486,13 @@ const DriverVerificationApp = () => {
         <h2 className="text-xl font-bold text-gray-900">Check Your Email</h2>
         <p className="text-gray-600 mt-2">We sent a 6-digit code to:</p>
         <p className="text-sm font-medium text-gray-900">{driverEmail}</p>
+        
+        {/* Show test email hint */}
+        {['test@oooshtours.co.uk', 'jon@oooshtours.co.uk', 'demo@oooshtours.co.uk', 'dev@oooshtours.co.uk'].includes(driverEmail.toLowerCase()) && (
+          <p className="text-xs text-orange-600 mt-2 font-medium">
+            🧪 Test email - use any 6-digit code (e.g., 123456)
+          </p>
+        )}
       </div>
 
       <div className="space-y-4">
