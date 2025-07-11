@@ -1,21 +1,25 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete React Application
-// UPDATED VERSION with Idenfy integration and verification complete handling
+// OOOSH Driver Verification - Complete React Application with Insurance Questionnaire
+// UPDATED VERSION with questionnaire workflow
 
-import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera, PenTool } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
-  // Steps: landing, email-entry, email-verification, driver-status, document-upload, dvla-check, processing, complete, rejected
+  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
+  
+  // Insurance questionnaire data
+  const [insuranceData, setInsuranceData] = useState(null);
 
   // Extract job ID from URL on load
   useEffect(() => {
@@ -157,13 +161,14 @@ const DriverVerificationApp = () => {
 
       // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
-        console.log('Verification successful, checking driver status');
+        console.log('Verification successful, checking if returning driver');
         
         // Show test mode indicator if applicable
         if (data.testMode) {
           console.log('🚨 Test mode verification successful');
         }
         
+        // First check if this is a returning driver
         await checkDriverStatus();
       } else {
         // This handles edge cases where status is 200 but verification failed
@@ -188,16 +193,68 @@ const DriverVerificationApp = () => {
         const driverData = await response.json();
         console.log('Driver status:', driverData);
         setDriverStatus(driverData);
+        
+        // Smart routing based on driver status
+        if (driverData.status === 'verified') {
+          // Returning driver with valid documents
+          setCurrentStep('driver-status');
+        } else if (driverData.status === 'partial') {
+          // Returning driver but some documents expired
+          setCurrentStep('driver-status');
+        } else {
+          // New driver - start with insurance questionnaire
+          setCurrentStep('insurance-questionnaire');
+        }
       } else {
         console.log('Driver not found, treating as new driver');
         setDriverStatus({ status: 'new', email: driverEmail });
+        setCurrentStep('insurance-questionnaire');
       }
       
-      setCurrentStep('driver-status');
     } catch (err) {
       console.error('Error checking driver status:', err);
       setDriverStatus({ status: 'new', email: driverEmail });
+      setCurrentStep('insurance-questionnaire');
+    }
+  };
+
+  const handleInsuranceComplete = async (insuranceFormData) => {
+    console.log('Insurance questionnaire completed:', insuranceFormData);
+    setInsuranceData(insuranceFormData);
+    
+    // TODO: Save insurance data to Google Sheets via Apps Script
+    try {
+      setLoading(true);
+      
+      // Call your Google Apps Script to save insurance data
+      const response = await fetch(process.env.REACT_APP_GOOGLE_APPS_SCRIPT_URL || '/.netlify/functions/save-insurance-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'save-insurance-data',
+          email: driverEmail,
+          jobId: jobId,
+          insuranceData: insuranceFormData
+        })
+      });
+
+      if (response.ok) {
+        console.log('Insurance data saved successfully');
+      } else {
+        console.error('Failed to save insurance data');
+      }
+      
+      // Move to driver status regardless of save success
       setCurrentStep('driver-status');
+      
+    } catch (err) {
+      console.error('Error saving insurance data:', err);
+      // Still proceed to next step
+      setCurrentStep('driver-status');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -394,7 +451,410 @@ const DriverVerificationApp = () => {
     return true;
   };
 
-  // Render functions for each step
+  // Insurance Questionnaire Component
+  const InsuranceQuestionnaire = () => {
+    const [formData, setFormData] = useState({
+      hasDisability: null,
+      hasConvictions: null,
+      hasProsecution: null,
+      hasAccidents: null,
+      hasInsuranceIssues: null,
+      hasDrivingBan: null,
+      additionalDetails: '',
+      signature: null,
+      declarationAccepted: false
+    });
+    
+    const [errors, setErrors] = useState({});
+    const [currentSection, setCurrentSection] = useState('questions'); // 'questions' or 'signature'
+    const [poaFiles, setPoaFiles] = useState({ poa1: null, poa2: null });
+    
+    const signatureRef = useRef(null);
+
+    const handleQuestionChange = (field, value) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+      
+      // Clear error when user makes selection
+      if (errors[field]) {
+        setErrors(prev => ({ ...prev, [field]: null }));
+      }
+    };
+
+    const handleFileUpload = (type, file) => {
+      if (!file) return;
+      
+      // Validate file type and size
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      if (!validTypes.includes(file.type)) {
+        setErrors(prev => ({ 
+          ...prev, 
+          [type]: 'Please upload a JPEG, PNG, or PDF file' 
+        }));
+        return;
+      }
+      
+      if (file.size > maxSize) {
+        setErrors(prev => ({ 
+          ...prev, 
+          [type]: 'File size must be less than 10MB' 
+        }));
+        return;
+      }
+      
+      setPoaFiles(prev => ({ ...prev, [type]: file }));
+      setErrors(prev => ({ ...prev, [type]: null }));
+    };
+
+    const validateQuestions = () => {
+      const newErrors = {};
+      
+      // Check all yes/no questions are answered
+      const requiredFields = [
+        'hasDisability', 'hasConvictions', 'hasProsecution', 
+        'hasAccidents', 'hasInsuranceIssues', 'hasDrivingBan'
+      ];
+      
+      requiredFields.forEach(field => {
+        if (formData[field] === null) {
+          newErrors[field] = 'Please select an option';
+        }
+      });
+
+      // NOTE: POA files are now optional since Idenfy handles them automatically
+      // We'll keep them as backup but not require them
+      
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    };
+
+    const proceedToSignature = () => {
+      if (validateQuestions()) {
+        setCurrentSection('signature');
+      }
+    };
+
+    const validateSignature = () => {
+      const newErrors = {};
+      
+      if (!formData.signature && signatureRef.current?.isEmpty()) {
+        newErrors.signature = 'Please provide your signature';
+      }
+      
+      if (!formData.declarationAccepted) {
+        newErrors.declarationAccepted = 'You must accept the declaration';
+      }
+      
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async () => {
+      if (!validateSignature()) return;
+
+      try {
+        // Capture signature as base64
+        let signatureData = formData.signature;
+        if (signatureRef.current && !signatureRef.current.isEmpty()) {
+          signatureData = signatureRef.current.toDataURL();
+        }
+
+        const submissionData = {
+          ...formData,
+          signature: signatureData,
+          email: driverEmail,
+          jobId: jobId,
+          poaFiles: poaFiles,
+          submittedAt: new Date().toISOString()
+        };
+
+        // Call completion handler
+        await handleInsuranceComplete(submissionData);
+        
+      } catch (error) {
+        console.error('Submission error:', error);
+        setErrors({ submit: 'Failed to submit questionnaire. Please try again.' });
+      }
+    };
+
+    const clearSignature = () => {
+      if (signatureRef.current) {
+        signatureRef.current.clear();
+      }
+      setFormData(prev => ({ ...prev, signature: null }));
+    };
+
+    const YesNoQuestion = ({ field, question, required = true }) => (
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          {question} {required && <span className="text-red-500">*</span>}
+        </label>
+        <div className="flex space-x-4">
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name={field}
+              value="yes"
+              checked={formData[field] === 'yes'}
+              onChange={(e) => handleQuestionChange(field, 'yes')}
+              className="mr-2"
+            />
+            Yes
+          </label>
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name={field}
+              value="no"
+              checked={formData[field] === 'no'}
+              onChange={(e) => handleQuestionChange(field, 'no')}
+              className="mr-2"
+            />
+            No
+          </label>
+        </div>
+        {errors[field] && (
+          <p className="text-sm text-red-600">{errors[field]}</p>
+        )}
+      </div>
+    );
+
+    const FileUpload = ({ type, label, file }) => (
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          {label} <span className="text-orange-500">(Optional - backup only)</span>
+        </label>
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={(e) => handleFileUpload(type, e.target.files[0])}
+            className="w-full"
+          />
+          {file && (
+            <p className="text-sm text-green-600 mt-2">
+              ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)
+            </p>
+          )}
+        </div>
+        <p className="text-xs text-gray-500">
+          Idenfy will handle POA verification automatically. Upload here only as backup.
+        </p>
+        {errors[type] && (
+          <p className="text-sm text-red-600">{errors[type]}</p>
+        )}
+      </div>
+    );
+
+    if (currentSection === 'questions') {
+      return (
+        <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+          <div className="text-center mb-6">
+            <FileText className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+            <h2 className="text-xl font-bold text-gray-900">Insurance Questions</h2>
+            <p className="text-gray-600 mt-2">Required for insurance compliance</p>
+          </div>
+
+          <div className="space-y-6">
+            {/* Insurance Questions */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
+              <div className="space-y-4">
+                <YesNoQuestion
+                  field="hasDisability"
+                  question="Have you any physical or mental disability or infirmity, or been told by your doctor not to drive, even temporarily?"
+                />
+                
+                <YesNoQuestion
+                  field="hasConvictions"
+                  question="Have you ever had a BA, DD, DR, UT, MS90, MS30, IN10, CU80, TT99, or CD conviction, or a single SP offence yielding 6 or more points?"
+                />
+                
+                <YesNoQuestion
+                  field="hasProsecution"
+                  question="Have you in the past 5 years been convicted of any of the following offences: manslaughter, causing death by dangerous driving, driving whilst under the influence of drink or drugs, failing to stop after and/or report an accident to police or any combination of offences that have resulted in suspension or disqualification from driving?"
+                />
+                
+                <YesNoQuestion
+                  field="hasAccidents"
+                  question="Have you been involved in any motoring accidents in the past three years?"
+                />
+                
+                <YesNoQuestion
+                  field="hasInsuranceIssues"
+                  question="Have you ever been refused motor insurance or had any special terms or premiums imposed?"
+                />
+                
+                <YesNoQuestion
+                  field="hasDrivingBan"
+                  question="Have you been banned or disqualified from driving in the past 5 years?"
+                />
+              </div>
+            </div>
+
+            {/* Additional Details */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Information (Optional)
+              </label>
+              <textarea
+                value={formData.additionalDetails}
+                onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Please provide any additional details about your answers above..."
+              />
+            </div>
+
+            {/* Proof of Address Upload - Now Optional */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <h3 className="font-medium text-yellow-900 mb-4">Proof of Address Documents (Optional Backup)</h3>
+              <p className="text-sm text-yellow-800 mb-4">
+                <strong>Note:</strong> Idenfy will automatically request proof of address documents during verification. 
+                Upload here only if you want to provide backup copies.
+              </p>
+              <div className="space-y-4">
+                <FileUpload
+                  type="poa1"
+                  label="First Proof of Address"
+                  file={poaFiles.poa1}
+                />
+                <FileUpload
+                  type="poa2"
+                  label="Second Proof of Address"
+                  file={poaFiles.poa2}
+                />
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {errors.submit && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <div className="ml-3">
+                    <p className="text-sm text-red-800">{errors.submit}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setCurrentStep('email-verification')}
+                className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300"
+              >
+                Back
+              </button>
+              <button
+                onClick={proceedToSignature}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+              >
+                Continue to Signature
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Signature Section
+    return (
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <div className="text-center mb-6">
+          <PenTool className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+          <h2 className="text-xl font-bold text-gray-900">Digital Signature</h2>
+          <p className="text-gray-600 mt-2">Sign to confirm your declaration</p>
+        </div>
+
+        <div className="space-y-6">
+          {/* Declaration Text */}
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+            <h3 className="font-medium text-gray-900 mb-3">Declaration</h3>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>I hereby warrant the truth of my above statements and I declare that I have not withheld any information whatsoever which might in anyway increase the risk of the insurers or influence the acceptance of this proposal.</p>
+              <p>I agree that this proposal shall be the basis of the contract between myself and the company.</p>
+              <p><strong>By my signature, I acknowledge that the information provided is accurate and true.</strong></p>
+            </div>
+          </div>
+
+          {/* Signature Pad */}
+          <div className="border border-gray-300 rounded-md">
+            <div className="bg-gray-50 px-4 py-2 border-b border-gray-300">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">Your Signature</span>
+                <button
+                  onClick={clearSignature}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <SignatureCanvas
+                ref={signatureRef}
+                canvasProps={{
+                  width: 500,
+                  height: 200,
+                  className: 'signature-canvas border border-gray-200 rounded w-full'
+                }}
+                backgroundColor="white"
+              />
+            </div>
+          </div>
+
+          {/* Acceptance Checkbox */}
+          <div className="flex items-start">
+            <input
+              type="checkbox"
+              id="declaration"
+              checked={formData.declarationAccepted}
+              onChange={(e) => handleQuestionChange('declarationAccepted', e.target.checked)}
+              className="mt-1 mr-3"
+            />
+            <label htmlFor="declaration" className="text-sm text-gray-700">
+              By clicking the Continue button I agree to the above terms and conditions. 
+              <span className="text-red-500">*</span>
+            </label>
+          </div>
+
+          {/* Errors */}
+          {(errors.signature || errors.declarationAccepted || errors.submit) && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+              {errors.signature && <p className="text-sm text-red-800">{errors.signature}</p>}
+              {errors.declarationAccepted && <p className="text-sm text-red-800">{errors.declarationAccepted}</p>}
+              {errors.submit && <p className="text-sm text-red-800">{errors.submit}</p>}
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setCurrentSection('questions')}
+              className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300"
+            >
+              Back to Questions
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50"
+            >
+              {loading ? 'Submitting...' : 'Submit & Continue'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render functions for each step (keeping your existing ones)
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
@@ -558,6 +1018,9 @@ const DriverVerificationApp = () => {
               `Welcome back!` : 
               'Verification Status'}
           </h2>
+          {insuranceData && (
+            <p className="text-sm text-green-600 mt-1">✓ Insurance questions completed</p>
+          )}
         </div>
 
         {/* Document Status Breakdown */}
@@ -825,6 +1288,7 @@ const DriverVerificationApp = () => {
       case 'landing': return renderLanding();
       case 'email-entry': return renderEmailEntry();
       case 'email-verification': return renderEmailVerification();
+      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
       case 'driver-status': return renderDriverStatus();
       case 'document-upload': return renderDocumentUpload();
       case 'dvla-check': return renderDVLACheck();
