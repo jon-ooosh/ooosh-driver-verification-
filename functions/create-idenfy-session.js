@@ -144,8 +144,8 @@ async function createIdenfySession(email, jobId, driverName) {
       locale: 'en',
       // FIXED: Correct document types according to Idenfy API
       documents: ['ID_CARD', 'PASSPORT', 'DRIVING_LICENCE'],
-      // FIXED: Correct additional steps format
-      additionalSteps: ['FACE_MATCHING'],
+     // Remove additionalSteps for now until we check Idenfy docs
+  // additionalSteps: ['FACE_MATCHING'], 
       expiryTime: 3600, // 1 hour
       sessionLength: 600, // 10 minutes per document
       callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`
