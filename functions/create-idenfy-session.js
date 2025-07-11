@@ -1,6 +1,6 @@
 // File: functions/create-idenfy-session.js
 // OOOSH Driver Verification - Create Idenfy Verification Session
-// FIXED VERSION - Corrected additionalSteps and documents format
+// FIXED VERSION - Correct API parameters based on official documentation
 
 const fetch = require('node-fetch');
 
@@ -118,13 +118,13 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Create Idenfy verification session using their API
+// Create Idenfy verification session using their API - FIXED VERSION
 async function createIdenfySession(email, jobId, driverName) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
     
-    // Hardcode the base URL - it's not secret, it's a public API endpoint
+    // Official Idenfy API endpoint
     const IDENFY_BASE_URL = 'https://ivs.idenfy.com';
 
     // Generate unique client ID
@@ -133,25 +133,42 @@ async function createIdenfySession(email, jobId, driverName) {
     // Create authentication header
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
+    // FIXED: Correct request body according to Idenfy documentation
     const requestBody = {
       clientId: clientId,
       firstName: driverName?.split(' ')[0] || 'Driver',
-      lastName: driverName?.split(' ')[1] || 'Verification',
-      email: email,
+      lastName: driverName?.split(' ').slice(1).join(' ') || 'Verification',
+      
+      // Redirect URLs for different outcomes
       successUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=success&job=${jobId}`,
       errorUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=error&job=${jobId}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=unverified&job=${jobId}`,
+      
+      // Basic settings
       locale: 'en',
-      // FIXED: Correct document types according to Idenfy API
-      documents: ['ID_CARD', 'PASSPORT', 'DRIVING_LICENCE'],
-     // Remove additionalSteps for now until we check Idenfy docs
-  // additionalSteps: ['FACE_MATCHING'], 
-      expiryTime: 3600, // 1 hour
-      sessionLength: 600, // 10 minutes per document
-      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`
+      
+      // FIXED: Remove documents array to allow all UK document types
+      // This allows: ID_CARD, PASSPORT, DRIVER_LICENSE, RESIDENCE_PERMIT
+      // Don't restrict - let users upload what they have
+      
+      // FIXED: Remove additionalSteps - this parameter doesn't exist
+      // Face matching is included by default in IDENTIFICATION token type
+      
+      // Session management
+      expiryTime: 3600, // 1 hour to complete verification
+      sessionLength: 1800, // 30 minutes per verification session
+      
+      // Token type - IDENTIFICATION includes document + selfie verification
+      tokenType: 'IDENTIFICATION',
+      
+      // Webhook for receiving results
+      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
+      
+      // Optional: Additional settings for better verification
+      showInstructions: true
     };
 
-    console.log('Sending request to Idenfy:', JSON.stringify(requestBody, null, 2));
+    console.log('Sending corrected request to Idenfy:', JSON.stringify(requestBody, null, 2));
 
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
@@ -163,10 +180,16 @@ async function createIdenfySession(email, jobId, driverName) {
     });
 
     const result = await response.json();
+    console.log('Idenfy API response status:', response.status);
     console.log('Idenfy API response:', JSON.stringify(result, null, 2));
 
     if (!response.ok) {
-      throw new Error(`Idenfy API error: ${result.message || response.statusText}`);
+      throw new Error(`Idenfy API error (${response.status}): ${result.message || result.error || response.statusText}`);
+    }
+
+    // Check if we got the expected response format
+    if (!result.authToken || !result.scanRef) {
+      throw new Error(`Invalid Idenfy response: missing authToken or scanRef`);
     }
 
     return {
@@ -174,7 +197,7 @@ async function createIdenfySession(email, jobId, driverName) {
       sessionToken: result.authToken,
       scanRef: result.scanRef,
       clientId: clientId,
-      redirectUrl: result.redirectUrl || requestBody.successUrl
+      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`
     };
 
   } catch (error) {
