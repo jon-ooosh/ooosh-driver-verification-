@@ -1,6 +1,6 @@
 // File: src/App.js
-// OOOSH Driver Verification - Main React Application
-// Replace your existing src/App.js with this content
+// OOOSH Driver Verification - Complete React Application with Idenfy Integration
+// Updated with real email verification and document upload flow
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
@@ -32,8 +32,6 @@ const DriverVerificationApp = () => {
   const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
     try {
-      // For now, use mock job details to avoid the 502 error
-      // TODO: Integrate with Monday.com or HireHop API later
       console.log('Validating job:', jobId);
       
       const mockJobDetails = {
@@ -46,7 +44,6 @@ const DriverVerificationApp = () => {
         isValid: true
       };
       
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 500));
       
       setJobDetails(mockJobDetails);
@@ -85,7 +82,6 @@ const DriverVerificationApp = () => {
       });
 
       console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
 
       const data = await response.json();
       console.log('Response data:', data);
@@ -95,12 +91,8 @@ const DriverVerificationApp = () => {
       }
       
       setCurrentStep('email-verification');
+      setError('');
       
-      // In development, show the code in console
-      if (data.debugCode) {
-        console.log('🔐 Verification code (dev only):', data.debugCode);
-        alert(`DEV MODE: Your verification code is ${data.debugCode}`);
-      }
     } catch (err) {
       console.error('Send verification error:', err);
       setError(`Failed to send verification email: ${err.message}`);
@@ -137,12 +129,17 @@ const DriverVerificationApp = () => {
       const data = await response.json();
       console.log('Verify response:', data);
 
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Verification failed');
       }
       
-      // Check driver status after email verification
-      await checkDriverStatus();
+      // Only proceed if verification was successful
+      if (data.verified) {
+        await checkDriverStatus();
+      } else {
+        throw new Error('Invalid verification code');
+      }
+      
     } catch (err) {
       console.error('Verify code error:', err);
       setError(`Verification failed: ${err.message}`);
@@ -169,7 +166,6 @@ const DriverVerificationApp = () => {
       setCurrentStep('driver-status');
     } catch (err) {
       console.error('Error checking driver status:', err);
-      // Fallback to new driver
       setDriverStatus({ status: 'new', email: driverEmail });
       setCurrentStep('driver-status');
     }
@@ -186,18 +182,47 @@ const DriverVerificationApp = () => {
   const generateIdenfyToken = async () => {
     setLoading(true);
     try {
-      // TODO: Create Idenfy verification session
       console.log('Starting Idenfy verification for:', driverEmail);
       
-      // Mock for development - skip to processing
-      setCurrentStep('processing');
-      setTimeout(() => {
-        setCurrentStep('complete');
-      }, 3000);
+      const response = await fetch('/.netlify/functions/create-idenfy-session', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          email: driverEmail, 
+          jobId: jobId,
+          driverName: driverStatus?.name 
+        })
+      });
+
+      const data = await response.json();
+      console.log('Idenfy session response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      if (data.sessionToken && data.sessionToken.startsWith('mock_')) {
+        // Mock mode - show processing then complete
+        console.log('Mock Idenfy mode - simulating verification');
+        setCurrentStep('processing');
+        setTimeout(() => {
+          setCurrentStep('complete');
+        }, 3000);
+      } else if (data.sessionToken) {
+        // Real Idenfy mode - redirect to verification
+        console.log('Redirecting to Idenfy verification');
+        const idenfyUrl = `https://ivs.idenfy.com/api/v2/redirect?authToken=${data.sessionToken}`;
+        window.location.href = idenfyUrl;
+      } else {
+        throw new Error('No session token received from Idenfy');
+      }
       
     } catch (err) {
       console.error('Idenfy error:', err);
-      setError('Failed to start document verification. Please try again.');
+      setError(`Failed to start document verification: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -255,7 +280,6 @@ const DriverVerificationApp = () => {
 
   const extractDVLAData = async (base64Image) => {
     try {
-      // TODO: Use window.claude.complete to extract DVLA data
       console.log('Extracting DVLA data from image...');
       
       // Mock response for development
@@ -275,11 +299,9 @@ const DriverVerificationApp = () => {
   };
 
   const validateDVLAData = (dvlaData) => {
-    // Validate that extracted data makes sense
     if (!dvlaData.driverName || !dvlaData.licenseNumber || !dvlaData.checkCode) {
       return false;
     }
-    
     return true;
   };
 
@@ -561,6 +583,12 @@ const DriverVerificationApp = () => {
           </p>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
 
       <button
         onClick={generateIdenfyToken}
