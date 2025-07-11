@@ -113,42 +113,42 @@ async function createIdenfySession(email, jobId, driverName) {
     const clientId = `ooosh_${jobId}_${email.replace('@', '_').replace('.', '_')}_${Date.now()}`;
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-    // FIXED: Use proper parameters based on JotForm learnings
+    // FIXED: Simplified parameters - remove problematic additionalSteps for now
     const requestBody = {
       clientId: clientId,
       firstName: driverName?.split(' ')[0] || 'Driver',
       lastName: driverName?.split(' ').slice(1).join(' ') || 'Verification',
       
-      // FIXED: Use your domain for callbacks
+      // Return to your app with status
       successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}`,
       errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}`,
       
-      // FIXED: Add webhook URL for result processing
-      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
+      // REMOVED: callbackUrl - we'll add this after you configure webhooks
+      // callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
       
       locale: 'en',
       
-      // FIXED: Set UK as default country (from JotForm script)
-      country: 'GB',
+      // REMOVED: Let users choose their country
+      // country: 'GB',
       
-      // FIXED: Specify required documents (driving license + POA)
+      // Just driving license for now - we'll add POA extraction after testing basic flow
       documents: ['DRIVER_LICENSE'],
       
-      // FIXED: Add POA extraction (from JotForm script)
-      additionalSteps: {
-        UTILITY_BILL: 'EXTRACT',
-        POA2: 'EXTRACT'
-      },
+      // REMOVED: additionalSteps causing the error
+      // additionalSteps: {
+      //   UTILITY_BILL: 'EXTRACT',
+      //   POA2: 'EXTRACT'
+      // },
       
       // Session settings
       expiryTime: 3600,
       sessionLength: 1800,
       tokenType: 'IDENTIFICATION',
-      showInstructions: true,
+      showInstructions: true
       
-      // FIXED: Add signature extraction
-      extractSignature: true
+      // REMOVED: We'll capture signature in React instead
+      // extractSignature: true
     };
 
     console.log('FIXED: Sending request to Idenfy with proper parameters:', JSON.stringify(requestBody, null, 2));
