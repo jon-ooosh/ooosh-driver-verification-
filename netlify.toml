@@ -1,6 +1,6 @@
 # File: netlify.toml
 # OOOSH Driver Verification - Netlify Configuration
-# Replace your existing netlify.toml with this content
+# Fixed version with no hardcoded Idenfy URLs
 
 [build]
   publish = "build"
@@ -14,7 +14,7 @@
   to = "/index.html"
   status = 200
 
-# Security headers with proper CSP for Tailwind CSS
+# Security headers with CSP that doesn't expose Idenfy URLs
 [[headers]]
   for = "/*"
   [headers.values]
@@ -22,7 +22,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://ivs.idenfy.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://ivs.idenfy.com https://api.claude.ai https://script.google.com https://script.googleusercontent.com; frame-src https://ivs.idenfy.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.claude.ai https://script.google.com https://script.googleusercontent.com https:; frame-src https:;"
 
 # Function-specific configuration - use root functions directory
 [functions]
