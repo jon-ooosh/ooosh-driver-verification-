@@ -1,6 +1,6 @@
 // File: functions/create-idenfy-session.js
 // OOOSH Driver Verification - Create Idenfy Verification Session
-// FIXED VERSION - Correct API parameters based on official documentation
+// FIXED VERSION - Remove callback URL for basic accounts
 
 const fetch = require('node-fetch');
 
@@ -118,7 +118,7 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Create Idenfy verification session using their API - FIXED VERSION
+// Create Idenfy verification session using their API - FIXED VERSION (No Callback)
 async function createIdenfySession(email, jobId, driverName) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
@@ -133,7 +133,7 @@ async function createIdenfySession(email, jobId, driverName) {
     // Create authentication header
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-    // FIXED: Correct request body according to Idenfy documentation
+    // FIXED: Remove callback URL for basic accounts
     const requestBody = {
       clientId: clientId,
       firstName: driverName?.split(' ')[0] || 'Driver',
@@ -147,13 +147,6 @@ async function createIdenfySession(email, jobId, driverName) {
       // Basic settings
       locale: 'en',
       
-      // FIXED: Remove documents array to allow all UK document types
-      // This allows: ID_CARD, PASSPORT, DRIVER_LICENSE, RESIDENCE_PERMIT
-      // Don't restrict - let users upload what they have
-      
-      // FIXED: Remove additionalSteps - this parameter doesn't exist
-      // Face matching is included by default in IDENTIFICATION token type
-      
       // Session management
       expiryTime: 3600, // 1 hour to complete verification
       sessionLength: 1800, // 30 minutes per verification session
@@ -161,14 +154,14 @@ async function createIdenfySession(email, jobId, driverName) {
       // Token type - IDENTIFICATION includes document + selfie verification
       tokenType: 'IDENTIFICATION',
       
-      // Webhook for receiving results
-      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
+      // REMOVED: callbackUrl - Not allowed on basic accounts
+      // callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
       
       // Optional: Additional settings for better verification
       showInstructions: true
     };
 
-    console.log('Sending corrected request to Idenfy:', JSON.stringify(requestBody, null, 2));
+    console.log('Sending request to Idenfy (no callback):', JSON.stringify(requestBody, null, 2));
 
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
