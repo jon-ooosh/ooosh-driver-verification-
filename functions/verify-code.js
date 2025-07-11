@@ -1,8 +1,16 @@
 // File: functions/verify-code.js
 // OOOSH Driver Verification - Verify Email Code Function
-// FIXED VERSION with proper error handling
+// FIXED VERSION with TESTING BACKDOOR for development
 
 const fetch = require('node-fetch');
+
+// 🚨 TESTING BACKDOOR - REMOVE BEFORE PRODUCTION! 🚨
+const TEST_EMAILS = [
+  'test@oooshtours.co.uk',
+  'jon@oooshtours.co.uk', // For easy testing
+  'demo@oooshtours.co.uk',
+  'dev@oooshtours.co.uk'
+];
 
 exports.handler = async (event, context) => {
   console.log('Verify code function called with method:', event.httpMethod);
@@ -53,6 +61,26 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // 🚨 TESTING BACKDOOR - Auto-verify test emails 🚨
+    if (TEST_EMAILS.includes(email.toLowerCase())) {
+      console.log('🚨 TESTING BACKDOOR: Auto-verifying test email:', email);
+      console.log('🚨 ANY CODE ACCEPTED FOR TEST EMAILS - REMOVE IN PRODUCTION!');
+      
+      // Create driver record for test email
+      await createTestDriverRecord(email, jobId);
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          success: true, 
+          verified: true,
+          message: 'Email verified successfully (TEST MODE)',
+          testMode: true
+        })
+      };
+    }
+
     // Check if Google Apps Script URL is configured
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
       console.log('GOOGLE_APPS_SCRIPT_URL not configured, using mock verification');
@@ -80,7 +108,7 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Call Google Apps Script
+    // Call Google Apps Script for real verification
     console.log('Calling Google Apps Script for verification');
     
     const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
@@ -147,3 +175,35 @@ exports.handler = async (event, context) => {
     };
   }
 };
+
+// Create test driver record for backdoor emails
+async function createTestDriverRecord(email, jobId) {
+  try {
+    if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
+      console.log('No Google Apps Script URL - skipping test driver creation');
+      return;
+    }
+
+    // Call Google Apps Script to create driver record
+    const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'create-test-driver',
+        email: email,
+        jobId: jobId
+      })
+    });
+
+    if (response.ok) {
+      console.log('Test driver record created successfully');
+    } else {
+      console.error('Failed to create test driver record');
+    }
+
+  } catch (error) {
+    console.error('Error creating test driver record:', error);
+  }
+}
