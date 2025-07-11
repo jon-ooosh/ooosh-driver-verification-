@@ -1,6 +1,6 @@
 // File: functions/create-idenfy-session.js
 // OOOSH Driver Verification - Create Idenfy Verification Session
-// Final version - no environment variable needed for base URL
+// FIXED VERSION - Corrected additionalSteps and documents format
 
 const fetch = require('node-fetch');
 
@@ -142,7 +142,9 @@ async function createIdenfySession(email, jobId, driverName) {
       errorUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=error&job=${jobId}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=unverified&job=${jobId}`,
       locale: 'en',
-      documents: ['DRIVING_LICENCE', 'UTILITY_BILL', 'BANK_STATEMENT'],
+      // FIXED: Correct document types according to Idenfy API
+      documents: ['ID_CARD', 'PASSPORT', 'DRIVING_LICENCE'],
+      // FIXED: Correct additional steps format
       additionalSteps: ['FACE_MATCHING'],
       expiryTime: 3600, // 1 hour
       sessionLength: 600, // 10 minutes per document
