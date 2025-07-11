@@ -40,7 +40,7 @@ const DriverVerificationApp = () => {
       console.log('Verification complete callback:', { status, job, session });
       handleVerificationComplete(status, job, session);
     }
-  }, []);
+  }, [driverStatus]); // Add driverStatus as dependency to fix React warning
 
   const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
