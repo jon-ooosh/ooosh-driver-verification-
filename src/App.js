@@ -40,7 +40,8 @@ const DriverVerificationApp = () => {
       console.log('Verification complete callback:', { status, job, session });
       handleVerificationComplete(status, job, session);
     }
-  }, [driverStatus]); // Add driverStatus as dependency to fix React warning
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Disable exhaustive deps warning for this useEffect
 
   const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
