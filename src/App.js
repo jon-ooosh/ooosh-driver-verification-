@@ -460,16 +460,10 @@ const DriverVerificationApp = () => {
       hasAccidents: null,
       hasInsuranceIssues: null,
       hasDrivingBan: null,
-      additionalDetails: '',
-      signature: null,
-      declarationAccepted: false
+      additionalDetails: ''
     });
     
     const [errors, setErrors] = useState({});
-    const [currentSection, setCurrentSection] = useState('questions'); // 'questions' or 'signature'
-    const [poaFiles, setPoaFiles] = useState({ poa1: null, poa2: null });
-    
-    const signatureRef = useRef(null);
 
     const handleQuestionChange = (field, value) => {
       setFormData(prev => ({
@@ -481,33 +475,6 @@ const DriverVerificationApp = () => {
       if (errors[field]) {
         setErrors(prev => ({ ...prev, [field]: null }));
       }
-    };
-
-    const handleFileUpload = (type, file) => {
-      if (!file) return;
-      
-      // Validate file type and size
-      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      
-      if (!validTypes.includes(file.type)) {
-        setErrors(prev => ({ 
-          ...prev, 
-          [type]: 'Please upload a JPEG, PNG, or PDF file' 
-        }));
-        return;
-      }
-      
-      if (file.size > maxSize) {
-        setErrors(prev => ({ 
-          ...prev, 
-          [type]: 'File size must be less than 10MB' 
-        }));
-        return;
-      }
-      
-      setPoaFiles(prev => ({ ...prev, [type]: file }));
-      setErrors(prev => ({ ...prev, [type]: null }));
     };
 
     const validateQuestions = () => {
@@ -525,54 +492,24 @@ const DriverVerificationApp = () => {
         }
       });
 
-      // NOTE: POA files are now optional since Idenfy handles them automatically
-      // We'll keep them as backup but not require them
-      
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    };
-
-    const proceedToSignature = () => {
-      if (validateQuestions()) {
-        setCurrentSection('signature');
-      }
-    };
-
-    const validateSignature = () => {
-      const newErrors = {};
-      
-      if (!formData.signature && signatureRef.current?.isEmpty()) {
-        newErrors.signature = 'Please provide your signature';
-      }
-      
-      if (!formData.declarationAccepted) {
-        newErrors.declarationAccepted = 'You must accept the declaration';
-      }
+      // No POA file validation needed anymore
       
       setErrors(newErrors);
       return Object.keys(newErrors).length === 0;
     };
 
     const handleSubmit = async () => {
-      if (!validateSignature()) return;
+      if (!validateQuestions()) return;
 
       try {
-        // Capture signature as base64
-        let signatureData = formData.signature;
-        if (signatureRef.current && !signatureRef.current.isEmpty()) {
-          signatureData = signatureRef.current.toDataURL();
-        }
-
         const submissionData = {
           ...formData,
-          signature: signatureData,
           email: driverEmail,
           jobId: jobId,
-          poaFiles: poaFiles,
           submittedAt: new Date().toISOString()
         };
 
-        // Call completion handler
+        // Call completion handler (no signature for now)
         await handleInsuranceComplete(submissionData);
         
       } catch (error) {
@@ -623,43 +560,16 @@ const DriverVerificationApp = () => {
       </div>
     );
 
-    const FileUpload = ({ type, label, file }) => (
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
-          {label} <span className="text-orange-500">(Optional - backup only)</span>
-        </label>
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-          <input
-            type="file"
-            accept="image/*,.pdf"
-            onChange={(e) => handleFileUpload(type, e.target.files[0])}
-            className="w-full"
-          />
-          {file && (
-            <p className="text-sm text-green-600 mt-2">
-              ✓ {file.name} ({(file.size / 1024 / 1024).toFixed(2)}MB)
-            </p>
-          )}
+    // Only show the questions section (no signature section)
+    return (
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <div className="text-center mb-6">
+          <FileText className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+          <h2 className="text-xl font-bold text-gray-900">Insurance Questions</h2>
+          <p className="text-gray-600 mt-2">Required for insurance compliance</p>
         </div>
-        <p className="text-xs text-gray-500">
-          Idenfy will handle POA verification automatically. Upload here only as backup.
-        </p>
-        {errors[type] && (
-          <p className="text-sm text-red-600">{errors[type]}</p>
-        )}
-      </div>
-    );
 
-    if (currentSection === 'questions') {
-      return (
-        <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
-          <div className="text-center mb-6">
-            <FileText className="mx-auto h-12 w-12 text-blue-600 mb-4" />
-            <h2 className="text-xl font-bold text-gray-900">Insurance Questions</h2>
-            <p className="text-gray-600 mt-2">Required for insurance compliance</p>
-          </div>
-
-          <div className="space-y-6">
+        <div className="space-y-6">
             {/* Insurance Questions */}
             <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
               <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
@@ -710,25 +620,13 @@ const DriverVerificationApp = () => {
               />
             </div>
 
-            {/* Proof of Address Upload - Now Optional */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-              <h3 className="font-medium text-yellow-900 mb-4">Proof of Address Documents (Optional Backup)</h3>
-              <p className="text-sm text-yellow-800 mb-4">
-                <strong>Note:</strong> Idenfy will automatically request proof of address documents during verification. 
-                Upload here only if you want to provide backup copies.
+            {/* Info about POA - No upload needed */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <h3 className="font-medium text-blue-900 mb-2">📄 Proof of Address Requirements</h3>
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
+                Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
               </p>
-              <div className="space-y-4">
-                <FileUpload
-                  type="poa1"
-                  label="First Proof of Address"
-                  file={poaFiles.poa1}
-                />
-                <FileUpload
-                  type="poa2"
-                  label="Second Proof of Address"
-                  file={poaFiles.poa2}
-                />
-              </div>
             </div>
 
             {/* Error Display */}
@@ -752,10 +650,10 @@ const DriverVerificationApp = () => {
                 Back
               </button>
               <button
-                onClick={proceedToSignature}
+                onClick={handleSubmit}
                 className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
               >
-                Continue to Signature
+                Continue to Documents
               </button>
             </div>
           </div>
