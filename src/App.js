@@ -226,13 +226,14 @@ const DriverVerificationApp = () => {
     try {
       setLoading(true);
       
-      const response = await fetch('https://script.google.com/macros/s/AKfycbwdI9xA0KP1ORvvCxNdYqCNZLlar81sCJLy48jImZQqVh8Hm-QdaHXMTtS2kZRShz_84g/exec', {
+      // Use existing environment variable (note: React needs REACT_APP_ prefix for client-side access)
+      // Since this runs in the browser, we need to call through a Netlify function instead
+      const response = await fetch('/.netlify/functions/save-insurance-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'save-insurance-data',
           email: driverEmail,
           jobId: jobId,
           insuranceData: insuranceFormData
