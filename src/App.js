@@ -1,10 +1,9 @@
 // File: src/App.js
 // OOOSH Driver Verification - Complete React Application with Insurance Questionnaire
-// UPDATED VERSION with questionnaire workflow
+// FIXED VERSION - Clean structure to resolve syntax errors
 
-import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera, PenTool } from 'lucide-react';
-import SignatureCanvas from 'react-signature-canvas';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -492,8 +491,6 @@ const DriverVerificationApp = () => {
         }
       });
 
-      // No POA file validation needed anymore
-      
       setErrors(newErrors);
       return Object.keys(newErrors).length === 0;
     };
@@ -509,7 +506,7 @@ const DriverVerificationApp = () => {
           submittedAt: new Date().toISOString()
         };
 
-        // Call completion handler (no signature for now)
+        // Call completion handler
         await handleInsuranceComplete(submissionData);
         
       } catch (error) {
@@ -553,7 +550,6 @@ const DriverVerificationApp = () => {
       </div>
     );
 
-    // Only show the questions section (no signature section)
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
@@ -563,181 +559,90 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="space-y-6">
-            {/* Insurance Questions */}
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
-              <div className="space-y-4">
-                <YesNoQuestion
-                  field="hasDisability"
-                  question="Have you any physical or mental disability or infirmity, or been told by your doctor not to drive, even temporarily?"
-                />
-                
-                <YesNoQuestion
-                  field="hasConvictions"
-                  question="Have you ever had a BA, DD, DR, UT, MS90, MS30, IN10, CU80, TT99, or CD conviction, or a single SP offence yielding 6 or more points?"
-                />
-                
-                <YesNoQuestion
-                  field="hasProsecution"
-                  question="Have you in the past 5 years been convicted of any of the following offences: manslaughter, causing death by dangerous driving, driving whilst under the influence of drink or drugs, failing to stop after and/or report an accident to police or any combination of offences that have resulted in suspension or disqualification from driving?"
-                />
-                
-                <YesNoQuestion
-                  field="hasAccidents"
-                  question="Have you been involved in any motoring accidents in the past three years?"
-                />
-                
-                <YesNoQuestion
-                  field="hasInsuranceIssues"
-                  question="Have you ever been refused motor insurance or had any special terms or premiums imposed?"
-                />
-                
-                <YesNoQuestion
-                  field="hasDrivingBan"
-                  question="Have you been banned or disqualified from driving in the past 5 years?"
-                />
-              </div>
-            </div>
-
-            {/* Additional Details */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Additional Information (Optional)
-              </label>
-              <textarea
-                value={formData.additionalDetails}
-                onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Please provide any additional details about your answers above..."
+          {/* Insurance Questions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+            <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
+            <div className="space-y-4">
+              <YesNoQuestion
+                field="hasDisability"
+                question="Have you any physical or mental disability or infirmity, or been told by your doctor not to drive, even temporarily?"
+              />
+              
+              <YesNoQuestion
+                field="hasConvictions"
+                question="Have you ever had a BA, DD, DR, UT, MS90, MS30, IN10, CU80, TT99, or CD conviction, or a single SP offence yielding 6 or more points?"
+              />
+              
+              <YesNoQuestion
+                field="hasProsecution"
+                question="Have you in the past 5 years been convicted of any of the following offences: manslaughter, causing death by dangerous driving, driving whilst under the influence of drink or drugs, failing to stop after and/or report an accident to police or any combination of offences that have resulted in suspension or disqualification from driving?"
+              />
+              
+              <YesNoQuestion
+                field="hasAccidents"
+                question="Have you been involved in any motoring accidents in the past three years?"
+              />
+              
+              <YesNoQuestion
+                field="hasInsuranceIssues"
+                question="Have you ever been refused motor insurance or had any special terms or premiums imposed?"
+              />
+              
+              <YesNoQuestion
+                field="hasDrivingBan"
+                question="Have you been banned or disqualified from driving in the past 5 years?"
               />
             </div>
+          </div>
 
-            {/* Info about POA - No upload needed */}
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <h3 className="font-medium text-blue-900 mb-2">📄 Proof of Address Requirements</h3>
-              <p className="text-sm text-blue-800">
-                <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
-                Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
-              </p>
-            </div>
+          {/* Additional Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Additional Information (Optional)
+            </label>
+            <textarea
+              value={formData.additionalDetails}
+              onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Please provide any additional details about your answers above..."
+            />
+          </div>
 
-            {/* Error Display */}
-            {errors.submit && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                  <div className="ml-3">
-                    <p className="text-sm text-red-800">{errors.submit}</p>
-                  </div>
+          {/* Info about POA - No upload needed */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+            <h3 className="font-medium text-blue-900 mb-2">📄 Proof of Address Requirements</h3>
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
+              Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
+            </p>
+          </div>
+
+          {/* Error Display */}
+          {errors.submit && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                <div className="ml-3">
+                  <p className="text-sm text-red-800">{errors.submit}</p>
                 </div>
               </div>
-            )}
-
-            {/* Navigation */}
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setCurrentStep('email-verification')}
-                className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
-              >
-                Continue to Documents
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Signature Section
-    return (
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
-        <div className="text-center mb-6">
-          <PenTool className="mx-auto h-12 w-12 text-blue-600 mb-4" />
-          <h2 className="text-xl font-bold text-gray-900">Digital Signature</h2>
-          <p className="text-gray-600 mt-2">Sign to confirm your declaration</p>
-        </div>
-
-        <div className="space-y-6">
-          {/* Declaration Text */}
-          <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-            <h3 className="font-medium text-gray-900 mb-3">Declaration</h3>
-            <div className="text-sm text-gray-700 space-y-2">
-              <p>I hereby warrant the truth of my above statements and I declare that I have not withheld any information whatsoever which might in anyway increase the risk of the insurers or influence the acceptance of this proposal.</p>
-              <p>I agree that this proposal shall be the basis of the contract between myself and the company.</p>
-              <p><strong>By my signature, I acknowledge that the information provided is accurate and true.</strong></p>
-            </div>
-          </div>
-
-          {/* Signature Pad */}
-          <div className="border border-gray-300 rounded-md">
-            <div className="bg-gray-50 px-4 py-2 border-b border-gray-300">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Your Signature</span>
-                <button
-                  onClick={clearSignature}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div className="p-4">
-              <SignatureCanvas
-                ref={signatureRef}
-                canvasProps={{
-                  width: 500,
-                  height: 200,
-                  className: 'signature-canvas border border-gray-200 rounded w-full'
-                }}
-                backgroundColor="white"
-              />
-            </div>
-          </div>
-
-          {/* Acceptance Checkbox */}
-          <div className="flex items-start">
-            <input
-              type="checkbox"
-              id="declaration"
-              checked={formData.declarationAccepted}
-              onChange={(e) => handleQuestionChange('declarationAccepted', e.target.checked)}
-              className="mt-1 mr-3"
-            />
-            <label htmlFor="declaration" className="text-sm text-gray-700">
-              By clicking the Continue button I agree to the above terms and conditions. 
-              <span className="text-red-500">*</span>
-            </label>
-          </div>
-
-          {/* Errors */}
-          {(errors.signature || errors.declarationAccepted || errors.submit) && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
-              {errors.signature && <p className="text-sm text-red-800">{errors.signature}</p>}
-              {errors.declarationAccepted && <p className="text-sm text-red-800">{errors.declarationAccepted}</p>}
-              {errors.submit && <p className="text-sm text-red-800">{errors.submit}</p>}
             </div>
           )}
 
           {/* Navigation */}
           <div className="flex space-x-3">
             <button
-              onClick={() => setCurrentSection('questions')}
+              onClick={() => setCurrentStep('email-verification')}
               className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300"
             >
-              Back to Questions
+              Back
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading}
-              className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50"
+              className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
             >
-              {loading ? 'Submitting...' : 'Submit & Continue'}
+              Continue to Documents
             </button>
           </div>
         </div>
@@ -745,7 +650,7 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // Render functions for each step (keeping your existing ones)
+  // Render functions for each step
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
