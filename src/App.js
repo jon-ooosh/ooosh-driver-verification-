@@ -218,16 +218,16 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // Handle insurance questionnaire completion
   const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
-    // TODO: Save insurance data to Google Sheets via Apps Script
+    // Save insurance data to Google Sheets via Apps Script
     try {
       setLoading(true);
       
-      // Call your Google Apps Script to save insurance data
-      const response = await fetch(process.env.REACT_APP_GOOGLE_APPS_SCRIPT_URL || '/.netlify/functions/save-insurance-data', {
+      const response = await fetch('https://script.google.com/macros/s/AKfycbwdI9xA0KP1ORvvCxNdYqCNZLlar81sCJLy48jImZQqVh8Hm-QdaHXMTtS2kZRShz_84g/exec', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -516,13 +516,6 @@ const DriverVerificationApp = () => {
         console.error('Submission error:', error);
         setErrors({ submit: 'Failed to submit questionnaire. Please try again.' });
       }
-    };
-
-    const clearSignature = () => {
-      if (signatureRef.current) {
-        signatureRef.current.clear();
-      }
-      setFormData(prev => ({ ...prev, signature: null }));
     };
 
     const YesNoQuestion = ({ field, question, required = true }) => (
