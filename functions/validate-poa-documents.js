@@ -1,5 +1,6 @@
 // File: functions/validate-poa-documents.js
 // NEW: Claude OCR validation for POA compliance checking
+// Validates POA documents for insurance compliance using Claude Vision API
 
 const fetch = require('node-fetch');
 
