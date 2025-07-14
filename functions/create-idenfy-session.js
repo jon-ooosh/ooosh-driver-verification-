@@ -1,5 +1,5 @@
 // File: functions/create-idenfy-session.js
-// FIXED VERSION - Based on learnings from JotForm integration
+// FIXED VERSION - Removes name comparison to prevent mismatches
 
 const fetch = require('node-fetch');
 
@@ -35,7 +35,7 @@ exports.handler = async (event, context) => {
     }
 
     const { email, jobId, driverName } = JSON.parse(event.body);
-    console.log('Creating Idenfy session for:', { email, jobId, driverName });
+    console.log('Creating Idenfy session for:', { email, jobId });
 
     if (!email || !jobId) {
       return {
@@ -61,8 +61,8 @@ exports.handler = async (event, context) => {
       return { statusCode: 200, headers, body: JSON.stringify(mockResponse) };
     }
 
-    // FIXED: Create Idenfy session with correct parameters
-    const idenfyResponse = await createIdenfySession(email, jobId, driverName);
+    // Create Idenfy session with NO name comparison
+    const idenfyResponse = await createIdenfySession(email, jobId);
     
     if (!idenfyResponse.success) {
       throw new Error(idenfyResponse.error || 'Failed to create Idenfy session');
@@ -103,8 +103,8 @@ exports.handler = async (event, context) => {
   }
 };
 
-// FIXED: Create Idenfy session with proper country handling and document selection
-async function createIdenfySession(email, jobId, driverName) {
+// FIXED: Create Idenfy session WITHOUT name fields to prevent mismatches
+async function createIdenfySession(email, jobId) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
@@ -113,45 +113,37 @@ async function createIdenfySession(email, jobId, driverName) {
     const clientId = `ooosh_${jobId}_${email.replace('@', '_').replace('.', '_')}_${Date.now()}`;
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-    // FIXED: Simplified parameters - remove problematic additionalSteps for now
+    // FIXED: Remove firstName/lastName to prevent name mismatch issues
     const requestBody = {
       clientId: clientId,
-      firstName: driverName?.split(' ')[0] || 'Driver',
-      lastName: driverName?.split(' ').slice(1).join(' ') || 'Verification',
       
-      // Return to your app with status
+      // Return URLs for different outcomes
       successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}`,
       errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}`,
       
-      // REMOVED: callbackUrl - we'll add this after you configure webhooks
-      // callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
+      // NEW: Add webhook URL for result processing
+      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
       
       locale: 'en',
       
-      // REMOVED: Let users choose their country
-      // country: 'GB',
-      
-      // Just driving license for now - we'll add POA extraction after testing basic flow
+      // License verification + POA extraction
       documents: ['DRIVER_LICENSE'],
       
-      // REMOVED: additionalSteps causing the error
-      // additionalSteps: {
-      //   UTILITY_BILL: 'EXTRACT',
-      //   POA2: 'EXTRACT'
-      // },
+      // NEW: Enable POA extraction for insurance compliance
+      additionalSteps: {
+        'UTILITY_BILL': 'EXTRACT',
+        'BANK_STATEMENT': 'EXTRACT'
+      },
       
       // Session settings
       expiryTime: 3600,
       sessionLength: 1800,
       tokenType: 'IDENTIFICATION',
       showInstructions: true
-      
-      // REMOVED: We'll capture signature in React instead
-      // extractSignature: true
     };
 
-    console.log('FIXED: Sending request to Idenfy with proper parameters:', JSON.stringify(requestBody, null, 2));
+    console.log('FIXED: Sending request to Idenfy WITHOUT name fields:', JSON.stringify(requestBody, null, 2));
 
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
@@ -167,33 +159,6 @@ async function createIdenfySession(email, jobId, driverName) {
     console.log('Idenfy API response:', JSON.stringify(result, null, 2));
 
     if (!response.ok) {
-      // FIXED: Better error handling for country issues
-      if (result.message && result.message.includes('country')) {
-        console.log('Country error detected, retrying with null country...');
-        
-        // Retry without country specification
-        const retryBody = { ...requestBody, country: null };
-        const retryResponse = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(retryBody)
-        });
-
-        if (retryResponse.ok) {
-          const retryResult = await retryResponse.json();
-          return {
-            success: true,
-            sessionToken: retryResult.authToken,
-            scanRef: retryResult.scanRef,
-            clientId: clientId,
-            redirectUrl: `https://ui.idenfy.com/session?authToken=${retryResult.authToken}`
-          };
-        }
-      }
-      
       throw new Error(`Idenfy API error (${response.status}): ${result.message || result.error || response.statusText}`);
     }
 
