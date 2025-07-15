@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude OCR Test - OOOSH Driver Verification</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 py-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-4">🔍 Claude OCR Test</h1>
+            <p class="text-gray-600 mb-6">Test POA and DVLA document processing independently</p>
+            
+            <!-- Test Selection -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Test Type</label>
+                <select id="testType" class="w-full p-2 border border-gray-300 rounded-md">
+                    <option value="poa">POA Document (Proof of Address)</option>
+                    <option value="dvla">DVLA Check Document</option>
+                </select>
+            </div>
+
+            <!-- File Upload -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Upload Document Image</label>
+                <input type="file" id="fileInput" accept="image/*" 
+                       class="w-full p-2 border border-gray-300 rounded-md">
+                <p class="text-xs text-gray-500 mt-1">
+                    Accepts: JPG, PNG, WebP. For best results, ensure image is clear and text is readable.
+                </p>
+            </div>
+
+            <!-- POA-specific options -->
+            <div id="poaOptions" class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Expected Address (for POA validation)</label>
+                <input type="text" id="licenseAddress" value="123 Test Street, London, SW1A 1AA"
+                       class="w-full p-2 border border-gray-300 rounded-md"
+                       placeholder="Enter the license address to match against">
+            </div>
+
+            <!-- Test Button -->
+            <button id="testBtn" onclick="runTest()" 
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                🧪 Run Claude OCR Test
+            </button>
+
+            <!-- Loading State -->
+            <div id="loading" class="hidden text-center py-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p class="text-gray-600">Processing with Claude Vision API...</p>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error" class="hidden mt-4 bg-red-50 border border-red-200 rounded-md p-4">
+                <h3 class="font-medium text-red-900">Error</h3>
+                <p id="errorText" class="text-red-800 text-sm mt-1"></p>
+            </div>
+        </div>
+
+        <!-- Results Display -->
+        <div id="results" class="hidden bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">📊 OCR Results</h2>
+            <div id="resultsContent"></div>
+        </div>
+
+        <!-- Sample Documents -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 class="font-medium text-blue-900 mb-3">📝 Sample Documents for Testing</h3>
+            <div class="text-sm text-blue-800 space-y-2">
+                <p><strong>POA Documents:</strong> Take a photo of a utility bill, bank statement, or council tax bill. 
+                   Ensure the address and date are clearly visible.</p>
+                <p><strong>DVLA Check:</strong> Visit gov.uk/check-driving-licence, generate a check, and screenshot 
+                   the summary page showing license details and any endorsements.</p>
+                <p><strong>Image Quality Tips:</strong> Good lighting, no glare, text clearly readable, full document visible.</p>
+            </div>
+        </div>
+
+        <!-- API Configuration Note -->
+        <div class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 class="font-medium text-yellow-900 mb-2">⚙️ Configuration</h3>
+            <p class="text-sm text-yellow-800">
+                If Claude API is not configured, the test will return mock data. 
+                Set <code>CLAUDE_API_KEY</code> environment variable for real OCR processing.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function runTest() {
+            const testType = document.getElementById('testType').value;
+            const fileInput = document.getElementById('fileInput');
+            const licenseAddress = document.getElementById('licenseAddress').value;
+            
+            // Validation
+            if (!fileInput.files[0]) {
+                showError('Please select an image file');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            if (!file.type.startsWith('image/')) {
+                showError('Please select a valid image file');
+                return;
+            }
+
+            // Show loading
+            showLoading();
+            hideError();
+            hideResults();
+
+            // Convert file to base64
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Data = e.target.result.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+                
+                // Call the test function
+                callTestApi(testType, base64Data, licenseAddress);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function callTestApi(testType, imageData, licenseAddress) {
+            try {
+                const payload = {
+                    testType: testType,
+                    imageData: imageData
+                };
+
+                if (testType === 'poa') {
+                    payload.licenseAddress = licenseAddress;
+                }
+
+                const response = await fetch('/.netlify/functions/test-claude-ocr', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResults(result);
+                } else {
+                    throw new Error(result.error || 'Test failed');
+                }
+
+            } catch (error) {
+                console.error('Test error:', error);
+                showError(`Test failed: ${error.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function showResults(data) {
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('resultsContent');
+            
+            // Create formatted display
+            let html = '';
+            
+            if (data.result.mockMode) {
+                html += '<div class="bg-orange-50 border border-orange-200 rounded-md p-3 mb-4">';
+                html += '<p class="text-orange-800 text-sm">🧪 <strong>Mock Mode:</strong> Claude API not configured, showing sample data</p>';
+                html += '</div>';
+            }
+
+            // Test type and timestamp
+            html += `<div class="mb-4">`;
+            html += `<p><strong>Test Type:</strong> ${data.testType.toUpperCase()}</p>`;
+            html += `<p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</p>`;
+            html += `</div>`;
+
+            // Results in formatted sections
+            if (data.testType === 'poa') {
+                html += formatPoaResults(data.result);
+            } else if (data.testType === 'dvla') {
+                html += formatDvlaResults(data.result);
+            }
+
+            // Raw JSON (collapsible)
+            html += `<div class="mt-6 border-t pt-4">`;
+            html += `<button onclick="toggleRawJson()" class="text-blue-600 hover:text-blue-800 text-sm">Show/Hide Raw JSON</button>`;
+            html += `<pre id="rawJson" class="hidden mt-2 bg-gray-100 p-3 rounded text-xs overflow-auto">${JSON.stringify(data.result, null, 2)}</pre>`;
+            html += `</div>`;
+
+            contentDiv.innerHTML = html;
+            resultsDiv.classList.remove('hidden');
+        }
+
+        function formatPoaResults(result) {
+            let html = '<div class="space-y-4">';
+            
+            // Validation Status
+            html += '<div class="border rounded-lg p-4">';
+            html += `<h3 class="font-medium mb-2 ${result.isValid ? 'text-green-700' : 'text-red-700'}">`;
+            html += `${result.isValid ? '✅' : '❌'} Validation Status</h3>`;
+            html += `<p class="text-sm ${result.isValid ? 'text-green-600' : 'text-red-600'}">`;
+            html += `${result.isValid ? 'Document passed validation' : 'Document failed validation'}`;
+            html += `</p>`;
+            if (result.issues && result.issues.length > 0) {
+                html += '<div class="mt-2"><strong>Issues:</strong><ul class="list-disc ml-5 text-sm">';
+                result.issues.forEach(issue => html += `<li>${issue}</li>`);
+                html += '</ul></div>';
+            }
+            html += '</div>';
+
+            // Document Details
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+            
+            html += '<div class="border rounded-lg p-4">';
+            html += '<h3 class="font-medium mb-2">Document Information</h3>';
+            html += `<p><strong>Type:</strong> ${result.documentType}</p>`;
+            html += `<p><strong>Provider:</strong> ${result.providerName}</p>`;
+            html += `<p><strong>Date:</strong> ${result.documentDate}</p>`;
+            html += `<p><strong>Age:</strong> ${result.ageInDays} days</p>`;
+            html += `<p><strong>Account:</strong> ${result.accountNumber}</p>`;
+            if (result.totalAmount) html += `<p><strong>Amount:</strong> ${result.totalAmount}</p>`;
+            html += '</div>';
+
+            html += '<div class="border rounded-lg p-4">';
+            html += '<h3 class="font-medium mb-2">Address Validation</h3>';
+            html += `<p><strong>Extracted Address:</strong><br><span class="text-sm">${result.address}</span></p>`;
+            html += `<p class="mt-2"><strong>Matches License:</strong> ${result.addressMatches ? '✅ Yes' : '❌ No'}</p>`;
+            html += `<p><strong>Account Holder:</strong> ${result.accountHolderName}</p>`;
+            html += '</div>';
+
+            html += '</div>';
+
+            // Confidence
+            html += '<div class="border rounded-lg p-4">';
+            html += `<h3 class="font-medium mb-2">Analysis Confidence: ${result.confidence.toUpperCase()}</h3>`;
+            if (result.extractedText) {
+                html += `<p class="text-sm text-gray-600"><strong>Key Text:</strong> ${result.extractedText}</p>`;
+            }
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+
+        function formatDvlaResults(result) {
+            let html = '<div class="space-y-4">';
+            
+            // Validation Status
+            html += '<div class="border rounded-lg p-4">';
+            html += `<h3 class="font-medium mb-2 ${result.isValid ? 'text-green-700' : 'text-red-700'}">`;
+            html += `${result.isValid ? '✅' : '❌'} DVLA Check Status</h3>`;
+            html += `<p class="text-sm">Confidence: ${result.confidence.toUpperCase()}</p>`;
+            if (result.issues && result.issues.length > 0) {
+                html += '<div class="mt-2"><strong>Issues:</strong><ul class="list-disc ml-5 text-sm">';
+                result.issues.forEach(issue => html += `<li>${issue}</li>`);
+                html += '</ul></div>';
+            }
+            html += '</div>';
+
+            // License Details
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+            
+            html += '<div class="border rounded-lg p-4">';
+            html += '<h3 class="font-medium mb-2">License Information</h3>';
+            html += `<p><strong>License Number:</strong> ${result.licenseNumber}</p>`;
+            html += `<p><strong>Driver Name:</strong> ${result.driverName}</p>`;
+            html += `<p><strong>Check Code:</strong> ${result.checkCode}</p>`;
+            html += `<p><strong>Status:</strong> ${result.drivingStatus}</p>`;
+            html += `<p><strong>Valid From:</strong> ${result.validFrom}</p>`;
+            html += `<p><strong>Valid To:</strong> ${result.validTo}</p>`;
+            html += '</div>';
+
+            html += '<div class="border rounded-lg p-4">';
+            html += '<h3 class="font-medium mb-2">Points & Endorsements</h3>';
+            html += `<p><strong>Total Points:</strong> ${result.totalPoints}</p>`;
+            if (result.endorsements && result.endorsements.length > 0) {
+                html += '<div class="mt-2"><strong>Endorsements:</strong><ul class="text-sm space-y-1">';
+                result.endorsements.forEach(endorsement => {
+                    html += `<li>${endorsement.code} - ${endorsement.points} pts (${endorsement.date})<br>`;
+                    html += `<span class="text-gray-600">${endorsement.description}</span></li>`;
+                });
+                html += '</ul></div>';
+            } else {
+                html += '<p class="text-green-600">No endorsements found</p>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+
+            // Insurance Decision
+            if (result.insuranceDecision) {
+                const decision = result.insuranceDecision;
+                html += '<div class="border rounded-lg p-4">';
+                html += `<h3 class="font-medium mb-2 ${decision.approved ? 'text-green-700' : decision.manualReview ? 'text-orange-700' : 'text-red-700'}">`;
+                html += `Insurance Decision</h3>`;
+                
+                if (decision.approved) {
+                    html += `<p class="text-green-600">✅ <strong>APPROVED</strong></p>`;
+                    if (decision.excess > 0) {
+                        html += `<p class="text-orange-600">💷 Excess Required: £${decision.excess}</p>`;
+                    }
+                } else if (decision.manualReview) {
+                    html += `<p class="text-orange-600">⚠️ <strong>MANUAL REVIEW REQUIRED</strong></p>`;
+                } else {
+                    html += `<p class="text-red-600">❌ <strong>REJECTED</strong></p>`;
+                }
+                
+                html += `<p><strong>Risk Level:</strong> ${decision.riskLevel.toUpperCase()}</p>`;
+                if (decision.reasons && decision.reasons.length > 0) {
+                    html += '<div class="mt-2"><strong>Reasons:</strong><ul class="list-disc ml-5 text-sm">';
+                    decision.reasons.forEach(reason => html += `<li>${reason}</li>`);
+                    html += '</ul></div>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function toggleRawJson() {
+            const rawJson = document.getElementById('rawJson');
+            rawJson.classList.toggle('hidden');
+        }
+
+        function showLoading() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('testBtn').disabled = true;
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('testBtn').disabled = false;
+        }
+
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('error').classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('error').classList.add('hidden');
+        }
+
+        function hideResults() {
+            document.getElementById('results').classList.add('hidden');
+        }
+
+        // Show/hide POA options based on test type
+        document.getElementById('testType').addEventListener('change', function(e) {
+            const poaOptions = document.getElementById('poaOptions');
+            if (e.target.value === 'poa') {
+                poaOptions.classList.remove('hidden');
+            } else {
+                poaOptions.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
