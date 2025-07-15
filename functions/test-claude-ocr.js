@@ -27,7 +27,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { testType, imageData, documentType, licenseAddress } = JSON.parse(event.body);
+    const { testType, imageData, documentType, licenseAddress, fileType } = JSON.parse(event.body);
     
     if (!testType || !imageData) {
       return {
@@ -35,20 +35,20 @@ exports.handler = async (event, context) => {
         headers,
         body: JSON.stringify({ 
           error: 'testType and imageData are required',
-          usage: 'testType: "poa" or "dvla", imageData: base64 string'
+          usage: 'testType: "poa" or "dvla", imageData: base64 string, fileType: "image" or "pdf"'
         })
       };
     }
 
-    console.log(`Testing ${testType} OCR processing`);
+    console.log(`Testing ${testType} OCR processing (${fileType || 'image'})`);
     let result;
 
     switch (testType) {
       case 'poa':
-        result = await testPoaOcr(imageData, documentType, licenseAddress);
+        result = await testPoaOcr(imageData, documentType, licenseAddress, fileType);
         break;
       case 'dvla':
-        result = await testDvlaOcr(imageData);
+        result = await testDvlaOcr(imageData, fileType);
         break;
       default:
         throw new Error('Invalid testType. Use "poa" or "dvla"');
@@ -79,7 +79,7 @@ exports.handler = async (event, context) => {
 };
 
 // Test POA document OCR
-async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = '123 Test Street, London, SW1A 1AA') {
+async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = '123 Test Street, London, SW1A 1AA', fileType = 'image') {
   console.log('Testing POA OCR with Claude Vision API');
   
   // Check if Claude API is configured
@@ -89,12 +89,16 @@ async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = 
   }
 
   try {
+    // Determine media type based on file type
+    const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
+    
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        ...(fileType === 'pdf' && { 'anthropic-beta': 'pdfs-2024-09-25' })
       },
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022', // Latest Claude model with vision
@@ -104,7 +108,7 @@ async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = 
           content: [
             {
               type: 'text',
-              text: `Please analyze this proof of address document and extract the following information in JSON format:
+              text: `Please analyze this proof of address document ${fileType === 'pdf' ? '(PDF)' : '(image)'} and extract the following information in JSON format:
 
 {
   "documentType": "utility_bill|bank_statement|council_tax|credit_card_statement|mortgage_statement|insurance_statement|mobile_phone_bill|other",
@@ -131,13 +135,15 @@ CRITICAL REQUIREMENTS:
 
 Compare the extracted address with license address "${licenseAddress}" - they should be substantially the same (allowing for minor formatting differences).
 
+${fileType === 'pdf' ? 'For PDF documents, focus on the first page where the main billing information is typically shown.' : ''}
+
 If you cannot read the document clearly, set confidence to "low" and list specific issues.`
             },
             {
-              type: 'image',
+              type: fileType === 'pdf' ? 'document' : 'image',
               source: {
                 type: 'base64',
-                media_type: 'image/jpeg',
+                media_type: mediaType,
                 data: imageData
               }
             }
@@ -176,7 +182,7 @@ If you cannot read the document clearly, set confidence to "low" and list specif
 }
 
 // Test DVLA document OCR
-async function testDvlaOcr(imageData) {
+async function testDvlaOcr(imageData, fileType = 'image') {
   console.log('Testing DVLA OCR with Claude Vision API');
   
   // Check if Claude API is configured
@@ -186,12 +192,16 @@ async function testDvlaOcr(imageData) {
   }
 
   try {
+    // Determine media type based on file type
+    const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
+    
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        ...(fileType === 'pdf' && { 'anthropic-beta': 'pdfs-2024-09-25' })
       },
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022', // Latest Claude model with vision
@@ -201,7 +211,7 @@ async function testDvlaOcr(imageData) {
           content: [
             {
               type: 'text',
-              text: `Please analyze this DVLA driving license check document and extract the following information in JSON format:
+              text: `Please analyze this DVLA driving license check document ${fileType === 'pdf' ? '(PDF)' : '(image)'} and extract the following information in JSON format:
 
 {
   "licenseNumber": "extracted license number",
@@ -241,6 +251,8 @@ IMPORTANT NOTES:
 - Extract the check code exactly as shown (should be format like "Kd m3 ch Nn")
 - Look for any disqualifications or restrictions
 
+${fileType === 'pdf' ? 'This is a PDF document - extract information from the DVLA check summary page.' : ''}
+
 INSURANCE DECISION LOGIC:
 - 0-3 points: Approve, standard risk
 - 4-6 points: Conditional approval (check offense types)
@@ -253,10 +265,10 @@ INSURANCE DECISION LOGIC:
 If you cannot read the document clearly, set confidence to "low" and list specific issues.`
             },
             {
-              type: 'image',
+              type: fileType === 'pdf' ? 'document' : 'image',
               source: {
                 type: 'base64',
-                media_type: 'image/jpeg',
+                media_type: mediaType,
                 data: imageData
               }
             }
