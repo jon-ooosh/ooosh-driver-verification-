@@ -122,8 +122,8 @@ async function createIdenfySession(email, jobId) {
       errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}`,
       
-      // NEW: Add webhook URL for result processing
-      callbackUrl: `https://ooosh-driver-verification.netlify.app/.netlify/functions/idenfy-webhook`,
+      // REMOVED: callbackUrl - not allowed on this Idenfy plan
+      // We'll handle result processing through the return URLs instead
       
       locale: 'en',
       
