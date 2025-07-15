@@ -127,14 +127,8 @@ async function createIdenfySession(email, jobId) {
       
       locale: 'en',
       
-      // License verification + POA extraction
+      // License + automatic POA extraction (no additionalSteps needed)
       documents: ['DRIVER_LICENSE'],
-      
-      // NEW: Enable POA extraction for insurance compliance
-      additionalSteps: {
-        'UTILITY_BILL': 'EXTRACT',
-        'BANK_STATEMENT': 'EXTRACT'
-      },
       
       // Session settings
       expiryTime: 3600,
