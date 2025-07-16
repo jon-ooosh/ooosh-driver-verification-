@@ -1,11 +1,11 @@
 // File: functions/test-claude-ocr.js
-// STANDALONE Claude OCR Test Function
-// Test POA and DVLA document processing independently without full verification flow
+// ENHANCED VERSION - Fixed JSON parsing and error handling
+// Robust Claude OCR test function with improved response parsing
 
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
-  console.log('Claude OCR Test function called');
+  console.log('Enhanced Claude OCR Test function called');
   
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -78,9 +78,170 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Test POA document OCR
+// Enhanced Claude API call with retry logic and robust JSON parsing
+async function callClaudeWithRetry(prompt, imageData, fileType = 'image', maxRetries = 3) {
+  const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Claude API attempt ${attempt}/${maxRetries}`);
+      
+      const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01',
+          ...(fileType === 'pdf' && { 'anthropic-beta': 'pdfs-2024-09-25' })
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: prompt
+                },
+                {
+                  type: fileType === 'pdf' ? 'document' : 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType,
+                    data: imageData
+                  }
+                }
+              ]
+            },
+            // CRITICAL: Prefill response to enforce JSON-only output
+            {
+              role: 'assistant',
+              content: '{'
+            }
+          ]
+        })
+      });
+
+      // Handle different HTTP error codes
+      if (!claudeResponse.ok) {
+        const errorText = await claudeResponse.text();
+        
+        if (claudeResponse.status === 529) {
+          // Overloaded - wait and retry
+          console.log(`Claude overloaded (529), waiting ${attempt * 2}s before retry...`);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+            continue;
+          }
+        } else if (claudeResponse.status === 400) {
+          // Bad request - don't retry
+          throw new Error(`Claude API error (400): ${errorText}`);
+        } else if (claudeResponse.status === 429) {
+          // Rate limited - wait longer and retry
+          console.log(`Claude rate limited (429), waiting ${attempt * 5}s before retry...`);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 5000));
+            continue;
+          }
+        }
+        
+        throw new Error(`Claude API error (${claudeResponse.status}): ${errorText}`);
+      }
+
+      const result = await claudeResponse.json();
+      console.log('Raw Claude response:', JSON.stringify(result, null, 2));
+      
+      // Extract and parse JSON from response
+      const responseText = result.content[0].text;
+      const extractedData = extractJsonFromResponse(responseText);
+      
+      return extractedData;
+
+    } catch (error) {
+      console.error(`Claude API attempt ${attempt} failed:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+}
+
+// ENHANCED: Robust JSON extraction that handles various Claude response formats
+function extractJsonFromResponse(responseText) {
+  console.log('Extracting JSON from response:', responseText.substring(0, 200) + '...');
+  
+  try {
+    // Method 1: Try parsing as direct JSON (if prefilled correctly)
+    const directJson = '{' + responseText;
+    const parsed = JSON.parse(directJson);
+    console.log('✅ Direct JSON parsing successful');
+    return parsed;
+  } catch (e) {
+    console.log('❌ Direct JSON parsing failed, trying extraction methods...');
+  }
+
+  // Method 2: Extract from markdown code blocks
+  try {
+    const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if (codeBlockMatch) {
+      const parsed = JSON.parse(codeBlockMatch[1]);
+      console.log('✅ Code block JSON extraction successful');
+      return parsed;
+    }
+  } catch (e) {
+    console.log('❌ Code block extraction failed');
+  }
+
+  // Method 3: Find JSON object boundaries (most robust)
+  try {
+    const startIndex = responseText.indexOf('{');
+    const endIndex = responseText.lastIndexOf('}');
+    
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const jsonStr = responseText.substring(startIndex, endIndex + 1);
+      const parsed = JSON.parse(jsonStr);
+      console.log('✅ Boundary-based JSON extraction successful');
+      return parsed;
+    }
+  } catch (e) {
+    console.log('❌ Boundary extraction failed');
+  }
+
+  // Method 4: Try to clean and extract (handles broken JSON)
+  try {
+    // Remove common prefixes/suffixes
+    let cleaned = responseText
+      .replace(/^[^{]*/, '') // Remove everything before first {
+      .replace(/[^}]*$/, '') // Remove everything after last }
+      .replace(/```[^`]*```/g, '') // Remove code blocks
+      .replace(/Here is the JSON.*?:/gi, '') // Remove common prefixes
+      .trim();
+    
+    if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
+      const parsed = JSON.parse(cleaned);
+      console.log('✅ Cleaned JSON extraction successful');
+      return parsed;
+    }
+  } catch (e) {
+    console.log('❌ Cleaned extraction failed');
+  }
+
+  // Method 5: Last resort - create error response with available text
+  console.error('🚨 All JSON extraction methods failed');
+  console.error('Raw response text:', responseText);
+  
+  throw new Error(`Failed to extract valid JSON from Claude response. Raw text: ${responseText.substring(0, 500)}...`);
+}
+
+// Test POA document OCR with enhanced error handling
 async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = '123 Test Street, London, SW1A 1AA', fileType = 'image') {
-  console.log('Testing POA OCR with Claude Vision API');
+  console.log('Testing POA OCR with enhanced Claude Vision API');
   
   // Check if Claude API is configured
   if (!process.env.CLAUDE_API_KEY) {
@@ -89,26 +250,7 @@ async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = 
   }
 
   try {
-    // Determine media type based on file type
-    const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
-    
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-        ...(fileType === 'pdf' && { 'anthropic-beta': 'pdfs-2024-09-25' })
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // Latest Claude model with vision
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Please analyze this proof of address document ${fileType === 'pdf' ? '(PDF)' : '(image)'} and extract the following information in JSON format:
+    const prompt = `Analyze this proof of address document ${fileType === 'pdf' ? '(PDF)' : '(image)'} and return ONLY a JSON object with this exact structure:
 
 {
   "documentType": "utility_bill|bank_statement|council_tax|credit_card_statement|mortgage_statement|insurance_statement|mobile_phone_bill|other",
@@ -119,7 +261,7 @@ async function testPoaOcr(imageData, documentType = 'unknown', licenseAddress = 
   "accountNumber": "last 4 digits or reference number if visible",
   "totalAmount": "bill total if applicable",
   "isValid": boolean,
-  "ageInDays": number (calculate from documentDate to today),
+  "ageInDays": number,
   "addressMatches": boolean,
   "issues": ["list of any problems found"],
   "confidence": "high|medium|low",
@@ -137,31 +279,9 @@ Compare the extracted address with license address "${licenseAddress}" - they sh
 
 ${fileType === 'pdf' ? 'For PDF documents, focus on the first page where the main billing information is typically shown.' : ''}
 
-If you cannot read the document clearly, set confidence to "low" and list specific issues.`
-            },
-            {
-              type: fileType === 'pdf' ? 'document' : 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: imageData
-              }
-            }
-          ]
-        }]
-      })
-    });
+RETURN ONLY THE JSON OBJECT. DO NOT include any explanatory text, markdown formatting, or code blocks.`;
 
-    if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text();
-      throw new Error(`Claude API error (${claudeResponse.status}): ${errorText}`);
-    }
-
-    const result = await claudeResponse.json();
-    console.log('Raw Claude response:', JSON.stringify(result, null, 2));
-    
-    // Extract JSON from Claude's response
-    const extractedData = extractJsonFromResponse(result.content[0].text);
+    const extractedData = await callClaudeWithRetry(prompt, imageData, fileType);
     
     // Validate and enhance the extracted data
     const validatedData = validatePoaData(extractedData, licenseAddress);
@@ -181,9 +301,9 @@ If you cannot read the document clearly, set confidence to "low" and list specif
   }
 }
 
-// Test DVLA document OCR
+// Test DVLA document OCR with enhanced error handling
 async function testDvlaOcr(imageData, fileType = 'image') {
-  console.log('Testing DVLA OCR with Claude Vision API');
+  console.log('Testing DVLA OCR with enhanced Claude Vision API');
   
   // Check if Claude API is configured
   if (!process.env.CLAUDE_API_KEY) {
@@ -192,26 +312,7 @@ async function testDvlaOcr(imageData, fileType = 'image') {
   }
 
   try {
-    // Determine media type based on file type
-    const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
-    
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-        ...(fileType === 'pdf' && { 'anthropic-beta': 'pdfs-2024-09-25' })
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022', // Latest Claude model with vision
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Please analyze this DVLA driving license check document ${fileType === 'pdf' ? '(PDF)' : '(image)'} and extract the following information in JSON format:
+    const prompt = `Analyze this DVLA driving license check document ${fileType === 'pdf' ? '(PDF)' : '(image)'} and return ONLY a JSON object with this exact structure:
 
 {
   "licenseNumber": "extracted license number",
@@ -262,31 +363,9 @@ INSURANCE DECISION LOGIC:
 - 10+ points: Reject, exceeds limits
 - Serious offenses (MS90, IN10, DR10-DR70): Manual review required
 
-If you cannot read the document clearly, set confidence to "low" and list specific issues.`
-            },
-            {
-              type: fileType === 'pdf' ? 'document' : 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: imageData
-              }
-            }
-          ]
-        }]
-      })
-    });
+RETURN ONLY THE JSON OBJECT. DO NOT include any explanatory text, markdown formatting, or code blocks.`;
 
-    if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text();
-      throw new Error(`Claude API error (${claudeResponse.status}): ${errorText}`);
-    }
-
-    const result = await claudeResponse.json();
-    console.log('Raw Claude response:', JSON.stringify(result, null, 2));
-    
-    // Extract JSON from Claude's response
-    const extractedData = extractJsonFromResponse(result.content[0].text);
+    const extractedData = await callClaudeWithRetry(prompt, imageData, fileType);
     
     // Validate and enhance the extracted data
     const validatedData = validateDvlaData(extractedData);
@@ -306,27 +385,8 @@ If you cannot read the document clearly, set confidence to "low" and list specif
   }
 }
 
-// Extract JSON from Claude's response (handles both pure JSON and text with JSON)
-function extractJsonFromResponse(responseText) {
-  try {
-    // Try parsing as direct JSON first
-    return JSON.parse(responseText);
-  } catch (e) {
-    // Extract JSON from markdown code blocks or mixed text
-    const jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || 
-                     responseText.match(/(\{[\s\S]*\})/);
-    
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1]);
-    }
-    
-    throw new Error('No valid JSON found in Claude response');
-  }
-}
-
-// Validate POA data and add insurance compliance logic
+// Enhanced POA validation logic
 function validatePoaData(data, expectedAddress) {
-  // Set defaults for missing fields
   const validatedData = {
     documentType: data.documentType || 'unknown',
     providerName: data.providerName || 'Unknown',
@@ -335,7 +395,7 @@ function validatePoaData(data, expectedAddress) {
     accountHolderName: data.accountHolderName || '',
     accountNumber: data.accountNumber || '',
     totalAmount: data.totalAmount || null,
-    isValid: data.isValid || false,
+    isValid: data.isValid !== false, // Default to true unless explicitly false
     ageInDays: data.ageInDays || 999,
     addressMatches: data.addressMatches || false,
     issues: data.issues || [],
@@ -344,7 +404,7 @@ function validatePoaData(data, expectedAddress) {
     error: data.error || null
   };
 
-  // Additional validation logic
+  // Enhanced validation logic
   if (!validatedData.documentType || validatedData.documentType === 'unknown') {
     validatedData.issues.push('Could not determine document type');
     validatedData.isValid = false;
@@ -376,10 +436,18 @@ function validatePoaData(data, expectedAddress) {
     validatedData.isValid = false;
   }
 
+  // Calculate age if date provided but age not calculated
+  if (validatedData.documentDate && validatedData.ageInDays === 999) {
+    const docDate = new Date(validatedData.documentDate);
+    const today = new Date();
+    const diffTime = today - docDate;
+    validatedData.ageInDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
   return validatedData;
 }
 
-// Validate DVLA data and add insurance decision logic
+// Enhanced DVLA validation with insurance decision logic
 function validateDvlaData(data) {
   const validatedData = {
     licenseNumber: data.licenseNumber || 'unknown',
@@ -393,7 +461,7 @@ function validateDvlaData(data) {
     totalPoints: data.totalPoints || 0,
     restrictions: data.restrictions || [],
     categories: data.categories || [],
-    isValid: data.isValid !== false, // Default to true unless explicitly false
+    isValid: data.isValid !== false,
     issues: data.issues || [],
     confidence: data.confidence || 'medium',
     insuranceDecision: data.insuranceDecision || null,
@@ -424,7 +492,7 @@ function validateDvlaData(data) {
   return validatedData;
 }
 
-// Calculate insurance decision based on DVLA data
+// Enhanced insurance decision logic
 function calculateInsuranceDecision(dvlaData) {
   const decision = {
     approved: false,
@@ -503,7 +571,7 @@ function calculateInsuranceDecision(dvlaData) {
   return decision;
 }
 
-// Mock POA analysis for development/testing
+// Mock data for development/testing
 function getMockPoaAnalysis() {
   return {
     documentType: 'utility_bill',
@@ -523,7 +591,6 @@ function getMockPoaAnalysis() {
   };
 }
 
-// Mock DVLA analysis for development/testing
 function getMockDvlaAnalysis() {
   return {
     licenseNumber: 'SMITH751120JS9AB',
