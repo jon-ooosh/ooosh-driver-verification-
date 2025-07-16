@@ -79,24 +79,33 @@ exports.handler = async (event, context) => {
 };
 
 // Enhanced Claude API call with retry logic and robust JSON parsing
-async function callClaudeWithRetry(prompt, imageData, fileType = 'image', maxRetries = 3) {
+async function callClaudeWithRetry(prompt, imageData, fileType = 'image', maxRetries = 2) {
   const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
+  
+  // Add timeout to prevent hanging
+  const timeoutMs = 25000; // 25 seconds (before Netlify's 26s limit)
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Claude API attempt ${attempt}/${maxRetries}`);
       
-      const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout after 25s')), timeoutMs)
+      );
+      
+      // Create API request promise
+      const apiPromise = fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': process.env.CLAUDE_API_KEY,
           'anthropic-version': '2023-06-01',
-          ...(fileType === 'pdf' && { 'anthropic-beta': 'pdfs-2024-09-25' })
+          'anthropic-beta': 'pdfs-2024-09-25' // Required for PDF support
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1024,
+          model: 'claude-3-5-sonnet-20241022', // Only this model supports PDFs
+          max_tokens: 512, // Reduced for faster response
           messages: [
             {
               role: 'user',
@@ -124,9 +133,15 @@ async function callClaudeWithRetry(prompt, imageData, fileType = 'image', maxRet
         })
       });
 
+      // Race timeout vs API call
+      const claudeResponse = await Promise.race([apiPromise, timeoutPromise]);
+
+      console.log(`Claude API response status: ${claudeResponse.status}`);
+
       // Handle different HTTP error codes
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
+        console.error(`Claude API error (${claudeResponse.status}):`, errorText);
         
         if (claudeResponse.status === 529) {
           // Overloaded - wait and retry
