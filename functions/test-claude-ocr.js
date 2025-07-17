@@ -231,28 +231,54 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetri
 // Helper function to calculate days from date string (handles UK/US formats)
 function calculateDaysFromDate(dateString) {
   try {
+    console.log(`Calculating days for date: ${dateString}`);
+    
     // Handle various date formats
     let parsedDate;
     
     if (dateString.includes('-')) {
       // YYYY-MM-DD format
-      parsedDate = new Date(dateString);
+      parsedDate = new Date(dateString + 'T00:00:00.000Z'); // Force UTC to avoid timezone issues
     } else if (dateString.includes('/')) {
-      // Try both DD/MM/YYYY and MM/DD/YYYY formats
+      // Handle DD/MM/YYYY format (UK standard)
       const parts = dateString.split('/');
       if (parts.length === 3) {
-        const day = parseInt(parts[0]);
-        const month = parseInt(parts[1]);
-        const year = parseInt(parts[2]);
+        let day, month, year;
         
-        // If day > 12, assume DD/MM/YYYY format
-        if (day > 12) {
-          parsedDate = new Date(year, month - 1, day);
+        // Determine if it's DD/MM/YYYY or MM/DD/YYYY
+        const part1 = parseInt(parts[0]);
+        const part2 = parseInt(parts[1]);
+        const part3 = parseInt(parts[2]);
+        
+        // If first part > 12, it must be DD/MM/YYYY
+        if (part1 > 12) {
+          day = part1;
+          month = part2;
+          year = part3;
+        } else if (part2 > 12) {
+          // If second part > 12, it must be MM/DD/YYYY
+          month = part1;
+          day = part2;
+          year = part3;
         } else {
-          // Try DD/MM/YYYY first (UK format)
-          parsedDate = new Date(year, month - 1, day);
+          // Ambiguous - assume DD/MM/YYYY for UK documents
+          day = part1;
+          month = part2;
+          year = part3;
         }
+        
+        // Handle 2-digit years
+        if (year < 100) {
+          year += (year < 50) ? 2000 : 1900;
+        }
+        
+        // Create date (month is 0-indexed in JavaScript)
+        parsedDate = new Date(year, month - 1, day);
+        console.log(`Parsed ${dateString} as DD/MM/YYYY: ${day}/${month}/${year}`);
       }
+    } else {
+      // Try direct parsing as last resort
+      parsedDate = new Date(dateString);
     }
     
     if (!parsedDate || isNaN(parsedDate.getTime())) {
@@ -262,10 +288,16 @@ function calculateDaysFromDate(dateString) {
     
     // Calculate days difference
     const today = new Date();
+    // Set time to start of day to avoid timezone issues
+    today.setHours(0, 0, 0, 0);
+    parsedDate.setHours(0, 0, 0, 0);
+    
     const diffTime = today.getTime() - parsedDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    console.log(`Date calculation: ${dateString} -> ${diffDays} days ago`);
+    console.log(`Date calculation: ${dateString} -> Parsed: ${parsedDate.toISOString().split('T')[0]} -> ${diffDays} days ago`);
+    console.log(`Today: ${today.toISOString().split('T')[0]}, Document: ${parsedDate.toISOString().split('T')[0]}`);
+    
     return diffDays;
     
   } catch (error) {
@@ -419,27 +451,61 @@ function validatePoaData(data, expectedAddress) {
     ageInDays: data.ageInDays || 999,
     addressMatches: data.addressMatches || false,
     issues: data.issues || [],
-    confidence: (data.confidence || 'medium').toLowerCase(), // Fix toUpperCase error
+    confidence: (data.confidence || 'medium').toLowerCase(),
     extractedText: data.extractedText || '',
     error: data.error || null
   };
 
-  // Fix date calculation for UK dates
-  if (validatedData.documentDate && validatedData.ageInDays === 999) {
+  // Calculate age if we have a date but no age calculation
+  if (validatedData.documentDate && (validatedData.ageInDays === 999 || validatedData.ageInDays === null)) {
     validatedData.ageInDays = calculateDaysFromDate(validatedData.documentDate);
+    console.log(`Recalculated age for ${validatedData.documentDate}: ${validatedData.ageInDays} days`);
   }
 
-  // Re-validate age-based issues
-  if (validatedData.ageInDays > 90) {
-    if (!validatedData.issues.includes('Document is older than 90 days')) {
-      validatedData.issues.push('Document is older than 90 days');
-    }
+  // Clear any existing date-related issues to avoid duplicates
+  validatedData.issues = validatedData.issues.filter(issue => 
+    !issue.includes('future') && 
+    !issue.includes('90 days') && 
+    !issue.includes('older than')
+  );
+
+  // Validate age and add appropriate issues
+  if (validatedData.ageInDays < 0) {
+    validatedData.issues.push(`Document is dated in the future (${Math.abs(validatedData.ageInDays)} days ahead)`);
+    validatedData.isValid = false;
+    console.log(`Document ${validatedData.documentDate} is ${Math.abs(validatedData.ageInDays)} days in the future`);
+  } else if (validatedData.ageInDays > 90) {
+    validatedData.issues.push(`Document is older than 90 days (${validatedData.ageInDays} days old)`);
+    validatedData.isValid = false;
+    console.log(`Document ${validatedData.documentDate} is ${validatedData.ageInDays} days old (over 90 day limit)`);
+  } else if (validatedData.ageInDays >= 0 && validatedData.ageInDays <= 90) {
+    console.log(`Document ${validatedData.documentDate} is ${validatedData.ageInDays} days old (within 90 day limit)`);
+  }
+
+  // Other validation checks
+  if (!validatedData.documentType || validatedData.documentType === 'unknown') {
+    validatedData.issues.push('Could not determine document type');
     validatedData.isValid = false;
   }
 
-  // Check if date is in the future
-  if (validatedData.ageInDays < 0) {
-    validatedData.issues.push('Document is dated in the future');
+  if (!validatedData.addressMatches) {
+    validatedData.issues.push('Address does not match license address');
+    validatedData.isValid = false;
+  }
+
+  if (!validatedData.accountHolderName) {
+    validatedData.issues.push('No account holder name found');
+    validatedData.confidence = 'low';
+  }
+
+  // Check for acceptable document types
+  const acceptableTypes = [
+    'utility_bill', 'bank_statement', 'council_tax', 'credit_card_statement',
+    'mortgage_statement', 'insurance_statement', 'mobile_phone_bill'
+  ];
+  
+  if (!acceptableTypes.includes(validatedData.documentType)) {
+    validatedData.issues.push('Document type not acceptable for POA');
     validatedData.isValid = false;
   }
 
