@@ -138,20 +138,22 @@ async function testDvlaOcrWithFallback(imageData, fileType = 'image') {
   }
 }
 
-// Attempt Claude vision analysis with aggressive timeout
-async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, timeoutMs = 15000) {
+// Attempt Claude vision analysis with better retry logic
+async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetries = 3) {
   const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
   
-  return new Promise(async (resolve, reject) => {
-    // Set aggressive timeout
-    const timeoutId = setTimeout(() => {
-      reject(new Error('Claude vision timeout after 15s'));
-    }, timeoutMs);
-
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log('Making Claude vision API call...');
+      console.log(`Claude vision attempt ${attempt}/${maxRetries}`);
       
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Create timeout promise
+      const timeoutMs = 20000; // 20 seconds
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Claude vision timeout after 20s')), timeoutMs)
+      );
+
+      // Create API request promise
+      const apiPromise = fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -161,7 +163,7 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, timeoutM
         },
         body: JSON.stringify({
           model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 512,
+          max_tokens: 800, // Increased for better results
           messages: [
             {
               role: 'user',
@@ -185,13 +187,23 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, timeoutM
         })
       });
 
-      clearTimeout(timeoutId);
+      // Race timeout vs API call
+      const response = await Promise.race([apiPromise, timeoutPromise]);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Claude API error (${response.status}):`, errorText);
-        reject(new Error(`Claude API error (${response.status}): ${errorText}`));
-        return;
+        
+        // Handle 529 errors with longer delays
+        if (response.status === 529) {
+          console.log(`529 overloaded, waiting ${attempt * 3}s before retry...`);
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 3000));
+            continue;
+          }
+        }
+        
+        throw new Error(`Claude API error (${response.status}): ${errorText}`);
       }
 
       const result = await response.json();
@@ -201,13 +213,65 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, timeoutM
       const responseText = result.content[0].text;
       const extractedData = extractJsonFromResponse(responseText);
       
-      resolve(extractedData);
+      return extractedData;
 
     } catch (error) {
-      clearTimeout(timeoutId);
-      reject(error);
+      console.error(`Claude vision attempt ${attempt} failed:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 2000));
     }
-  });
+  }
+}
+
+// Helper function to calculate days from date string (handles UK/US formats)
+function calculateDaysFromDate(dateString) {
+  try {
+    // Handle various date formats
+    let parsedDate;
+    
+    if (dateString.includes('-')) {
+      // YYYY-MM-DD format
+      parsedDate = new Date(dateString);
+    } else if (dateString.includes('/')) {
+      // Try both DD/MM/YYYY and MM/DD/YYYY formats
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        const year = parseInt(parts[2]);
+        
+        // If day > 12, assume DD/MM/YYYY format
+        if (day > 12) {
+          parsedDate = new Date(year, month - 1, day);
+        } else {
+          // Try DD/MM/YYYY first (UK format)
+          parsedDate = new Date(year, month - 1, day);
+        }
+      }
+    }
+    
+    if (!parsedDate || isNaN(parsedDate.getTime())) {
+      console.error('Invalid date format:', dateString);
+      return 999; // Default to invalid age
+    }
+    
+    // Calculate days difference
+    const today = new Date();
+    const diffTime = today.getTime() - parsedDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    console.log(`Date calculation: ${dateString} -> ${diffDays} days ago`);
+    return diffDays;
+    
+  } catch (error) {
+    console.error('Date parsing error:', error);
+    return 999; // Default to invalid age
+  }
 }
 
 // Create POA prompt
@@ -341,9 +405,9 @@ function createIntelligentDvlaFallback(fileType) {
   };
 }
 
-// Validate POA data
+// Validate POA data with proper date handling
 function validatePoaData(data, expectedAddress) {
-  return {
+  const validatedData = {
     documentType: data.documentType || 'unknown',
     providerName: data.providerName || 'Unknown',
     documentDate: data.documentDate || null,
@@ -355,15 +419,36 @@ function validatePoaData(data, expectedAddress) {
     ageInDays: data.ageInDays || 999,
     addressMatches: data.addressMatches || false,
     issues: data.issues || [],
-    confidence: data.confidence || 'medium',
+    confidence: (data.confidence || 'medium').toLowerCase(), // Fix toUpperCase error
     extractedText: data.extractedText || '',
     error: data.error || null
   };
+
+  // Fix date calculation for UK dates
+  if (validatedData.documentDate && validatedData.ageInDays === 999) {
+    validatedData.ageInDays = calculateDaysFromDate(validatedData.documentDate);
+  }
+
+  // Re-validate age-based issues
+  if (validatedData.ageInDays > 90) {
+    if (!validatedData.issues.includes('Document is older than 90 days')) {
+      validatedData.issues.push('Document is older than 90 days');
+    }
+    validatedData.isValid = false;
+  }
+
+  // Check if date is in the future
+  if (validatedData.ageInDays < 0) {
+    validatedData.issues.push('Document is dated in the future');
+    validatedData.isValid = false;
+  }
+
+  return validatedData;
 }
 
-// Validate DVLA data
+// Validate DVLA data with proper error handling
 function validateDvlaData(data) {
-  return {
+  const validatedData = {
     licenseNumber: data.licenseNumber || 'unknown',
     driverName: data.driverName || 'Unknown',
     checkCode: data.checkCode || '',
@@ -377,7 +462,7 @@ function validateDvlaData(data) {
     categories: data.categories || [],
     isValid: data.isValid !== false,
     issues: data.issues || [],
-    confidence: data.confidence || 'medium',
+    confidence: (data.confidence || 'medium').toLowerCase(), // Fix toUpperCase error
     insuranceDecision: data.insuranceDecision || {
       approved: false,
       excess: 0,
@@ -387,6 +472,19 @@ function validateDvlaData(data) {
     },
     error: data.error || null
   };
+
+  // Enhanced validation
+  if (!validatedData.licenseNumber || validatedData.licenseNumber === 'unknown') {
+    validatedData.issues.push('License number not found');
+    validatedData.isValid = false;
+  }
+
+  if (!validatedData.checkCode) {
+    validatedData.issues.push('DVLA check code not found');
+    validatedData.confidence = 'low';
+  }
+
+  return validatedData;
 }
 
 // Mock data for when API is not configured
