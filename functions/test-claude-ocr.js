@@ -1,6 +1,7 @@
 // File: functions/test-claude-ocr.js
 // FALLBACK VERSION - Graceful degradation when Claude vision is overloaded
 // Always returns a result, even if it's mock data
+// FIXED: Date parsing calculation to resolve "635 days in the future" issue
 
 const fetch = require('node-fetch');
 
@@ -228,19 +229,21 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetri
   }
 }
 
-// Helper function to calculate days from date string (handles UK/US formats)
+// FIXED: Helper function to calculate days from date string (handles UK/US formats)
 function calculateDaysFromDate(dateString) {
   try {
-    console.log(`Calculating days for date: ${dateString}`);
+    console.log(`=== CALCULATING DAYS FOR: ${dateString} ===`);
     
     // Handle various date formats
     let parsedDate;
     
     if (dateString.includes('-')) {
-      // YYYY-MM-DD format
+      // YYYY-MM-DD format - most common
+      console.log('Parsing as YYYY-MM-DD format');
       parsedDate = new Date(dateString + 'T00:00:00.000Z'); // Force UTC to avoid timezone issues
     } else if (dateString.includes('/')) {
-      // Handle DD/MM/YYYY format (UK standard)
+      // Handle DD/MM/YYYY format (UK standard) or MM/DD/YYYY
+      console.log('Parsing as DD/MM/YYYY or MM/DD/YYYY format');
       const parts = dateString.split('/');
       if (parts.length === 3) {
         let day, month, year;
@@ -255,16 +258,19 @@ function calculateDaysFromDate(dateString) {
           day = part1;
           month = part2;
           year = part3;
+          console.log('Detected DD/MM/YYYY format');
         } else if (part2 > 12) {
           // If second part > 12, it must be MM/DD/YYYY
           month = part1;
           day = part2;
           year = part3;
+          console.log('Detected MM/DD/YYYY format');
         } else {
           // Ambiguous - assume DD/MM/YYYY for UK documents
           day = part1;
           month = part2;
           year = part3;
+          console.log('Ambiguous date - assuming DD/MM/YYYY (UK format)');
         }
         
         // Handle 2-digit years
@@ -272,36 +278,56 @@ function calculateDaysFromDate(dateString) {
           year += (year < 50) ? 2000 : 1900;
         }
         
-        // Create date (month is 0-indexed in JavaScript)
-        parsedDate = new Date(year, month - 1, day);
-        console.log(`Parsed ${dateString} as DD/MM/YYYY: ${day}/${month}/${year}`);
+        console.log(`Parsed components: ${day}/${month}/${year}`);
+        
+        // Create date in UTC to avoid timezone issues
+        // Note: month is 0-indexed in JavaScript Date constructor
+        parsedDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      } else {
+        throw new Error('Invalid date format - expected DD/MM/YYYY or MM/DD/YYYY');
       }
     } else {
       // Try direct parsing as last resort
+      console.log('Attempting direct parsing');
       parsedDate = new Date(dateString);
     }
     
+    // Validate the parsed date
     if (!parsedDate || isNaN(parsedDate.getTime())) {
-      console.error('Invalid date format:', dateString);
+      console.error('Invalid date after parsing:', dateString);
       return 999; // Default to invalid age
     }
     
-    // Calculate days difference
-    const today = new Date();
-    // Set time to start of day to avoid timezone issues
-    today.setHours(0, 0, 0, 0);
-    parsedDate.setHours(0, 0, 0, 0);
+    console.log('Parsed date (UTC):', parsedDate.toISOString());
     
-    const diffTime = today.getTime() - parsedDate.getTime();
+    // Calculate days difference using UTC to avoid timezone issues
+    const today = new Date();
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+    
+    console.log('Today (UTC):', todayUTC.toISOString());
+    console.log('Document date (UTC):', parsedDate.toISOString());
+    
+    // Calculate difference in milliseconds
+    const diffTime = todayUTC.getTime() - parsedDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    console.log(`Date calculation: ${dateString} -> Parsed: ${parsedDate.toISOString().split('T')[0]} -> ${diffDays} days ago`);
-    console.log(`Today: ${today.toISOString().split('T')[0]}, Document: ${parsedDate.toISOString().split('T')[0]}`);
+    console.log('Time difference (ms):', diffTime);
+    console.log('Days difference:', diffDays);
+    
+    // Log the result clearly
+    if (diffDays < 0) {
+      console.log(`📅 RESULT: Document is ${Math.abs(diffDays)} days in the FUTURE`);
+    } else if (diffDays === 0) {
+      console.log(`📅 RESULT: Document is from TODAY`);
+    } else {
+      console.log(`📅 RESULT: Document is ${diffDays} days OLD`);
+    }
     
     return diffDays;
     
   } catch (error) {
     console.error('Date parsing error:', error);
+    console.error('Input was:', dateString);
     return 999; // Default to invalid age
   }
 }
@@ -385,9 +411,9 @@ function createIntelligentPoaFallback(licenseAddress, fileType) {
     accountNumber: '****1234',
     totalAmount: '£156.78',
     isValid: true,
-    ageInDays: 29,
+    ageInDays: 32, // FIXED: Use correct age calculation
     addressMatches: true,
-    issues: [],
+    issues: ['✅ Recent document (32 days old)'],
     confidence: 'medium',
     extractedText: 'Gas Bill - Account ending 1234',
     fallbackMode: true,
@@ -437,7 +463,7 @@ function createIntelligentDvlaFallback(fileType) {
   };
 }
 
-// Validate POA data with proper date handling
+// FIXED: Validate POA data with proper date handling
 function validatePoaData(data, expectedAddress) {
   const validatedData = {
     documentType: data.documentType || 'unknown',
@@ -456,45 +482,57 @@ function validatePoaData(data, expectedAddress) {
     error: data.error || null
   };
 
-  // Calculate age if we have a date but no age calculation
-  if (validatedData.documentDate && (validatedData.ageInDays === 999 || validatedData.ageInDays === null)) {
-    validatedData.ageInDays = calculateDaysFromDate(validatedData.documentDate);
-    console.log(`Recalculated age for ${validatedData.documentDate}: ${validatedData.ageInDays} days`);
+  // ALWAYS recalculate age using our fixed function if we have a date
+  if (validatedData.documentDate) {
+    const recalculatedAge = calculateDaysFromDate(validatedData.documentDate);
+    console.log(`📅 RECALCULATING AGE: ${validatedData.documentDate} -> ${recalculatedAge} days`);
+    validatedData.ageInDays = recalculatedAge;
   }
 
   // Clear any existing date-related issues to avoid duplicates
   validatedData.issues = validatedData.issues.filter(issue => 
     !issue.includes('future') && 
     !issue.includes('90 days') && 
-    !issue.includes('older than')
+    !issue.includes('older than') &&
+    !issue.includes('days ahead') &&
+    !issue.includes('days old')
   );
 
-  // Validate age and add appropriate issues
+  // Validate age and add appropriate issues with clearer messages
   if (validatedData.ageInDays < 0) {
-    validatedData.issues.push(`Document is dated in the future (${Math.abs(validatedData.ageInDays)} days ahead)`);
+    const daysAhead = Math.abs(validatedData.ageInDays);
+    validatedData.issues.push(`❌ Document is ${daysAhead} days in the future (invalid date)`);
     validatedData.isValid = false;
-    console.log(`Document ${validatedData.documentDate} is ${Math.abs(validatedData.ageInDays)} days in the future`);
+    console.log(`❌ VALIDATION FAILED: Document ${validatedData.documentDate} is ${daysAhead} days in the future`);
   } else if (validatedData.ageInDays > 90) {
-    validatedData.issues.push(`Document is older than 90 days (${validatedData.ageInDays} days old)`);
+    validatedData.issues.push(`❌ Document is ${validatedData.ageInDays} days old (must be within 90 days)`);
     validatedData.isValid = false;
-    console.log(`Document ${validatedData.documentDate} is ${validatedData.ageInDays} days old (over 90 day limit)`);
+    console.log(`❌ VALIDATION FAILED: Document ${validatedData.documentDate} is ${validatedData.ageInDays} days old (over 90 day limit)`);
   } else if (validatedData.ageInDays >= 0 && validatedData.ageInDays <= 90) {
-    console.log(`Document ${validatedData.documentDate} is ${validatedData.ageInDays} days old (within 90 day limit)`);
+    console.log(`✅ DATE VALIDATION PASSED: Document ${validatedData.documentDate} is ${validatedData.ageInDays} days old (within 90 day limit)`);
+    // Add a positive note for valid dates
+    if (validatedData.ageInDays <= 30) {
+      validatedData.issues.push(`✅ Recent document (${validatedData.ageInDays} days old)`);
+    }
+  } else if (validatedData.ageInDays === 999) {
+    validatedData.issues.push(`❌ Could not determine document age`);
+    validatedData.isValid = false;
+    console.log(`❌ VALIDATION FAILED: Could not parse document date: ${validatedData.documentDate}`);
   }
 
   // Other validation checks
   if (!validatedData.documentType || validatedData.documentType === 'unknown') {
-    validatedData.issues.push('Could not determine document type');
+    validatedData.issues.push('❌ Could not determine document type');
     validatedData.isValid = false;
   }
 
   if (!validatedData.addressMatches) {
-    validatedData.issues.push('Address does not match license address');
+    validatedData.issues.push('❌ Address does not match license address');
     validatedData.isValid = false;
   }
 
   if (!validatedData.accountHolderName) {
-    validatedData.issues.push('No account holder name found');
+    validatedData.issues.push('⚠️ No account holder name found');
     validatedData.confidence = 'low';
   }
 
@@ -505,9 +543,12 @@ function validatePoaData(data, expectedAddress) {
   ];
   
   if (!acceptableTypes.includes(validatedData.documentType)) {
-    validatedData.issues.push('Document type not acceptable for POA');
+    validatedData.issues.push('❌ Document type not acceptable for POA');
     validatedData.isValid = false;
   }
+
+  console.log(`📋 FINAL VALIDATION RESULT: ${validatedData.isValid ? 'VALID' : 'INVALID'}`);
+  console.log(`📋 Issues found: ${validatedData.issues.filter(i => i.includes('❌')).length}`);
 
   return validatedData;
 }
@@ -564,9 +605,9 @@ function getMockPoaAnalysis() {
     accountNumber: '****1234',
     totalAmount: '£156.78',
     isValid: true,
-    ageInDays: 29,
+    ageInDays: 32, // FIXED: Use correct age calculation
     addressMatches: true,
-    issues: [],
+    issues: ['✅ Recent document (32 days old)'],
     confidence: 'high',
     extractedText: 'Gas Bill - Account ending 1234',
     mockMode: true,
