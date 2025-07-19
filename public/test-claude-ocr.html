@@ -10,33 +10,73 @@
     <div class="max-w-4xl mx-auto">
         <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h1 class="text-2xl font-bold text-gray-900 mb-4">🔍 Claude OCR Test</h1>
-            <p class="text-gray-600 mb-6">Test POA and DVLA document processing independently</p>
+            <p class="text-gray-600 mb-6">Test POA cross-validation and DVLA document processing</p>
             
             <!-- Test Selection -->
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Test Type</label>
-                <select id="testType" class="w-full p-2 border border-gray-300 rounded-md">
-                    <option value="poa">POA Document (Proof of Address)</option>
+                <select id="testType" class="w-full p-2 border border-gray-300 rounded-md" onchange="toggleTestOptions()">
+                    <option value="poa">Single POA Document (Basic OCR Test)</option>
+                    <option value="dual-poa">Dual POA Cross-Validation (Insurance Workflow)</option>
                     <option value="dvla">DVLA Check Document</option>
                 </select>
             </div>
 
-            <!-- File Upload -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Upload Document Image</label>
-                <input type="file" id="fileInput" accept="image/*,.pdf" 
+            <!-- Single POA Upload -->
+            <div id="singlePoaOptions" class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Upload POA Document</label>
+                <input type="file" id="fileInput1" accept="image/*,.pdf" 
                        class="w-full p-2 border border-gray-300 rounded-md">
                 <p class="text-xs text-gray-500 mt-1">
-                    Accepts: JPG, PNG, WebP, PDF. For PDFs, first page will be converted to image for processing.
+                    For basic Claude OCR testing of a single document
                 </p>
             </div>
 
-            <!-- POA-specific options -->
+            <!-- Dual POA Upload -->
+            <div id="dualPoaOptions" class="hidden mb-6">
+                <div class="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                    <h3 class="font-medium text-blue-900 mb-2">🏢 Insurance Cross-Validation Test</h3>
+                    <p class="text-sm text-blue-800">
+                        Upload 2 POA documents to test if they're from different sources (the core insurance requirement).
+                        Try documents from the same provider vs different providers to see the validation in action.
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">POA Document #1</label>
+                        <input type="file" id="fileInput1" accept="image/*,.pdf" 
+                               class="w-full p-2 border border-gray-300 rounded-md">
+                        <p class="text-xs text-gray-500 mt-1">First proof of address document</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">POA Document #2</label>
+                        <input type="file" id="fileInput2" accept="image/*,.pdf" 
+                               class="w-full p-2 border border-gray-300 rounded-md">
+                        <p class="text-xs text-gray-500 mt-1">Second proof of address document</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DVLA Upload -->
+            <div id="dvlaOptions" class="hidden mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Upload DVLA Check Document</label>
+                <input type="file" id="fileInput1" accept="image/*,.pdf" 
+                       class="w-full p-2 border border-gray-300 rounded-md">
+                <p class="text-xs text-gray-500 mt-1">
+                    DVLA check document from gov.uk/check-driving-licence
+                </p>
+            </div>
+
+            <!-- POA-specific options (only for single POA) -->
             <div id="poaOptions" class="mb-6">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Expected Address (for POA validation)</label>
                 <input type="text" id="licenseAddress" value="123 Test Street, London, SW1A 1AA"
                        class="w-full p-2 border border-gray-300 rounded-md"
                        placeholder="Enter the license address to match against">
+                <p class="text-xs text-gray-500 mt-1">
+                    Note: For dual POA testing, this is mainly for record keeping
+                </p>
             </div>
 
             <!-- Test Button -->
@@ -49,6 +89,7 @@
             <div id="loading" class="hidden text-center py-4">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
                 <p class="text-gray-600">Processing with Claude Vision API...</p>
+                <p id="loadingDetails" class="text-sm text-gray-500 mt-1"></p>
             </div>
 
             <!-- Error Display -->
@@ -64,15 +105,34 @@
             <div id="resultsContent"></div>
         </div>
 
-        <!-- Sample Documents -->
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 class="font-medium text-blue-900 mb-3">📝 Sample Documents for Testing</h3>
-            <div class="text-sm text-blue-800 space-y-2">
-                <p><strong>POA Documents:</strong> Take a photo of a utility bill, bank statement, or council tax bill. 
-                   Ensure the address and date are clearly visible.</p>
-                <p><strong>DVLA Check:</strong> Visit gov.uk/check-driving-licence, generate a check, and screenshot 
-                   the summary page showing license details and any endorsements.</p>
-                <p><strong>Image Quality Tips:</strong> Good lighting, no glare, text clearly readable, full document visible.</p>
+        <!-- Test Scenarios Guide -->
+        <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+            <h3 class="font-medium text-green-900 mb-3">🧪 Test Scenarios</h3>
+            <div class="text-sm text-green-800 space-y-3">
+                <div>
+                    <strong>✅ Should PASS:</strong>
+                    <ul class="list-disc ml-5 mt-1">
+                        <li>British Gas utility bill + HSBC bank statement</li>
+                        <li>Council tax bill + Virgin Media bill</li>
+                        <li>Payslip + Credit card statement from different companies</li>
+                    </ul>
+                </div>
+                <div>
+                    <strong>❌ Should FAIL:</strong>
+                    <ul class="list-disc ml-5 mt-1">
+                        <li>Two documents from the same bank/company</li>
+                        <li>Same document uploaded twice</li>
+                        <li>Two statements from same account (same account number)</li>
+                    </ul>
+                </div>
+                <div>
+                    <strong>💡 Tips:</strong>
+                    <ul class="list-disc ml-5 mt-1">
+                        <li>Good lighting and clear text improve OCR accuracy</li>
+                        <li>Provider names should be clearly visible</li>
+                        <li>Document dates help with record keeping</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
@@ -80,56 +140,132 @@
         <div class="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <h3 class="font-medium text-yellow-900 mb-2">⚙️ Configuration</h3>
             <p class="text-sm text-yellow-800">
-                If Claude API is not configured, the test will return mock data. 
+                If Claude API is not configured, the test will return mock data showing the expected workflow.
                 Set <code>CLAUDE_API_KEY</code> environment variable for real OCR processing.
             </p>
         </div>
     </div>
 
     <script>
-        function runTest() {
+        function toggleTestOptions() {
             const testType = document.getElementById('testType').value;
-            const fileInput = document.getElementById('fileInput');
-            const licenseAddress = document.getElementById('licenseAddress').value;
+            const singlePoaOptions = document.getElementById('singlePoaOptions');
+            const dualPoaOptions = document.getElementById('dualPoaOptions');
+            const dvlaOptions = document.getElementById('dvlaOptions');
+            const poaOptions = document.getElementById('poaOptions');
             
-            // Validation
-            if (!fileInput.files[0]) {
-                showError('Please select an image file');
-                return;
-            }
-
-            const file = fileInput.files[0];
-            if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-                showError('Please select a valid image file or PDF');
-                return;
-            }
-
-            // Show loading
-            showLoading();
-            hideError();
-            hideResults();
-
-            // Convert file to base64
-            if (file.type === 'application/pdf') {
-                // For PDFs, we'll send the PDF directly and let the backend handle conversion
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const base64Data = e.target.result.split(',')[1];
-                    callTestApi(testType, base64Data, licenseAddress, 'pdf');
-                };
-                reader.readAsDataURL(file);
-            } else {
-                // For images, process as before
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const base64Data = e.target.result.split(',')[1];
-                    callTestApi(testType, base64Data, licenseAddress, 'image');
-                };
-                reader.readAsDataURL(file);
+            // Hide all options first
+            singlePoaOptions.classList.add('hidden');
+            dualPoaOptions.classList.add('hidden');
+            dvlaOptions.classList.add('hidden');
+            
+            // Show relevant options
+            if (testType === 'poa') {
+                singlePoaOptions.classList.remove('hidden');
+                poaOptions.classList.remove('hidden');
+            } else if (testType === 'dual-poa') {
+                dualPoaOptions.classList.remove('hidden');
+                poaOptions.classList.remove('hidden');
+            } else if (testType === 'dvla') {
+                dvlaOptions.classList.remove('hidden');
+                poaOptions.classList.add('hidden');
             }
         }
 
-        async function callTestApi(testType, imageData, licenseAddress, fileType = 'image') {
+        function runTest() {
+            const testType = document.getElementById('testType').value;
+            const fileInput1 = document.getElementById('fileInput1');
+            const fileInput2 = document.getElementById('fileInput2');
+            const licenseAddress = document.getElementById('licenseAddress').value;
+            
+            // Validation
+            if (!fileInput1.files[0]) {
+                showError('Please select the first document');
+                return;
+            }
+
+            if (testType === 'dual-poa' && !fileInput2.files[0]) {
+                showError('Please select both POA documents for dual POA testing');
+                return;
+            }
+
+            const file1 = fileInput1.files[0];
+            const file2 = testType === 'dual-poa' ? fileInput2.files[0] : null;
+
+            // Validate file types
+            if (!isValidFile(file1) || (file2 && !isValidFile(file2))) {
+                showError('Please select valid image files or PDFs');
+                return;
+            }
+
+            // Show loading with appropriate message
+            showLoading(testType);
+            hideError();
+            hideResults();
+
+            // Process files
+            if (testType === 'dual-poa') {
+                processDualFiles(file1, file2, licenseAddress);
+            } else {
+                processSingleFile(testType, file1, licenseAddress);
+            }
+        }
+
+        function isValidFile(file) {
+            return file.type.startsWith('image/') || file.type === 'application/pdf';
+        }
+
+        function showLoading(testType) {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('testBtn').disabled = true;
+            
+            const details = document.getElementById('loadingDetails');
+            if (testType === 'dual-poa') {
+                details.textContent = 'Analyzing both documents and cross-validating...';
+            } else if (testType === 'dvla') {
+                details.textContent = 'Extracting DVLA check data...';
+            } else {
+                details.textContent = 'Extracting document data...';
+            }
+        }
+
+        function processDualFiles(file1, file2, licenseAddress) {
+            Promise.all([
+                fileToBase64(file1),
+                fileToBase64(file2)
+            ]).then(([base64Data1, base64Data2]) => {
+                callTestApi('dual-poa', base64Data1, licenseAddress, getFileType(file1), base64Data2);
+            }).catch(error => {
+                console.error('File processing error:', error);
+                showError('Failed to process files: ' + error.message);
+                hideLoading();
+            });
+        }
+
+        function processSingleFile(testType, file, licenseAddress) {
+            fileToBase64(file).then(base64Data => {
+                callTestApi(testType, base64Data, licenseAddress, getFileType(file));
+            }).catch(error => {
+                console.error('File processing error:', error);
+                showError('Failed to process file: ' + error.message);
+                hideLoading();
+            });
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function getFileType(file) {
+            return file.type === 'application/pdf' ? 'pdf' : 'image';
+        }
+
+        async function callTestApi(testType, imageData, licenseAddress, fileType = 'image', imageData2 = null) {
             try {
                 const payload = {
                     testType: testType,
@@ -137,8 +273,12 @@
                     fileType: fileType
                 };
 
-                if (testType === 'poa') {
+                if (testType === 'poa' || testType === 'dual-poa') {
                     payload.licenseAddress = licenseAddress;
+                }
+
+                if (testType === 'dual-poa' && imageData2) {
+                    payload.imageData2 = imageData2;
                 }
 
                 const response = await fetch('/.netlify/functions/test-claude-ocr', {
@@ -169,12 +309,12 @@
             const resultsDiv = document.getElementById('results');
             const contentDiv = document.getElementById('resultsContent');
             
-            // Create formatted display
             let html = '';
             
-            if (data.result.mockMode) {
+            // Mock mode indicator
+            if (data.result.mockMode || (data.result.poa1 && data.result.poa1.mockMode)) {
                 html += '<div class="bg-orange-50 border border-orange-200 rounded-md p-3 mb-4">';
-                html += '<p class="text-orange-800 text-sm">🧪 <strong>Mock Mode:</strong> Claude API not configured, showing sample data</p>';
+                html += '<p class="text-orange-800 text-sm">🧪 <strong>Mock Mode:</strong> Claude API not configured, showing sample workflow</p>';
                 html += '</div>';
             }
 
@@ -184,9 +324,11 @@
             html += `<p><strong>Timestamp:</strong> ${new Date(data.timestamp).toLocaleString()}</p>`;
             html += `</div>`;
 
-            // Results in formatted sections
-            if (data.testType === 'poa') {
-                html += formatPoaResults(data.result);
+            // Format results based on test type
+            if (data.testType === 'dual-poa') {
+                html += formatDualPoaResults(data.result);
+            } else if (data.testType === 'poa') {
+                html += formatSinglePoaResults(data.result);
             } else if (data.testType === 'dvla') {
                 html += formatDvlaResults(data.result);
             }
@@ -201,53 +343,97 @@
             resultsDiv.classList.remove('hidden');
         }
 
-        function formatPoaResults(result) {
-            let html = '<div class="space-y-4">';
+        function formatDualPoaResults(result) {
+            let html = '<div class="space-y-6">';
             
-            // Validation Status
+            // Overall Result
             html += '<div class="border rounded-lg p-4">';
-            html += `<h3 class="font-medium mb-2 ${result.isValid ? 'text-green-700' : 'text-red-700'}">`;
-            html += `${result.isValid ? '✅' : '❌'} Validation Status</h3>`;
-            html += `<p class="text-sm ${result.isValid ? 'text-green-600' : 'text-red-600'}">`;
-            html += `${result.isValid ? 'Document passed validation' : 'Document failed validation'}`;
-            html += `</p>`;
-            if (result.issues && result.issues.length > 0) {
-                html += '<div class="mt-2"><strong>Issues:</strong><ul class="list-disc ml-5 text-sm">';
-                result.issues.forEach(issue => html += `<li>${issue}</li>`);
+            html += `<h3 class="font-medium mb-2 ${result.overallValid ? 'text-green-700' : 'text-red-700'}">`;
+            html += `${result.overallValid ? '✅' : '❌'} Cross-Validation Result</h3>`;
+            html += `<p class="text-lg font-medium ${result.overallValid ? 'text-green-600' : 'text-red-600'}">`;
+            html += `${result.summary.overallResult}</p>`;
+            
+            if (result.summary.keyFindings) {
+                html += '<div class="mt-3"><strong>Key Findings:</strong><ul class="list-disc ml-5 text-sm mt-1">';
+                result.summary.keyFindings.forEach(finding => html += `<li>${finding}</li>`);
+                html += '</ul></div>';
+            }
+            
+            if (result.summary.recommendations && result.summary.recommendations.length > 0) {
+                html += '<div class="mt-3"><strong>Recommendations:</strong><ul class="list-disc ml-5 text-sm mt-1">';
+                result.summary.recommendations.forEach(rec => html += `<li>${rec}</li>`);
                 html += '</ul></div>';
             }
             html += '</div>';
 
-            // Document Details
+            // Individual POA Results
             html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
             
+            // POA 1
             html += '<div class="border rounded-lg p-4">';
-            html += '<h3 class="font-medium mb-2">Document Information</h3>';
-            html += `<p><strong>Type:</strong> ${result.documentType}</p>`;
-            html += `<p><strong>Provider:</strong> ${result.providerName}</p>`;
-            html += `<p><strong>Date:</strong> ${result.documentDate}</p>`;
-            html += `<p><strong>Age:</strong> ${result.ageInDays} days</p>`;
-            html += `<p><strong>Account:</strong> ${result.accountNumber}</p>`;
-            if (result.totalAmount) html += `<p><strong>Amount:</strong> ${result.totalAmount}</p>`;
+            html += '<h3 class="font-medium mb-3">📄 POA Document #1</h3>';
+            html += formatPoaDocumentDetails(result.poa1);
+            html += '</div>';
+            
+            // POA 2
+            html += '<div class="border rounded-lg p-4">';
+            html += '<h3 class="font-medium mb-3">📄 POA Document #2</h3>';
+            html += formatPoaDocumentDetails(result.poa2);
+            html += '</div>';
+            
             html += '</div>';
 
+            // Cross-Validation Details
             html += '<div class="border rounded-lg p-4">';
-            html += '<h3 class="font-medium mb-2">Address Validation</h3>';
-            html += `<p><strong>Extracted Address:</strong><br><span class="text-sm">${result.address}</span></p>`;
-            html += `<p class="mt-2"><strong>Matches License:</strong> ${result.addressMatches ? '✅ Yes' : '❌ No'}</p>`;
-            html += `<p><strong>Account Holder:</strong> ${result.accountHolderName}</p>`;
-            html += '</div>';
-
-            html += '</div>';
-
-            // Confidence
-            html += '<div class="border rounded-lg p-4">';
-            html += `<h3 class="font-medium mb-2">Analysis Confidence: ${result.confidence.toUpperCase()}</h3>`;
-            if (result.extractedText) {
-                html += `<p class="text-sm text-gray-600"><strong>Key Text:</strong> ${result.extractedText}</p>`;
+            html += '<h3 class="font-medium mb-3">⚖️ Cross-Validation Checks</h3>';
+            const checks = result.crossValidation.checks;
+            html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">`;
+            html += `<p>${checks.bothExtracted ? '✅' : '❌'} Data extraction successful</p>`;
+            html += `<p>${checks.differentProviders ? '✅' : '❌'} Different providers</p>`;
+            html += `<p>${checks.differentDocumentTypes ? '✅' : '❌'} Different document types</p>`;
+            html += `<p>${checks.differentAccountNumbers ? '✅' : '❌'} Different account numbers</p>`;
+            html += `<p>${checks.bothHaveDates ? '✅' : '❌'} Both have dates</p>`;
+            html += `</div>`;
+            
+            if (result.crossValidation.issues && result.crossValidation.issues.length > 0) {
+                html += '<div class="mt-3"><strong>Validation Issues:</strong><ul class="list-disc ml-5 text-sm">';
+                result.crossValidation.issues.forEach(issue => html += `<li>${issue}</li>`);
+                html += '</ul></div>';
             }
             html += '</div>';
 
+            html += '</div>';
+            return html;
+        }
+
+        function formatPoaDocumentDetails(poa) {
+            let html = '';
+            html += `<p><strong>Type:</strong> ${poa.documentType}</p>`;
+            html += `<p><strong>Provider:</strong> ${poa.providerName}</p>`;
+            html += `<p><strong>Date:</strong> ${poa.documentDate || 'Not found'}</p>`;
+            if (poa.ageInDays !== null) {
+                html += `<p><strong>Age:</strong> ${poa.ageInDays} days</p>`;
+            }
+            html += `<p><strong>Account:</strong> ${poa.accountNumber}</p>`;
+            html += `<p><strong>Confidence:</strong> ${poa.confidence.toUpperCase()}</p>`;
+            
+            if (poa.issues && poa.issues.length > 0) {
+                html += '<div class="mt-2"><strong>Issues:</strong><ul class="list-disc ml-5 text-xs">';
+                poa.issues.forEach(issue => html += `<li>${issue}</li>`);
+                html += '</ul></div>';
+            }
+            
+            return html;
+        }
+
+        function formatSinglePoaResults(result) {
+            let html = '<div class="space-y-4">';
+            
+            html += '<div class="border rounded-lg p-4">';
+            html += '<h3 class="font-medium mb-3">📄 POA Document Analysis</h3>';
+            html += formatPoaDocumentDetails(result);
+            html += '</div>';
+            
             html += '</div>';
             return html;
         }
@@ -255,75 +441,15 @@
         function formatDvlaResults(result) {
             let html = '<div class="space-y-4">';
             
-            // Validation Status
             html += '<div class="border rounded-lg p-4">';
-            html += `<h3 class="font-medium mb-2 ${result.isValid ? 'text-green-700' : 'text-red-700'}">`;
-            html += `${result.isValid ? '✅' : '❌'} DVLA Check Status</h3>`;
-            html += `<p class="text-sm">Confidence: ${result.confidence.toUpperCase()}</p>`;
-            if (result.issues && result.issues.length > 0) {
-                html += '<div class="mt-2"><strong>Issues:</strong><ul class="list-disc ml-5 text-sm">';
-                result.issues.forEach(issue => html += `<li>${issue}</li>`);
-                html += '</ul></div>';
-            }
-            html += '</div>';
-
-            // License Details
-            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
-            
-            html += '<div class="border rounded-lg p-4">';
-            html += '<h3 class="font-medium mb-2">License Information</h3>';
+            html += '<h3 class="font-medium mb-3">🚗 DVLA Check Results</h3>';
             html += `<p><strong>License Number:</strong> ${result.licenseNumber}</p>`;
             html += `<p><strong>Driver Name:</strong> ${result.driverName}</p>`;
-            html += `<p><strong>Check Code:</strong> ${result.checkCode}</p>`;
-            html += `<p><strong>Status:</strong> ${result.drivingStatus}</p>`;
-            html += `<p><strong>Valid From:</strong> ${result.validFrom}</p>`;
-            html += `<p><strong>Valid To:</strong> ${result.validTo}</p>`;
-            html += '</div>';
-
-            html += '<div class="border rounded-lg p-4">';
-            html += '<h3 class="font-medium mb-2">Points & Endorsements</h3>';
             html += `<p><strong>Total Points:</strong> ${result.totalPoints}</p>`;
-            if (result.endorsements && result.endorsements.length > 0) {
-                html += '<div class="mt-2"><strong>Endorsements:</strong><ul class="text-sm space-y-1">';
-                result.endorsements.forEach(endorsement => {
-                    html += `<li>${endorsement.code} - ${endorsement.points} pts (${endorsement.date})<br>`;
-                    html += `<span class="text-gray-600">${endorsement.description}</span></li>`;
-                });
-                html += '</ul></div>';
-            } else {
-                html += '<p class="text-green-600">No endorsements found</p>';
-            }
+            html += `<p><strong>Valid:</strong> ${result.isValid ? 'Yes' : 'No'}</p>`;
+            html += `<p><strong>Confidence:</strong> ${result.confidence.toUpperCase()}</p>`;
             html += '</div>';
-
-            html += '</div>';
-
-            // Insurance Decision
-            if (result.insuranceDecision) {
-                const decision = result.insuranceDecision;
-                html += '<div class="border rounded-lg p-4">';
-                html += `<h3 class="font-medium mb-2 ${decision.approved ? 'text-green-700' : decision.manualReview ? 'text-orange-700' : 'text-red-700'}">`;
-                html += `Insurance Decision</h3>`;
-                
-                if (decision.approved) {
-                    html += `<p class="text-green-600">✅ <strong>APPROVED</strong></p>`;
-                    if (decision.excess > 0) {
-                        html += `<p class="text-orange-600">💷 Excess Required: £${decision.excess}</p>`;
-                    }
-                } else if (decision.manualReview) {
-                    html += `<p class="text-orange-600">⚠️ <strong>MANUAL REVIEW REQUIRED</strong></p>`;
-                } else {
-                    html += `<p class="text-red-600">❌ <strong>REJECTED</strong></p>`;
-                }
-                
-                html += `<p><strong>Risk Level:</strong> ${decision.riskLevel.toUpperCase()}</p>`;
-                if (decision.reasons && decision.reasons.length > 0) {
-                    html += '<div class="mt-2"><strong>Reasons:</strong><ul class="list-disc ml-5 text-sm">';
-                    decision.reasons.forEach(reason => html += `<li>${reason}</li>`);
-                    html += '</ul></div>';
-                }
-                html += '</div>';
-            }
-
+            
             html += '</div>';
             return html;
         }
@@ -331,11 +457,6 @@
         function toggleRawJson() {
             const rawJson = document.getElementById('rawJson');
             rawJson.classList.toggle('hidden');
-        }
-
-        function showLoading() {
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('testBtn').disabled = true;
         }
 
         function hideLoading() {
@@ -356,15 +477,8 @@
             document.getElementById('results').classList.add('hidden');
         }
 
-        // Show/hide POA options based on test type
-        document.getElementById('testType').addEventListener('change', function(e) {
-            const poaOptions = document.getElementById('poaOptions');
-            if (e.target.value === 'poa') {
-                poaOptions.classList.remove('hidden');
-            } else {
-                poaOptions.classList.add('hidden');
-            }
-        });
+        // Initialize on page load
+        toggleTestOptions();
     </script>
 </body>
 </html>
