@@ -2,6 +2,7 @@
 // FALLBACK VERSION - Graceful degradation when Claude vision is overloaded
 // Always returns a result, even if it's mock data
 // FIXED: Date parsing calculation to resolve "635 days in the future" issue
+// FIXED: Address matching logic to properly validate identical addresses
 
 const fetch = require('node-fetch');
 
@@ -463,8 +464,12 @@ function createIntelligentDvlaFallback(fileType) {
   };
 }
 
-// FIXED: Validate POA data with proper date handling
+// FIXED: Validate POA data with proper address matching
 function validatePoaData(data, expectedAddress) {
+  console.log('=== POA VALIDATION DEBUG ===');
+  console.log('Expected address:', expectedAddress);
+  console.log('Extracted address:', data.address);
+  
   const validatedData = {
     documentType: data.documentType || 'unknown',
     providerName: data.providerName || 'Unknown',
@@ -475,7 +480,7 @@ function validatePoaData(data, expectedAddress) {
     totalAmount: data.totalAmount || null,
     isValid: data.isValid !== false,
     ageInDays: data.ageInDays || 999,
-    addressMatches: data.addressMatches || false,
+    addressMatches: false, // Will be properly calculated below
     issues: data.issues || [],
     confidence: (data.confidence || 'medium').toLowerCase(),
     extractedText: data.extractedText || '',
@@ -489,14 +494,15 @@ function validatePoaData(data, expectedAddress) {
     validatedData.ageInDays = recalculatedAge;
   }
 
-  // Clear any existing date-related issues to avoid duplicates
-  validatedData.issues = validatedData.issues.filter(issue => 
-    !issue.includes('future') && 
-    !issue.includes('90 days') && 
-    !issue.includes('older than') &&
-    !issue.includes('days ahead') &&
-    !issue.includes('days old')
-  );
+  // Clear any existing issues to avoid duplicates
+  validatedData.issues = [];
+
+  // FIXED: Improved address matching logic
+  validatedData.addressMatches = compareAddresses(validatedData.address, expectedAddress);
+  
+  console.log('🏠 ADDRESS COMPARISON RESULT:', validatedData.addressMatches);
+  console.log('🏠 Normalized extracted:', normalizeAddress(validatedData.address));
+  console.log('🏠 Normalized expected:', normalizeAddress(expectedAddress));
 
   // Validate age and add appropriate issues with clearer messages
   if (validatedData.ageInDays < 0) {
@@ -526,9 +532,14 @@ function validatePoaData(data, expectedAddress) {
     validatedData.isValid = false;
   }
 
+  // FIXED: Address matching validation with detailed logging
   if (!validatedData.addressMatches) {
     validatedData.issues.push('❌ Address does not match license address');
     validatedData.isValid = false;
+    console.log('❌ ADDRESS VALIDATION FAILED');
+  } else {
+    validatedData.issues.push('✅ Address matches license address');
+    console.log('✅ ADDRESS VALIDATION PASSED');
   }
 
   if (!validatedData.accountHolderName) {
@@ -549,8 +560,105 @@ function validatePoaData(data, expectedAddress) {
 
   console.log(`📋 FINAL VALIDATION RESULT: ${validatedData.isValid ? 'VALID' : 'INVALID'}`);
   console.log(`📋 Issues found: ${validatedData.issues.filter(i => i.includes('❌')).length}`);
+  console.log('=== END POA VALIDATION DEBUG ===');
 
   return validatedData;
+}
+
+// NEW: Robust address comparison function
+function compareAddresses(extractedAddress, expectedAddress) {
+  // Handle null/undefined addresses
+  if (!extractedAddress || !expectedAddress) {
+    console.log('🏠 One or both addresses are empty');
+    return false;
+  }
+
+  const normalized1 = normalizeAddress(extractedAddress);
+  const normalized2 = normalizeAddress(expectedAddress);
+  
+  console.log('🏠 COMPARING ADDRESSES:');
+  console.log('🏠 Extracted (raw):', extractedAddress);
+  console.log('🏠 Expected (raw):', expectedAddress);
+  console.log('🏠 Extracted (normalized):', normalized1);
+  console.log('🏠 Expected (normalized):', normalized2);
+  
+  // Exact match after normalization
+  if (normalized1 === normalized2) {
+    console.log('🏠 ✅ EXACT MATCH after normalization');
+    return true;
+  }
+  
+  // Calculate similarity score for partial matches
+  const similarity = calculateAddressSimilarity(normalized1, normalized2);
+  console.log('🏠 Similarity score:', similarity);
+  
+  // Accept if similarity is very high (90% or above)
+  const isMatch = similarity >= 0.9;
+  console.log('🏠 Final decision:', isMatch ? 'MATCH' : 'NO MATCH', `(${Math.round(similarity * 100)}% similar)`);
+  
+  return isMatch;
+}
+
+// NEW: Normalize address for comparison
+function normalizeAddress(address) {
+  if (!address || typeof address !== 'string') {
+    return '';
+  }
+  
+  return address
+    .toUpperCase()                           // Convert to uppercase
+    .replace(/[^\w\s]/g, ' ')               // Replace punctuation with spaces
+    .replace(/\s+/g, ' ')                   // Replace multiple spaces with single space
+    .replace(/\bSTREET\b/g, 'ST')           // Normalize "STREET" to "ST"
+    .replace(/\bROAD\b/g, 'RD')             // Normalize "ROAD" to "RD"
+    .replace(/\bAVENUE\b/g, 'AVE')          // Normalize "AVENUE" to "AVE"
+    .replace(/\bCLOSE\b/g, 'CL')            // Normalize "CLOSE" to "CL"
+    .replace(/\bLANE\b/g, 'LN')             // Normalize "LANE" to "LN"
+    .replace(/\bDRIVE\b/g, 'DR')            // Normalize "DRIVE" to "DR"
+    .replace(/\bCOURT\b/g, 'CT')            // Normalize "COURT" to "CT"
+    .replace(/\bPLACE\b/g, 'PL')            // Normalize "PLACE" to "PL"
+    .replace(/\bAPARTMENT\b/g, 'APT')       // Normalize "APARTMENT" to "APT"
+    .replace(/\bFLAT\b/g, 'FL')             // Normalize "FLAT" to "FL"
+    .replace(/\bUNIT\b/g, 'U')              // Normalize "UNIT" to "U"
+    .replace(/\bNORTH\b/g, 'N')             // Normalize directions
+    .replace(/\bSOUTH\b/g, 'S')
+    .replace(/\bEAST\b/g, 'E')
+    .replace(/\bWEST\b/g, 'W')
+    .trim();                                // Remove leading/trailing spaces
+}
+
+// NEW: Calculate similarity between two normalized addresses
+function calculateAddressSimilarity(addr1, addr2) {
+  if (!addr1 || !addr2) return 0;
+  if (addr1 === addr2) return 1;
+  
+  // Split into words for comparison
+  const words1 = addr1.split(' ').filter(w => w.length > 0);
+  const words2 = addr2.split(' ').filter(w => w.length > 0);
+  
+  // Find matching words
+  let matchingWords = 0;
+  const totalWords = Math.max(words1.length, words2.length);
+  
+  for (const word1 of words1) {
+    if (words2.includes(word1)) {
+      matchingWords++;
+    }
+  }
+  
+  // Calculate similarity as percentage of matching words
+  const similarity = matchingWords / totalWords;
+  
+  // Bonus for matching key components (house numbers, postcodes)
+  const hasMatchingHouseNumber = words1[0] && words2[0] && words1[0] === words2[0];
+  const hasMatchingPostcode = words1[words1.length - 1] && words2[words2.length - 1] && 
+                             words1[words1.length - 1] === words2[words2.length - 1];
+  
+  let bonus = 0;
+  if (hasMatchingHouseNumber) bonus += 0.1;
+  if (hasMatchingPostcode) bonus += 0.1;
+  
+  return Math.min(1, similarity + bonus);
 }
 
 // Validate DVLA data with proper error handling
@@ -569,7 +677,7 @@ function validateDvlaData(data) {
     categories: data.categories || [],
     isValid: data.isValid !== false,
     issues: data.issues || [],
-    confidence: (data.confidence || 'medium').toLowerCase(), // Fix toUpperCase error
+    confidence: (data.confidence || 'medium').toLowerCase(),
     insuranceDecision: data.insuranceDecision || {
       approved: false,
       excess: 0,
