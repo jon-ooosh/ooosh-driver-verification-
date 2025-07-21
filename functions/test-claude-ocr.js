@@ -663,11 +663,16 @@ function calculateDaysFromDate(dateString) {
 }
 
 // Minimal Claude API call function
-async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetries = 2) {
+// Enhanced Claude API call function with better 529 handling
+// Replace the attemptClaudeVisionAnalysis function in your test-claude-ocr.js
+
+async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetries = 5) {
   const mediaType = fileType === 'pdf' ? 'application/pdf' : 'image/jpeg';
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      console.log(`Claude API attempt ${attempt}/${maxRetries}`);
+      
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -696,20 +701,43 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetri
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`Claude API error ${response.status}: ${errorText}`);
+        
         if (response.status === 529 && attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, attempt * 3000));
+          // Exponential backoff for 529 errors with jitter
+          const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 30000);
+          console.log(`529 error - waiting ${Math.round(delay/1000)}s before retry ${attempt + 1}...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
-        throw new Error(`Claude API error (${response.status})`);
+        
+        if (response.status === 400) {
+          // Bad request - likely image/prompt issue, don't retry
+          throw new Error(`Claude API error (${response.status}): Invalid request - ${errorText}`);
+        }
+        
+        throw new Error(`Claude API error (${response.status}): ${errorText}`);
       }
 
       const result = await response.json();
       const responseText = result.content[0].text;
+      console.log(`✅ Claude API success on attempt ${attempt}`);
       return JSON.parse('{' + responseText);
 
     } catch (error) {
-      if (attempt === maxRetries) throw error;
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      console.log(`Attempt ${attempt} failed: ${error.message}`);
+      
+      if (attempt === maxRetries) {
+        console.log(`All ${maxRetries} attempts failed`);
+        throw error;
+      }
+      
+      // Wait before next attempt (shorter for non-529 errors)
+      const delay = error.message.includes('529') ? 
+        Math.min(2000 * attempt, 10000) : 
+        1000 * attempt;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 }
