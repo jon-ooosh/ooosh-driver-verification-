@@ -1,5 +1,5 @@
 // File: functions/test-claude-ocr.js
-// ENHANCED VERSION - Now includes dual POA cross-validation testing
+// ENHANCED VERSION - Now includes comprehensive DVLA processing
 // Allows testing the actual insurance compliance workflow without Idenfy
 
 const fetch = require('node-fetch');
@@ -48,7 +48,7 @@ exports.handler = async (event, context) => {
         result = await testSinglePoaExtraction(imageData, documentType, licenseAddress, fileType);
         break;
       case 'dvla':
-        result = await testDvlaOcrWithFallback(imageData, fileType);
+        result = await testEnhancedDvlaOcrWithFallback(imageData, fileType);
         break;
       case 'dual-poa':
         if (!imageData2) {
@@ -285,6 +285,274 @@ function generateValidationSummary(poa1, poa2, crossValidation) {
   return summary;
 }
 
+// ENHANCED: DVLA processing with comprehensive data extraction
+async function testEnhancedDvlaOcrWithFallback(imageData, fileType = 'image') {
+  console.log('🚗 Testing ENHANCED DVLA OCR with comprehensive extraction');
+  
+  if (!process.env.CLAUDE_API_KEY) {
+    console.log('Claude API not configured, using enhanced mock DVLA analysis');
+    return getEnhancedMockDvlaAnalysis();
+  }
+
+  try {
+    console.log('Attempting Claude API for enhanced DVLA analysis...');
+    const claudeResult = await attemptClaudeVisionAnalysis(imageData, fileType, createEnhancedDvlaPrompt());
+    
+    const validatedData = validateEnhancedDvlaData(claudeResult);
+    console.log('✅ Enhanced Claude DVLA analysis successful');
+    return validatedData;
+
+  } catch (error) {
+    console.log('❌ Claude vision failed, using enhanced intelligent fallback:', error.message);
+    return createEnhancedDvlaFallback(fileType);
+  }
+}
+
+// ENHANCED: Comprehensive DVLA prompt
+function createEnhancedDvlaPrompt(expectedLicenseNumber) {
+  return `Analyze this DVLA driving license check document and extract the following information in JSON format:
+
+{
+  "licenseNumber": "extracted license number",
+  "driverName": "full name from document",
+  "checkCode": "DVLA check code (format: Ab cd ef Gh)",
+  "dateGenerated": "YYYY-MM-DD when check was generated",
+  "validFrom": "YYYY-MM-DD license valid from",
+  "validTo": "YYYY-MM-DD license valid until",
+  "drivingStatus": "current status text",
+  "endorsements": [
+    {
+      "code": "endorsement code (SP30, MS90, etc)",
+      "date": "YYYY-MM-DD",
+      "points": number,
+      "description": "description of offense"
+    }
+  ],
+  "totalPoints": number,
+  "restrictions": ["any driving restrictions"],
+  "categories": ["license categories like B, C1, etc"],
+  "isValid": boolean,
+  "issues": ["any problems found"],
+  "confidence": "high|medium|low"
+}
+
+Important notes:
+- Look for endorsement codes like SP30 (speeding), MS90 (failure to give information), CU80 (breach of requirements), IN10 (using vehicle uninsured), etc.
+- Count total penalty points carefully
+- Check if license is currently valid
+- Extract the check code exactly as shown
+- Look for any disqualifications or restrictions
+
+Expected license number for validation: "${expectedLicenseNumber || 'Not provided'}"
+
+RETURN ONLY JSON, no other text.`;
+}
+
+// ENHANCED: Comprehensive DVLA data validation
+function validateEnhancedDvlaData(data, expectedLicenseNumber) {
+  const validatedData = {
+    licenseNumber: data.licenseNumber || 'unknown',
+    driverName: data.driverName || 'Unknown',
+    checkCode: data.checkCode || null,
+    dateGenerated: data.dateGenerated || null,
+    validFrom: data.validFrom || null,
+    validTo: data.validTo || null,
+    drivingStatus: data.drivingStatus || 'Unknown',
+    endorsements: data.endorsements || [],
+    totalPoints: data.totalPoints || 0,
+    restrictions: data.restrictions || [],
+    categories: data.categories || [],
+    isValid: data.isValid !== false,
+    issues: data.issues || [],
+    confidence: (data.confidence || 'medium').toLowerCase(),
+    ageInDays: null,
+    extractionSuccess: true
+  };
+
+  // Validation checks
+  if (!validatedData.licenseNumber || validatedData.licenseNumber === 'unknown') {
+    validatedData.issues.push('❌ License number not found');
+    validatedData.confidence = 'low';
+    validatedData.isValid = false;
+  }
+
+  if (!validatedData.driverName || validatedData.driverName === 'Unknown') {
+    validatedData.issues.push('⚠️ Driver name not clearly identified');
+    validatedData.confidence = 'low';
+  }
+
+  if (!validatedData.checkCode) {
+    validatedData.issues.push('⚠️ DVLA check code not found');
+  }
+
+  // License number validation against expected
+  if (expectedLicenseNumber && validatedData.licenseNumber !== expectedLicenseNumber) {
+    validatedData.issues.push('❌ License number mismatch');
+    validatedData.isValid = false;
+  }
+
+  // Check code format validation (should be like "Ab cd ef Gh")
+  if (validatedData.checkCode && !/^[A-Za-z]{2}\s+[A-Za-z0-9]{2}\s+[A-Za-z0-9]{2}\s+[A-Za-z0-9]{2}$/.test(validatedData.checkCode)) {
+    validatedData.issues.push('⚠️ Invalid DVLA check code format');
+  }
+
+  // Calculate document age if generated date available
+  if (validatedData.dateGenerated) {
+    validatedData.ageInDays = calculateDaysFromDate(validatedData.dateGenerated);
+  }
+
+  // NEW: Calculate insurance decision automatically
+  validatedData.insuranceDecision = calculateInsuranceDecision(validatedData);
+
+  console.log(`🚗 Enhanced DVLA validation complete: ${validatedData.issues.length} issues, ${validatedData.totalPoints} points`);
+  return validatedData;
+}
+
+// NEW: Automatic insurance decision calculation
+function calculateInsuranceDecision(dvlaData) {
+  const decision = {
+    approved: false,
+    excess: 0,
+    manualReview: false,
+    reasons: [],
+    riskLevel: 'standard'
+  };
+
+  if (!dvlaData.isValid) {
+    decision.manualReview = true;
+    decision.reasons.push('DVLA check could not be validated');
+    return decision;
+  }
+
+  const points = dvlaData.totalPoints || 0;
+  const endorsements = dvlaData.endorsements || [];
+
+  // Check for serious offenses that require manual review
+  const seriousOffenses = ['MS90', 'IN10', 'DR10', 'DR20', 'DR30', 'DR40', 'DR50', 'DR60', 'DR70'];
+  const hasSeriousOffense = endorsements.some(e => seriousOffenses.includes(e.code));
+
+  if (hasSeriousOffense) {
+    decision.manualReview = true;
+    decision.reasons.push('Serious driving offense detected - requires underwriter review');
+    return decision;
+  }
+
+  // Points-based decision logic
+  if (points === 0) {
+    decision.approved = true;
+    decision.riskLevel = 'low';
+    decision.reasons.push('Clean license - no points');
+  } else if (points <= 3) {
+    decision.approved = true;
+    decision.riskLevel = 'standard';
+    decision.reasons.push('Minor points - standard approval');
+  } else if (points <= 6) {
+    // Check for specific offense types
+    const hasSpeedingOnly = endorsements.every(e => e.code && e.code.startsWith('SP'));
+    if (hasSpeedingOnly) {
+      decision.approved = true;
+      decision.riskLevel = 'medium';
+      decision.reasons.push('Speeding points only - approved');
+    } else {
+      decision.manualReview = true;
+      decision.reasons.push('Mixed offenses with 4-6 points - requires review');
+    }
+  } else if (points <= 9) {
+    decision.approved = true;
+    decision.excess = 500;
+    decision.riskLevel = 'high';
+    decision.reasons.push('7-9 points - approved with £500 excess');
+  } else {
+    decision.approved = false;
+    decision.reasons.push('10+ points - exceeds insurance limits');
+  }
+
+  // Check for recent offenses (last 12 months)
+  const recentOffenses = endorsements.filter(e => {
+    if (!e.date) return false;
+    const offenseDate = new Date(e.date);
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+    return offenseDate > twelveMonthsAgo;
+  });
+
+  if (recentOffenses.length > 0) {
+    decision.reasons.push(`${recentOffenses.length} recent offense(s) in last 12 months`);
+    if (decision.excess < 250) {
+      decision.excess = 250;
+    }
+  }
+
+  return decision;
+}
+
+// ENHANCED: Comprehensive mock DVLA data
+function getEnhancedMockDvlaAnalysis() {
+  return {
+    licenseNumber: "WOOD661120JO9LA",
+    driverName: "JONATHAN WOOD",
+    checkCode: "Kd m3 ch Nn",
+    dateGenerated: "2025-07-14",
+    validFrom: "2006-08-01",
+    validTo: "2032-08-01",
+    drivingStatus: "Current full licence",
+    endorsements: [
+      {
+        code: "SP30",
+        date: "2023-03-15",
+        points: 3,
+        description: "Exceeding statutory speed limit on a public road"
+      }
+    ],
+    totalPoints: 3,
+    restrictions: [],
+    categories: ["B", "BE"],
+    isValid: true,
+    issues: [],
+    confidence: "high",
+    ageInDays: 7,
+    extractionSuccess: true,
+    insuranceDecision: {
+      approved: true,
+      excess: 0,
+      manualReview: false,
+      reasons: ["Minor points - standard approval"],
+      riskLevel: "standard"
+    },
+    mockMode: true
+  };
+}
+
+// ENHANCED: Intelligent DVLA fallback
+function createEnhancedDvlaFallback(fileType) {
+  return {
+    licenseNumber: 'FALLBACK751120FB9AB',
+    driverName: 'Fallback Driver',
+    checkCode: 'Fb 12 ck 34',
+    dateGenerated: '2025-07-21',
+    validFrom: '2010-01-01',
+    validTo: '2030-01-01',
+    drivingStatus: 'Current full licence',
+    endorsements: [],
+    totalPoints: 0,
+    restrictions: [],
+    categories: ['B'],
+    isValid: true,
+    issues: ['⚠️ Claude API failed - using fallback data'],
+    confidence: 'low',
+    ageInDays: 0,
+    extractionSuccess: false,
+    insuranceDecision: {
+      approved: true,
+      excess: 0,
+      manualReview: false,
+      reasons: ['Clean license - no points (fallback)'],
+      riskLevel: 'low'
+    },
+    fallbackMode: true
+  };
+}
+
 // Mock POA data for testing when Claude API not available
 function getMockPoaData(documentId) {
   const mockData = {
@@ -338,32 +606,6 @@ async function testSinglePoaExtraction(imageData, documentType = 'unknown', lice
   console.log('Testing single POA extraction');
   return await extractPoaDocumentData(imageData, 'Single-POA', fileType);
 }
-
-// Keep existing DVLA test functionality
-async function testDvlaOcrWithFallback(imageData, fileType = 'image') {
-  console.log('Testing DVLA OCR with fallback strategy');
-  
-  if (!process.env.CLAUDE_API_KEY) {
-    console.log('Claude API not configured, using mock DVLA analysis');
-    return getMockDvlaAnalysis();
-  }
-
-  try {
-    console.log('Attempting Claude API for DVLA analysis...');
-    const claudeResult = await attemptClaudeVisionAnalysis(imageData, fileType, createDvlaPrompt(fileType));
-    
-    const validatedData = validateDvlaData(claudeResult);
-    console.log('✅ Claude DVLA analysis successful');
-    return validatedData;
-
-  } catch (error) {
-    console.log('❌ Claude vision failed, using intelligent fallback:', error.message);
-    return createIntelligentDvlaFallback(fileType);
-  }
-}
-
-// [Keep all existing helper functions: attemptClaudeVisionAnalysis, calculateDaysFromDate, createDvlaPrompt, etc.]
-// ... (I'll include the essential ones here to keep this focused)
 
 // FIXED: Helper function to calculate days from date string
 function calculateDaysFromDate(dateString) {
@@ -470,49 +712,4 @@ async function attemptClaudeVisionAnalysis(imageData, fileType, prompt, maxRetri
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
     }
   }
-}
-
-// Basic DVLA functions (keeping minimal for completeness)
-function createDvlaPrompt(fileType) {
-  return `Analyze this DVLA check document and return ONLY a JSON object:
-{
-  "licenseNumber": "extracted number",
-  "driverName": "name from document", 
-  "totalPoints": number,
-  "isValid": boolean,
-  "confidence": "high|medium|low"
-}
-RETURN ONLY JSON, no other text.`;
-}
-
-function validateDvlaData(data) {
-  return {
-    licenseNumber: data.licenseNumber || 'unknown',
-    driverName: data.driverName || 'Unknown',
-    totalPoints: data.totalPoints || 0,
-    isValid: data.isValid !== false,
-    confidence: (data.confidence || 'medium').toLowerCase()
-  };
-}
-
-function getMockDvlaAnalysis() {
-  return {
-    licenseNumber: 'SMITH751120JS9AB',
-    driverName: 'JOHN SMITH',
-    totalPoints: 3,
-    isValid: true,
-    confidence: 'high',
-    mockMode: true
-  };
-}
-
-function createIntelligentDvlaFallback(fileType) {
-  return {
-    licenseNumber: 'FALLBACK751120FB9AB',
-    driverName: 'Fallback Driver',
-    totalPoints: 0,
-    isValid: true,
-    confidence: 'low',
-    fallbackMode: true
-  };
 }
