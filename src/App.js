@@ -1,11 +1,21 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete React Application with Insurance Questionnaire
-// FIXED VERSION - Clean structure to resolve syntax errors
+// OOOSH Driver Verification  
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 
+// ADD THIS IMPORT
+import DVLATestPage from './DVLATestPage';
+
+// ADD THIS SIMPLE CHECK AT THE VERY TOP OF YOUR EXISTING COMPONENT
 const DriverVerificationApp = () => {
+  // Simple route check - if test=dvla, show DVLA test page
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('test') === 'dvla') {
+    return <DVLATestPage />;
+  }
+
+  // YOUR EXISTING CODE CONTINUES EXACTLY AS IT WAS
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
