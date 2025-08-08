@@ -557,8 +557,8 @@ const DriverVerificationApp = () => {
         </div>
         {errors[field] && (
           <p className="text-sm text-red-600">{errors[field]}</p>
-        </div>
-      )}
+        )}
+      </div>
     );
 
     return (
