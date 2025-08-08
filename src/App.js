@@ -1,12 +1,21 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete React Application with Insurance Questionnaire
-// UPDATED VERSION - Added DVLA Test Route
+// OOOSH Driver Verification - FIXED VERSION
+// Moved route check BEFORE all hooks to comply with React Rules of Hooks
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 import DVLATestPage from './DVLATestPage';
 
 const DriverVerificationApp = () => {
+  // Check for test route FIRST - before ANY hooks
+  const urlParams = new URLSearchParams(window.location.search);
+  const testRoute = urlParams.get('test');
+  
+  if (testRoute === 'dvla') {
+    return <DVLATestPage />;
+  }
+
+  // Now ALL hooks come after the early return check
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -20,14 +29,6 @@ const DriverVerificationApp = () => {
   
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
-
-  // Check for test route FIRST - before any other logic
-  const urlParams = new URLSearchParams(window.location.search);
-  const testRoute = urlParams.get('test');
-  
-  if (testRoute === 'dvla') {
-    return <DVLATestPage />;
-  }
 
   // Extract job ID from URL on load
   useEffect(() => {
@@ -556,8 +557,8 @@ const DriverVerificationApp = () => {
         </div>
         {errors[field] && (
           <p className="text-sm text-red-600">{errors[field]}</p>
-        )}
-      </div>
+        </div>
+      )}
     );
 
     return (
