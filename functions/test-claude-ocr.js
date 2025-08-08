@@ -122,13 +122,21 @@ async function callAwsTextract(imageData, fileType) {
   const region = process.env.OOOSH_AWS_REGION || 'eu-west-2';
   const endpoint = `https://textract.${region}.amazonaws.com/`;
   
-  // Convert base64 to buffer
-  const imageBuffer = Buffer.from(imageData, 'base64');
+  // Validate image size (AWS limit is 10MB)
+  const imageSizeBytes = (imageData.length * 3) / 4; // Approximate base64 to bytes
+  console.log(`📏 Image size: ${Math.round(imageSizeBytes / 1024)}KB`);
+  
+  if (imageSizeBytes > 10000000) { // 10MB limit
+    throw new Error('Image too large for AWS Textract (max 10MB)');
+  }
+  
+  // Ensure clean base64 (remove data URL prefix if present)
+  const cleanBase64 = imageData.replace(/^data:image\/[^;]+;base64,/, '');
   
   // Prepare AWS request
   const requestBody = JSON.stringify({
     Document: {
-      Bytes: imageData
+      Bytes: cleanBase64
     },
     FeatureTypes: ['FORMS', 'TABLES']
   });
