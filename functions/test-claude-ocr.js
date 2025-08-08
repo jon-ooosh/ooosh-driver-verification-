@@ -2,7 +2,8 @@
 // AWS TEXTRACT VERSION - Reliable OCR processing
 // Replaces Claude API with AWS Textract for better reliability
 
-const fetch = require('node-fetch');
+// Use native fetch (Node 18+)
+// const fetch = require('node-fetch'); // Remove this line
 
 exports.handler = async (event, context) => {
   console.log('AWS Textract OCR Test function called');
