@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
+import DVLATestPage from './DVLATestPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -20,6 +21,27 @@ const DriverVerificationApp = () => {
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
 
+  // Check for test route
+  const urlParams = new URLSearchParams(window.location.search);
+  const testRoute = urlParams.get('test');
+  
+  if (testRoute === 'dvla') {
+    return <DVLATestPage />;
+  }
+  // END OF NEW CODE
+
+  // Extract job ID from URL on load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const jobParam = urlParams.get('job');
+    if (jobParam) {
+      setJobId(jobParam);
+      validateJobAndFetchDetails(jobParam);
+    } else {
+      setError('Invalid verification link. Please check your email for the correct link.');
+    }
+  }, []);
+  
   // Extract job ID from URL on load
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
