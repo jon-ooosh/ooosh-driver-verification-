@@ -37,7 +37,7 @@
   },
   "homepage": "."
 
-{
+}
   "name": "ooosh-driver-verification",
   "version": "1.0.0",
   "dependencies": {
