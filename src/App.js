@@ -1,37 +1,23 @@
 // File: src/App.js
-// OOOSH Driver Verification - PROPERLY STRUCTURED VERSION
-// Route wrapper to avoid React Hooks violations
+// OOOSH Driver Verification - Complete React Application with Insurance Questionnaire
+// FIXED VERSION - Clean structure to resolve syntax errors
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
-import DVLATestPage from './DVLATestPage';
 
-// Route wrapper component - handles routing BEFORE any hooks
-const AppRouter = () => {
-  // Check for test route FIRST - completely separate from main component
-  const urlParams = new URLSearchParams(window.location.search);
-  const testRoute = urlParams.get('test');
-  
-  if (testRoute === 'dvla') {
-    return <DVLATestPage />;
-  }
-
-  // Return main app component if not a test route
-  return <DriverVerificationApp />;
-};
-
-// Main app component - all hooks are now safe
 const DriverVerificationApp = () => {
-  // ALL hooks are now unconditional - no early returns above them
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
+  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
+  
+  // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
 
   // Extract job ID from URL on load
@@ -58,7 +44,7 @@ const DriverVerificationApp = () => {
       handleVerificationComplete(status, job, session);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Disable exhaustive deps warning for this useEffect
 
   const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
@@ -124,8 +110,9 @@ const DriverVerificationApp = () => {
       setCurrentStep('email-verification');
       setError('');
       
+      // Show helpful message for test emails
       if (data.testMode) {
-        setError('');
+        setError(''); // Clear any errors
         console.log('🚨 Test email detected - use any 6-digit code');
       }
       
@@ -165,19 +152,25 @@ const DriverVerificationApp = () => {
       const data = await response.json();
       console.log('Verify response:', data);
 
+      // Check response status first, then handle data
       if (!response.ok) {
+        // This handles 400 status responses (invalid codes)
         throw new Error(data.error || 'Verification failed');
       }
 
+      // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
         console.log('Verification successful, checking if returning driver');
         
+        // Show test mode indicator if applicable
         if (data.testMode) {
           console.log('🚨 Test mode verification successful');
         }
         
+        // First check if this is a returning driver
         await checkDriverStatus();
       } else {
+        // This handles edge cases where status is 200 but verification failed
         throw new Error(data.error || 'Invalid verification code');
       }
       
@@ -200,11 +193,15 @@ const DriverVerificationApp = () => {
         console.log('Driver status:', driverData);
         setDriverStatus(driverData);
         
+        // Smart routing based on driver status
         if (driverData.status === 'verified') {
+          // Returning driver with valid documents
           setCurrentStep('driver-status');
         } else if (driverData.status === 'partial') {
+          // Returning driver but some documents expired
           setCurrentStep('driver-status');
         } else {
+          // New driver - start with insurance questionnaire
           setCurrentStep('insurance-questionnaire');
         }
       } else {
@@ -220,13 +217,17 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // Handle insurance questionnaire completion
   const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
+    // Save insurance data to Google Sheets via Apps Script
     try {
       setLoading(true);
       
+      // Use existing environment variable (note: React needs REACT_APP_ prefix for client-side access)
+      // Since this runs in the browser, we need to call through a Netlify function instead
       const response = await fetch('/.netlify/functions/save-insurance-data', {
         method: 'POST',
         headers: {
@@ -245,10 +246,12 @@ const DriverVerificationApp = () => {
         console.error('Failed to save insurance data');
       }
       
+      // Move to driver status regardless of save success
       setCurrentStep('driver-status');
       
     } catch (err) {
       console.error('Error saving insurance data:', err);
+      // Still proceed to next step
       setCurrentStep('driver-status');
     } finally {
       setLoading(false);
@@ -291,13 +294,16 @@ const DriverVerificationApp = () => {
       }
       
       if (data.sessionToken && data.sessionToken.startsWith('mock_')) {
+        // Mock mode - show processing then complete
         console.log('Mock Idenfy mode - simulating verification');
         setCurrentStep('processing');
         setTimeout(() => {
           setCurrentStep('complete');
         }, 3000);
       } else if (data.sessionToken) {
+        // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
+        // Use the redirect URL from the response or construct the proper Idenfy UI URL
         window.location.href = data.redirectUrl || `https://ui.idenfy.com/session?authToken=${data.sessionToken}`;
       } else {
         throw new Error('No session token received from Idenfy');
@@ -311,23 +317,31 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // Handle verification complete callback from Idenfy
   const handleVerificationComplete = async (status, jobId, sessionId) => {
     console.log('Handling verification complete:', { status, jobId, sessionId });
     
+    // Set loading state while we process the result
     setCurrentStep('processing');
     setError('');
     
     try {
+      // Wait a bit for webhook to process (Idenfy webhooks can be delayed)
       await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Check final driver status
       await checkDriverStatus();
       
+      // Determine final step based on status
       switch (status) {
         case 'success':
+          // Verification completed successfully
           if (driverStatus?.status === 'verified') {
             setCurrentStep('complete');
           } else if (driverStatus?.status === 'review_required') {
-            setCurrentStep('processing');
+            setCurrentStep('processing'); // Still under review
           } else {
+            // Check if we need DVLA check
             const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
             if (needsDVLA) {
               setCurrentStep('dvla-check');
@@ -336,14 +350,18 @@ const DriverVerificationApp = () => {
             }
           }
           break;
+          
         case 'error':
         case 'unverified':
           setCurrentStep('rejected');
           setError('Document verification failed. Please try again or contact support.');
           break;
+          
         case 'mock':
+          // Mock mode - simulate success
           setCurrentStep('complete');
           break;
+          
         default:
           console.log('Unknown verification status:', status);
           setCurrentStep('driver-status');
@@ -366,11 +384,16 @@ const DriverVerificationApp = () => {
     try {
       console.log('Processing DVLA check document:', file.name);
       
+      // Convert file to base64 for Claude processing
       const base64 = await fileToBase64(file);
+      
+      // Use Claude API to extract DVLA check data
       const dvlaData = await extractDVLAData(base64);
       console.log('Extracted DVLA data:', dvlaData);
       
+      // Validate the extracted data
       if (validateDVLAData(dvlaData)) {
+        // Update driver status with DVLA check
         setDriverStatus(prev => ({
           ...prev,
           documents: {
@@ -405,6 +428,7 @@ const DriverVerificationApp = () => {
     try {
       console.log('Extracting DVLA data from image...');
       
+      // Mock response for development
       return {
         driverName: "John Doe",
         licenseNumber: "XXXXXX066JD9LA",
@@ -447,6 +471,7 @@ const DriverVerificationApp = () => {
         [field]: value
       }));
       
+      // Clear error when user makes selection
       if (errors[field]) {
         setErrors(prev => ({ ...prev, [field]: null }));
       }
@@ -455,6 +480,7 @@ const DriverVerificationApp = () => {
     const validateQuestions = () => {
       const newErrors = {};
       
+      // Check all yes/no questions are answered
       const requiredFields = [
         'hasDisability', 'hasConvictions', 'hasProsecution', 
         'hasAccidents', 'hasInsuranceIssues', 'hasDrivingBan'
@@ -481,6 +507,7 @@ const DriverVerificationApp = () => {
           submittedAt: new Date().toISOString()
         };
 
+        // Call completion handler
         await handleInsuranceComplete(submissionData);
         
       } catch (error) {
@@ -533,6 +560,7 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Insurance Questions */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
             <div className="space-y-4">
@@ -568,6 +596,7 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
+          {/* Additional Details */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Additional Information (Optional)
@@ -581,6 +610,7 @@ const DriverVerificationApp = () => {
             />
           </div>
 
+          {/* Info about POA - No upload needed */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <h3 className="font-medium text-blue-900 mb-2">📄 Proof of Address Requirements</h3>
             <p className="text-sm text-blue-800">
@@ -589,6 +619,7 @@ const DriverVerificationApp = () => {
             </p>
           </div>
 
+          {/* Error Display */}
           {errors.submit && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
@@ -600,6 +631,7 @@ const DriverVerificationApp = () => {
             </div>
           )}
 
+          {/* Navigation */}
           <div className="flex space-x-3">
             <button
               onClick={() => setCurrentStep('email-verification')}
@@ -619,7 +651,7 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // All the render functions (truncated for space but include all of them)
+  // Render functions for each step
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
@@ -705,15 +737,361 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-  // [Include all other render functions here - truncating for space]
-  
+  const renderEmailVerification = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center mb-6">
+        <Mail className="mx-auto h-12 w-12 text-green-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900">Check Your Email</h2>
+        <p className="text-gray-600 mt-2">We sent a 6-digit code to:</p>
+        <p className="text-sm font-medium text-gray-900">{driverEmail}</p>
+        
+        {/* Show test email hint */}
+        {['test@oooshtours.co.uk', 'jon@oooshtours.co.uk', 'demo@oooshtours.co.uk', 'dev@oooshtours.co.uk'].includes(driverEmail.toLowerCase()) && (
+          <p className="text-xs text-orange-600 mt-2 font-medium">
+            🧪 Test email - use any 6-digit code (e.g., 123456)
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
+            Verification Code
+          </label>
+          <input
+            type="text"
+            id="code"
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg font-mono"
+            placeholder="123456"
+            maxLength="6"
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3">
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+
+        <button
+          onClick={verifyEmailCode}
+          disabled={loading || verificationCode.length < 6}
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          {loading ? 'Verifying...' : 'Verify Code'}
+        </button>
+
+        <button
+          onClick={sendVerificationEmail}
+          disabled={loading}
+          className="w-full text-blue-600 hover:text-blue-700 text-sm disabled:opacity-50"
+        >
+          Didn't receive the code? Send again
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderDriverStatus = () => {
+    const isVerified = driverStatus?.status === 'verified';
+    const needsDocuments = driverStatus?.status === 'new' || 
+                          !driverStatus?.documents?.license?.valid ||
+                          !driverStatus?.documents?.poa1?.valid ||
+                          !driverStatus?.documents?.poa2?.valid;
+    const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
+
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+        <div className="text-center mb-6">
+          {isVerified && !needsDocuments && !needsDVLA ? (
+            <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
+          ) : (
+            <FileText className="mx-auto h-12 w-12 text-orange-600 mb-4" />
+          )}
+          <h2 className="text-xl font-bold text-gray-900">
+            {isVerified && !needsDocuments && !needsDVLA ? 
+              `Welcome back!` : 
+              'Verification Status'}
+          </h2>
+          {insuranceData && (
+            <p className="text-sm text-green-600 mt-1">✓ Insurance questions completed</p>
+          )}
+        </div>
+
+        {/* Document Status Breakdown */}
+        {driverStatus?.documents && (
+          <div className="space-y-3 mb-6">
+            <DocumentStatus 
+              title="Driving License" 
+              status={driverStatus.documents.license} 
+            />
+            <DocumentStatus 
+              title="Proof of Address #1" 
+              status={driverStatus.documents.poa1} 
+            />
+            <DocumentStatus 
+              title="Proof of Address #2" 
+              status={driverStatus.documents.poa2} 
+            />
+            <DocumentStatus 
+              title="DVLA Check" 
+              status={driverStatus.documents.dvlaCheck} 
+            />
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="space-y-3">
+          {needsDocuments && (
+            <button
+              onClick={startVerification}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Upload Documents
+            </button>
+          )}
+          
+          {needsDVLA && !needsDocuments && (
+            <button
+              onClick={startDVLACheck}
+              className="w-full bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              Upload DVLA Check
+            </button>
+          )}
+          
+          {!needsDocuments && !needsDVLA && (
+            <button
+              onClick={() => alert('Added to hire! (Monday.com integration pending)')}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              Join This Hire
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const DocumentStatus = ({ title, status }) => {
+    const isValid = status?.valid;
+    const isExpiringSoon = status?.expiryDate && 
+                          new Date(status.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    
+    return (
+      <div className="flex items-center justify-between p-3 border rounded-md">
+        <div className="flex items-center">
+          {isValid ? (
+            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+          ) : (
+            <XCircle className="h-4 w-4 text-red-500 mr-2" />
+          )}
+          <span className="text-sm font-medium">{title}</span>
+        </div>
+        <div className="text-right">
+          {isValid ? (
+            <div>
+              {status.expiryDate && (
+                <span className={`text-xs ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
+                  Valid until {status.expiryDate}
+                </span>
+              )}
+              {status.lastCheck && !status.expiryDate && (
+                <span className="text-xs text-green-600">
+                  Checked {status.lastCheck}
+                </span>
+              )}
+              {status.type && (
+                <p className="text-xs text-gray-500">{status.type}</p>
+              )}
+            </div>
+          ) : (
+            <span className="text-xs text-red-600">Required</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDocumentUpload = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center mb-6">
+        <Upload className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900">Document Verification</h2>
+        <p className="text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
+      </div>
+
+      <div className="space-y-4 mb-6">
+        <div className="border border-gray-200 rounded-md p-4">
+          <h3 className="font-medium text-gray-900 mb-2">Required Documents:</h3>
+          <ul className="text-sm text-gray-600 space-y-1">
+            <li>• UK Driving License (front and back)</li>
+            <li>• Two Proof of Address documents (within 90 days)</li>
+            <li>• Selfie for identity verification</li>
+          </ul>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+          <p className="text-sm text-blue-800">
+            <strong>Acceptable Proof of Address:</strong> Utility bills, bank statements, council tax, credit card statements
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
+
+      <button
+        onClick={generateIdenfyToken}
+        disabled={loading}
+        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+      >
+        {loading ? 'Starting Verification...' : 'Start Document Upload'}
+      </button>
+    </div>
+  );
+
+  const renderDVLACheck = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center mb-6">
+        <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900">DVLA License Check</h2>
+        <p className="text-gray-600 mt-2">Upload your DVLA check document</p>
+      </div>
+
+      <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
+        <h3 className="font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
+        <ol className="text-sm text-orange-800 space-y-1 list-decimal list-inside">
+          <li>Visit gov.uk/check-driving-licence</li>
+          <li>Enter your license details</li>
+          <li>Download/screenshot the summary page</li>
+          <li>Upload it here</li>
+        </ol>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            DVLA Check Document
+          </label>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={(e) => setUploadedFile(e.target.files[0])}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3">
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+
+        <button
+          onClick={() => processDVLACheck(uploadedFile)}
+          disabled={loading || !uploadedFile}
+          className="w-full bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
+        >
+          {loading ? 'Processing Document...' : 'Verify DVLA Check'}
+        </button>
+
+        <button
+          onClick={() => setCurrentStep('driver-status')}
+          className="w-full text-gray-600 hover:text-gray-700 text-sm"
+        >
+          Back to Status
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderProcessing = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Processing Verification</h2>
+        <p className="text-gray-600">Please wait while we verify your documents...</p>
+        <p className="text-sm text-gray-500 mt-2">This usually takes 30-60 seconds</p>
+      </div>
+    </div>
+  );
+
+  const renderComplete = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center py-8">
+        <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Verification Complete!</h2>
+        <p className="text-gray-600 mb-4">You're approved for this hire.</p>
+        
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-green-800">
+            Your verification has been added to the hire roster. You'll receive confirmation details shortly.
+          </p>
+        </div>
+
+        <button
+          onClick={() => window.close()}
+          className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderRejected = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center py-8">
+        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Verification Issues</h2>
+        <p className="text-gray-600 mb-4">We couldn't approve your verification.</p>
+        
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-red-800">
+            This may be due to document quality, insurance requirements, or other factors. 
+            Please contact OOOSH for assistance.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            onClick={startVerification}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Try Again
+          </button>
+          
+          <a
+            href="tel:+441234567890"
+            className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center"
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            Call OOOSH Support
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main render logic
   const renderStep = () => {
     switch(currentStep) {
       case 'landing': return renderLanding();
       case 'email-entry': return renderEmailEntry();
-      case 'email-verification': return <div>Email Verification Step</div>; // Simplified for space
+      case 'email-verification': return renderEmailVerification();
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
-      case 'driver-status': return <div>Driver Status Step</div>; // Simplified for space
+      case 'driver-status': return renderDriverStatus();
+      case 'document-upload': return renderDocumentUpload();
+      case 'dvla-check': return renderDVLACheck();
+      case 'processing': return renderProcessing();
+      case 'complete': return renderComplete();
+      case 'rejected': return renderRejected();
       default: return renderLanding();
     }
   };
@@ -725,5 +1103,4 @@ const DriverVerificationApp = () => {
   );
 };
 
-// Export the router component as default
-export default AppRouter;
+export default DriverVerificationApp;
