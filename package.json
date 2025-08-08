@@ -37,3 +37,8 @@
   },
   "homepage": "."
 }
+{
+  "dependencies": {
+    "pdf2pic": "^2.1.4"
+  }
+}
