@@ -5,8 +5,7 @@
 [build]
   publish = "build"
   command = "npm run build"
-  command = "npm install && apt-get update && apt-get install -y poppler-utils && npm run build"
-
+  
 [build.environment]
   NODE_VERSION = "18"
 
