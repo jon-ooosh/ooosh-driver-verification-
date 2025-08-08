@@ -1,39 +1,43 @@
 // File: src/App.js
-// OOOSH Driver Verification  
+// OOOSH Driver Verification - FIXED VERSION with DVLA Test Route
+// Fixed React Hooks violations by adding test route properly
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 
-// ADD THIS IMPORT
+// Import the DVLA components you built
 import DVLATestPage from './DVLATestPage';
 
-// ADD THIS SIMPLE CHECK AT THE VERY TOP OF YOUR EXISTING COMPONENT
 const DriverVerificationApp = () => {
-  // Simple route check - if test=dvla, show DVLA test page
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('test') === 'dvla') {
-    return <DVLATestPage />;
-  }
-
-  // YOUR EXISTING CODE CONTINUES EXACTLY AS IT WAS
+  // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONAL HOOKS
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
-  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
-  
-  // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
+  
+  // NEW: State for test mode detection
+  const [isTestMode, setIsTestMode] = useState(false);
 
   // Extract job ID from URL on load
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const jobParam = urlParams.get('job');
+    const testParam = urlParams.get('test'); // NEW: Check for test parameter
+    
+    // NEW: Handle test mode
+    if (testParam === 'dvla') {
+      setIsTestMode(true);
+      setCurrentStep('dvla-test');
+      return;
+    }
+    
+    // Normal flow
     if (jobParam) {
       setJobId(jobParam);
       validateJobAndFetchDetails(jobParam);
@@ -54,7 +58,7 @@ const DriverVerificationApp = () => {
       handleVerificationComplete(status, job, session);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Disable exhaustive deps warning for this useEffect
+  }, []);
 
   const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
@@ -162,25 +166,19 @@ const DriverVerificationApp = () => {
       const data = await response.json();
       console.log('Verify response:', data);
 
-      // Check response status first, then handle data
       if (!response.ok) {
-        // This handles 400 status responses (invalid codes)
         throw new Error(data.error || 'Verification failed');
       }
 
-      // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
         console.log('Verification successful, checking if returning driver');
         
-        // Show test mode indicator if applicable
         if (data.testMode) {
           console.log('🚨 Test mode verification successful');
         }
         
-        // First check if this is a returning driver
         await checkDriverStatus();
       } else {
-        // This handles edge cases where status is 200 but verification failed
         throw new Error(data.error || 'Invalid verification code');
       }
       
@@ -203,15 +201,11 @@ const DriverVerificationApp = () => {
         console.log('Driver status:', driverData);
         setDriverStatus(driverData);
         
-        // Smart routing based on driver status
         if (driverData.status === 'verified') {
-          // Returning driver with valid documents
           setCurrentStep('driver-status');
         } else if (driverData.status === 'partial') {
-          // Returning driver but some documents expired
           setCurrentStep('driver-status');
         } else {
-          // New driver - start with insurance questionnaire
           setCurrentStep('insurance-questionnaire');
         }
       } else {
@@ -227,17 +221,13 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // Handle insurance questionnaire completion
   const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
-    // Save insurance data to Google Sheets via Apps Script
     try {
       setLoading(true);
       
-      // Use existing environment variable (note: React needs REACT_APP_ prefix for client-side access)
-      // Since this runs in the browser, we need to call through a Netlify function instead
       const response = await fetch('/.netlify/functions/save-insurance-data', {
         method: 'POST',
         headers: {
@@ -256,12 +246,10 @@ const DriverVerificationApp = () => {
         console.error('Failed to save insurance data');
       }
       
-      // Move to driver status regardless of save success
       setCurrentStep('driver-status');
       
     } catch (err) {
       console.error('Error saving insurance data:', err);
-      // Still proceed to next step
       setCurrentStep('driver-status');
     } finally {
       setLoading(false);
@@ -304,16 +292,13 @@ const DriverVerificationApp = () => {
       }
       
       if (data.sessionToken && data.sessionToken.startsWith('mock_')) {
-        // Mock mode - show processing then complete
         console.log('Mock Idenfy mode - simulating verification');
         setCurrentStep('processing');
         setTimeout(() => {
           setCurrentStep('complete');
         }, 3000);
       } else if (data.sessionToken) {
-        // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
-        // Use the redirect URL from the response or construct the proper Idenfy UI URL
         window.location.href = data.redirectUrl || `https://ui.idenfy.com/session?authToken=${data.sessionToken}`;
       } else {
         throw new Error('No session token received from Idenfy');
@@ -327,31 +312,23 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // Handle verification complete callback from Idenfy
   const handleVerificationComplete = async (status, jobId, sessionId) => {
     console.log('Handling verification complete:', { status, jobId, sessionId });
     
-    // Set loading state while we process the result
     setCurrentStep('processing');
     setError('');
     
     try {
-      // Wait a bit for webhook to process (Idenfy webhooks can be delayed)
       await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Check final driver status
       await checkDriverStatus();
       
-      // Determine final step based on status
       switch (status) {
         case 'success':
-          // Verification completed successfully
           if (driverStatus?.status === 'verified') {
             setCurrentStep('complete');
           } else if (driverStatus?.status === 'review_required') {
-            setCurrentStep('processing'); // Still under review
+            setCurrentStep('processing');
           } else {
-            // Check if we need DVLA check
             const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
             if (needsDVLA) {
               setCurrentStep('dvla-check');
@@ -368,7 +345,6 @@ const DriverVerificationApp = () => {
           break;
           
         case 'mock':
-          // Mock mode - simulate success
           setCurrentStep('complete');
           break;
           
@@ -394,16 +370,11 @@ const DriverVerificationApp = () => {
     try {
       console.log('Processing DVLA check document:', file.name);
       
-      // Convert file to base64 for Claude processing
       const base64 = await fileToBase64(file);
-      
-      // Use Claude API to extract DVLA check data
       const dvlaData = await extractDVLAData(base64);
       console.log('Extracted DVLA data:', dvlaData);
       
-      // Validate the extracted data
       if (validateDVLAData(dvlaData)) {
-        // Update driver status with DVLA check
         setDriverStatus(prev => ({
           ...prev,
           documents: {
@@ -438,7 +409,6 @@ const DriverVerificationApp = () => {
     try {
       console.log('Extracting DVLA data from image...');
       
-      // Mock response for development
       return {
         driverName: "John Doe",
         licenseNumber: "XXXXXX066JD9LA",
@@ -481,7 +451,6 @@ const DriverVerificationApp = () => {
         [field]: value
       }));
       
-      // Clear error when user makes selection
       if (errors[field]) {
         setErrors(prev => ({ ...prev, [field]: null }));
       }
@@ -490,7 +459,6 @@ const DriverVerificationApp = () => {
     const validateQuestions = () => {
       const newErrors = {};
       
-      // Check all yes/no questions are answered
       const requiredFields = [
         'hasDisability', 'hasConvictions', 'hasProsecution', 
         'hasAccidents', 'hasInsuranceIssues', 'hasDrivingBan'
@@ -517,7 +485,6 @@ const DriverVerificationApp = () => {
           submittedAt: new Date().toISOString()
         };
 
-        // Call completion handler
         await handleInsuranceComplete(submissionData);
         
       } catch (error) {
@@ -570,7 +537,6 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="space-y-6">
-          {/* Insurance Questions */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
             <div className="space-y-4">
@@ -606,7 +572,6 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
-          {/* Additional Details */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Additional Information (Optional)
@@ -620,7 +585,6 @@ const DriverVerificationApp = () => {
             />
           </div>
 
-          {/* Info about POA - No upload needed */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <h3 className="font-medium text-blue-900 mb-2">📄 Proof of Address Requirements</h3>
             <p className="text-sm text-blue-800">
@@ -629,7 +593,6 @@ const DriverVerificationApp = () => {
             </p>
           </div>
 
-          {/* Error Display */}
           {errors.submit && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
@@ -641,7 +604,6 @@ const DriverVerificationApp = () => {
             </div>
           )}
 
-          {/* Navigation */}
           <div className="flex space-x-3">
             <button
               onClick={() => setCurrentStep('email-verification')}
@@ -755,7 +717,6 @@ const DriverVerificationApp = () => {
         <p className="text-gray-600 mt-2">We sent a 6-digit code to:</p>
         <p className="text-sm font-medium text-gray-900">{driverEmail}</p>
         
-        {/* Show test email hint */}
         {['test@oooshtours.co.uk', 'jon@oooshtours.co.uk', 'demo@oooshtours.co.uk', 'dev@oooshtours.co.uk'].includes(driverEmail.toLowerCase()) && (
           <p className="text-xs text-orange-600 mt-2 font-medium">
             🧪 Test email - use any 6-digit code (e.g., 123456)
@@ -830,7 +791,6 @@ const DriverVerificationApp = () => {
           )}
         </div>
 
-        {/* Document Status Breakdown */}
         {driverStatus?.documents && (
           <div className="space-y-3 mb-6">
             <DocumentStatus 
@@ -852,7 +812,6 @@ const DriverVerificationApp = () => {
           </div>
         )}
 
-        {/* Action Buttons */}
         <div className="space-y-3">
           {needsDocuments && (
             <button
@@ -1089,8 +1048,19 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-  // Main render logic
+  // NEW: Render function for DVLA test mode
+  const renderDVLATest = () => (
+    <DVLATestPage />
+  );
+
+  // Main render logic - FIXED to handle test mode properly
   const renderStep = () => {
+    // Handle test mode first
+    if (isTestMode && currentStep === 'dvla-test') {
+      return renderDVLATest();
+    }
+    
+    // Normal flow
     switch(currentStep) {
       case 'landing': return renderLanding();
       case 'email-entry': return renderEmailEntry();
