@@ -361,7 +361,17 @@ function extractEndorsementsNoDuplicates(text) {
 
   specificPatterns.forEach((pattern, patternIndex) => {
     console.log(`🔍 Checking pattern ${patternIndex + 1}...`);
-    const matches = [...text.matchAll(pattern)];
+    
+    // Use matchAll for global patterns, match for non-global
+    let matches = [];
+    if (pattern.global) {
+      matches = [...text.matchAll(pattern)];
+    } else {
+      const singleMatch = text.match(pattern);
+      if (singleMatch) {
+        matches = [singleMatch];
+      }
+    }
     
     matches.forEach(match => {
       const code = match[1];
@@ -398,7 +408,16 @@ function extractEndorsementsNoDuplicates(text) {
     ];
 
     summaryPatterns.forEach((pattern, patternIndex) => {
-      const matches = [...text.matchAll(pattern)];
+      let matches = [];
+      if (pattern.global) {
+        matches = [...text.matchAll(pattern)];
+      } else {
+        const singleMatch = text.match(pattern);
+        if (singleMatch) {
+          matches = [singleMatch];
+        }
+      }
+      
       matches.forEach(match => {
         const points = parseInt(match[2] || match[1]);
         if (points > 0) {
