@@ -110,8 +110,44 @@ async function testDvlaExtractionWithTextract(imageData, fileType = 'image') {
     return validatedData;
 
   } catch (error) {
-    console.log('❌ AWS Textract failed, using enhanced fallback:', error.message);
-    return createDvlaFallback(fileType, error.message);
+    console.log('❌ AWS Textract failed:', error.message);
+    
+    // Return the error directly instead of fallback
+    return {
+      licenseNumber: null,
+      licenseEnding: null,
+      driverName: null,
+      checkCode: null,
+      dateGenerated: null,
+      validFrom: null,
+      validTo: null,
+      drivingStatus: null,
+      endorsements: [],
+      totalPoints: 0,
+      restrictions: [],
+      categories: [],
+      isValid: false,
+      issues: [`❌ Processing failed: ${error.message}`],
+      confidence: 0,
+      ageInDays: 0,
+      extractionSuccess: false,
+      parseError: error.message,
+      insuranceDecision: {
+        approved: false,
+        excess: 0,
+        manualReview: true,
+        reasons: ['Document processing failed'],
+        riskLevel: 'unknown'
+      },
+      extractionDetails: {
+        licensePatterns: [],
+        endorsementSources: [],
+        dateFormats: [],
+        debugInfo: { error: error.message, stack: error.stack }
+      },
+      errorMode: true,
+      ocrProvider: 'AWS Textract (Failed)'
+    };
   }
 }
 
