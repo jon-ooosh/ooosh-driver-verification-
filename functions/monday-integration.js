@@ -118,14 +118,14 @@ const COLUMNS = {
   status: 'color_mktqc2dt'
 };
 
-// Status values for the status column
+// Status values for the status column - FIXED to match your actual board
 const STATUS_VALUES = {
-  pending: 'Pending',
-  documentsRequired: 'Documents Required',
-  underReview: 'Under Review', 
-  approved: 'Approved',
-  rejected: 'Rejected',
-  expired: 'Expired'
+  pending: 'Working on it',
+  documentsRequired: 'Working on it', 
+  underReview: 'Working on it',
+  approved: 'Done',
+  rejected: 'Stuck',
+  expired: 'Stuck'
 };
 
 // Get driver status - replacement for Google Sheets lookup
@@ -141,15 +141,15 @@ async function getDriverStatus(email, jobId) {
       };
     }
 
-    // Query Monday.com for existing driver - FIXED v2 API syntax
+    // Query Monday.com for existing driver - OPTIMIZED for speed
     const query = `
       query {
         boards (ids: [${MONDAY_CONFIG.boardId}]) {
-          items_page {
+          items_page (limit: 50) {
             items {
               id
               name
-              column_values {
+              column_values (ids: ["${COLUMNS.email}"]) {
                 id
                 text
                 value
