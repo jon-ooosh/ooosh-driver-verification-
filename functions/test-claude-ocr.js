@@ -198,9 +198,9 @@ function parseDvlaFromTextEnhanced(text) {
   if (!dvlaData.licenseEnding) {
     // Look for patterns like "ending 162JD9GA" or "last digits 162JD9GA"
     const endingPatterns = [
-      /ending\s+([A-Z0-9]{2}[A-Z]{2})/i,
-      /last\s+digits?\s+([A-Z0-9]{2}[A-Z]{2})/i,
-      /licence\s+number\s+[^\s]*([A-Z0-9]{2}[A-Z]{2})/i
+      /ending\s+([A-Z0-9]{2}[A-Z]{2})/gi,
+      /last\s+digits?\s+([A-Z0-9]{2}[A-Z]{2})/gi,
+      /licence\s+number\s+[^\s]*([A-Z0-9]{2}[A-Z]{2})/gi
     ];
     
     for (const pattern of endingPatterns) {
