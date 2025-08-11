@@ -141,17 +141,19 @@ async function getDriverStatus(email, jobId) {
       };
     }
 
-    // Query Monday.com for existing driver - FIXED GraphQL syntax
+    // Query Monday.com for existing driver - FIXED v2 API syntax
     const query = `
       query {
         boards (ids: [${MONDAY_CONFIG.boardId}]) {
-          items {
-            id
-            name
-            column_values {
+          items_page {
+            items {
               id
-              text
-              value
+              name
+              column_values {
+                id
+                text
+                value
+              }
             }
           }
         }
@@ -161,12 +163,12 @@ async function getDriverStatus(email, jobId) {
     console.log('Executing GraphQL query:', query);
     const response = await callMondayApi(query);
     
-    if (!response.data || !response.data.boards || !response.data.boards[0]) {
+    if (!response.data || !response.data.boards || !response.data.boards[0] || !response.data.boards[0].items_page) {
       console.log('No board data found, treating as new driver');
       return createNewDriverResponse(email);
     }
 
-    const items = response.data.boards[0].items;
+    const items = response.data.boards[0].items_page.items;
     console.log(`Found ${items.length} items in Monday.com board`);
     
     // Find driver by email
@@ -228,9 +230,9 @@ async function createDriver(params) {
     // Create item in Monday.com - FIXED mutation syntax
     const itemName = driverName || `Driver - ${email}`;
     
-    // Simple column values object
+    // Simple column values object - FIXED email format
     const columnValues = {};
-    columnValues[COLUMNS.email] = email;
+    columnValues[COLUMNS.email] = { email: email, text: email }; // Email column needs both fields
     if (jobNumber) columnValues[COLUMNS.jobNumber] = jobNumber;
     columnValues[COLUMNS.status] = { label: STATUS_VALUES.pending };
 
@@ -643,6 +645,12 @@ async function testMondayConnection() {
             title
             type
           }
+          items_page {
+            items {
+              id
+              name
+            }
+          }
         }
       }
     `;
@@ -669,7 +677,8 @@ async function testMondayConnection() {
         board: {
           id: board.id,
           name: board.name,
-          columnCount: board.columns.length
+          columnCount: board.columns.length,
+          itemCount: board.items_page?.items?.length || 0
         },
         timestamp: new Date().toISOString()
       })
