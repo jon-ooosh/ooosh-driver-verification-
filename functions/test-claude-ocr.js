@@ -261,11 +261,11 @@ function parseDvlaFromText(text) {
     console.log('✅ Found license number:', dvlaData.licenseNumber);
   }
 
-  // Extract driver name (look for common patterns)
+  // Extract driver name (look for common patterns) - FIXED to stop at line breaks
   const namePatterns = [
-    /Driver's full name[:\s]+([A-Z][A-Z\s]+[A-Z])/i,
-    /full name[:\s]+([A-Z][A-Z\s]+[A-Z])/i,
-    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/
+    /Driver's full name[:\s]+([A-Z][A-Z\s]+?)(?:\s*\n|Date|$)/i,
+    /full name[:\s]+([A-Z][A-Z\s]+?)(?:\s*\n|Date|$)/i,
+    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)(?=\s*\n|Date|$)/
   ];
   
   for (const pattern of namePatterns) {
