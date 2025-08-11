@@ -221,9 +221,9 @@ function parseDvlaFromTextEnhanced(text) {
   // Extract driver name with enhanced patterns
   console.log('👤 Extracting driver name...');
   const namePatterns = [
-    /Name[:\s]+([A-Z][A-Z\s]+[A-Z])/,
-    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/,
-    /Driver[:\s]+([A-Z][A-Z\s]+)/i
+    /Name[:\s]+([A-Z][A-Z\s]+[A-Z])/gi,
+    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/gi,
+    /Driver[:\s]+([A-Z][A-Z\s]+)/gi
   ];
   
   for (const pattern of namePatterns) {
@@ -237,9 +237,9 @@ function parseDvlaFromTextEnhanced(text) {
 
   // Extract check code (DVLA format: Ab cd ef Gh)
   console.log('🔑 Extracting DVLA check code...');
-  const checkCodeMatch = text.match(/([A-Za-z]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2})/);
-  if (checkCodeMatch) {
-    dvlaData.checkCode = checkCodeMatch[1];
+  const checkCodeMatch = text.match(/([A-Za-z]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2})/gi);
+  if (checkCodeMatch && checkCodeMatch.length > 0) {
+    dvlaData.checkCode = checkCodeMatch[0];
     console.log('✅ Found check code:', dvlaData.checkCode);
   }
 
@@ -280,9 +280,9 @@ function parseDvlaFromTextEnhanced(text) {
   dvlaData.totalPoints = dvlaData.endorsements.reduce((sum, e) => sum + (e.points || 0), 0);
 
   // Extract license categories
-  const categoryMatch = text.match(/categories?[:\s]*([A-Z0-9\s,+]+)/i);
-  if (categoryMatch) {
-    dvlaData.categories = categoryMatch[1].split(/[,\s+]/).filter(c => c.length > 0);
+  const categoryMatch = text.match(/categories?[:\s]*([A-Z0-9\s,+]+)/gi);
+  if (categoryMatch && categoryMatch.length > 0) {
+    dvlaData.categories = categoryMatch[0].replace(/categories?[:\s]*/i, '').split(/[,\s+]/).filter(c => c.length > 0);
   }
 
   // Check for driving status
@@ -314,7 +314,7 @@ function extractEndorsementsNoDuplicates(text) {
     // Pattern: "SP30 Exceeding speed limit 3 points"
     /([A-Z]{2}[0-9]{2})[^0-9]*?(\d+)\s*points?/gi,
     // Pattern: Just the code "SP30" (we'll assign default points)
-    /\b([A-Z]{2}[0-9]{2})\b/g
+    /\b([A-Z]{2}[0-9]{2})\b/gi
   ];
 
   specificPatterns.forEach((pattern, patternIndex) => {
