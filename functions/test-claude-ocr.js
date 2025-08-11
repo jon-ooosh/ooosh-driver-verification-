@@ -1,11 +1,11 @@
 // File: functions/test-claude-ocr.js
-// COMPLETE VERSION - Enhanced DVLA Parser with License Ending Fix
-// Session 19: Debugging license ending extraction + database improvements
+// SESSION 18 WORKING VERSION + License Ending Only
+// Stop overthinking - just add license ending to what was working!
 
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
-  console.log('AWS Textract OCR Test function called - Session 19 Enhanced');
+  console.log('AWS Textract OCR Test - Session 18 + License Ending');
   
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -34,21 +34,20 @@ exports.handler = async (event, context) => {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'testType and imageData are required',
-          usage: 'testType: "poa", "dvla", or "dual-poa", imageData: base64 string'
+          error: 'testType and imageData are required'
         })
       };
     }
 
-    console.log(`Testing ${testType} OCR processing with AWS Textract (${fileType || 'image'})`);
+    console.log(`Testing ${testType} OCR processing with AWS Textract`);
     let result;
 
     switch (testType) {
-      case 'poa':
-        result = await testSinglePoaExtraction(imageData, documentType, licenseAddress, fileType);
-        break;
       case 'dvla':
         result = await testDvlaExtractionWithTextract(imageData, fileType);
+        break;
+      case 'poa':
+        result = await testSinglePoaExtraction(imageData, documentType, licenseAddress, fileType);
         break;
       case 'dual-poa':
         if (!imageData2) {
@@ -57,7 +56,7 @@ exports.handler = async (event, context) => {
         result = await testDualPoaCrossValidation(imageData, imageData2, licenseAddress, fileType);
         break;
       default:
-        throw new Error('Invalid testType. Use "poa", "dvla", or "dual-poa"');
+        throw new Error('Invalid testType');
     }
 
     return {
@@ -85,75 +84,37 @@ exports.handler = async (event, context) => {
   }
 };
 
-// ENHANCED: DVLA processing with FIXED license ending extraction
+// DVLA processing - Session 18 working version + license ending
 async function testDvlaExtractionWithTextract(imageData, fileType = 'image') {
-  console.log('🚗 Testing DVLA OCR with AWS Textract - Session 19 Enhanced');
+  console.log('🚗 DVLA OCR with AWS Textract - Session 18 + License Ending');
   
   if (!process.env.OOOSH_AWS_ACCESS_KEY_ID || !process.env.OOOSH_AWS_SECRET_ACCESS_KEY) {
-    console.log('⚠️ AWS credentials not configured - using enhanced fallback');
-    return getEnhancedMockDvlaAnalysis();
+    console.log('⚠️ AWS credentials not configured');
+    throw new Error('AWS Textract credentials not configured');
   }
 
   try {
-    console.log('📞 Calling AWS Textract for DVLA analysis...');
-    
     // Call AWS Textract
     const textractResult = await callAwsTextract(imageData, fileType);
     
-    // ENHANCED: Parse DVLA-specific data with license ending extraction
-    const dvlaData = parseDvlaFromTextEnhanced(textractResult.extractedText);
+    // Parse DVLA data - Session 18 logic + license ending
+    const dvlaData = parseDvlaFromText(textractResult.extractedText);
     
-    // Validate and enhance the data
-    const validatedData = validateDvlaDataEnhanced(dvlaData);
+    // Validate data
+    const validatedData = validateDvlaData(dvlaData);
     
-    console.log('✅ AWS Textract DVLA analysis successful');
+    console.log('✅ DVLA analysis completed successfully');
     return validatedData;
 
   } catch (error) {
-    console.log('❌ AWS Textract failed:', error.message);
-    
-    // Return the error directly instead of fallback
-    return {
-      licenseNumber: null,
-      licenseEnding: null,
-      driverName: null,
-      checkCode: null,
-      dateGenerated: null,
-      validFrom: null,
-      validTo: null,
-      drivingStatus: null,
-      endorsements: [],
-      totalPoints: 0,
-      restrictions: [],
-      categories: [],
-      isValid: false,
-      issues: [`❌ Processing failed: ${error.message}`],
-      confidence: 0,
-      ageInDays: 0,
-      extractionSuccess: false,
-      parseError: error.message,
-      insuranceDecision: {
-        approved: false,
-        excess: 0,
-        manualReview: true,
-        reasons: ['Document processing failed'],
-        riskLevel: 'unknown'
-      },
-      extractionDetails: {
-        licensePatterns: [],
-        endorsementSources: [],
-        dateFormats: [],
-        debugInfo: { error: error.message, stack: error.stack }
-      },
-      errorMode: true,
-      ocrProvider: 'AWS Textract (Failed)'
-    };
+    console.error('DVLA processing error:', error);
+    throw error; // Let the main handler deal with errors
   }
 }
 
-// ENHANCED: Parse DVLA data with FIXED license ending extraction
-function parseDvlaFromTextEnhanced(text) {
-  console.log('🔍 Enhanced DVLA parsing with license ending extraction...');
+// Session 18 WORKING parsing logic + license ending extraction
+function parseDvlaFromText(text) {
+  console.log('🔍 DVLA parsing - Session 18 + License Ending');
   
   const dvlaData = {
     licenseNumber: null,
@@ -170,102 +131,31 @@ function parseDvlaFromTextEnhanced(text) {
     categories: [],
     isValid: true,
     issues: [],
-    confidence: 'high',
-    
-    // Processing metadata
-    extractionDetails: {
-      licensePatterns: [],
-      endorsementSources: [],
-      dateFormats: [],
-      debugInfo: {}
-    }
+    confidence: 'high'
   };
 
-  // ENHANCED: Multiple license number patterns with detailed logging
-  console.log('🔍 Searching for license patterns...');
-  
-  const licensePatterns = [
-    // Full UK license format: WOOD661120JO9LA
-    /([A-Z]{2,5}[0-9]{6}[A-Z0-9]{2}[A-Z]{2})/g,
-    // Partial format: XXXXXXXX162JD9GA (common in DVLA summaries)
-    /(XXXXXXXX[A-Z0-9]{2}[A-Z]{2})/g,
-    // Mixed partial: WOOD****20JO9LA
-    /([A-Z]{2,5}[\*X]{1,6}[0-9]{2}[A-Z0-9]{2}[A-Z]{2})/g
-  ];
-
-  licensePatterns.forEach((pattern, index) => {
-    const matches = [...text.matchAll(pattern)];
-    matches.forEach(match => {
-      const found = match[1];
-      dvlaData.extractionDetails.licensePatterns.push({
-        pattern: index,
-        found: found,
-        position: match.index
-      });
-      console.log(`📝 License pattern ${index}: "${found}" at position ${match.index}`);
-    });
-  });
-
-  // FIXED: License ending extraction with multiple fallback patterns
-  console.log('🎯 Extracting license ending for anti-fraud validation...');
-  
-  // Pattern 1: Full license number (ideal)
-  const fullLicenseMatch = text.match(/([A-Z]{2,5}[0-9]{6}[A-Z0-9]{2}[A-Z]{2})/);
-  if (fullLicenseMatch) {
-    dvlaData.licenseNumber = fullLicenseMatch[1];
-    dvlaData.licenseEnding = fullLicenseMatch[1].slice(-8); // Last 8 characters
+  // Extract license number (Session 18 working logic)
+  const licenseMatch = text.match(/([A-Z]{2,5}[0-9]{6}[A-Z0-9]{2}[A-Z]{2})/);
+  if (licenseMatch) {
+    dvlaData.licenseNumber = licenseMatch[1];
+    dvlaData.licenseEnding = licenseMatch[1].slice(-8); // NEW: Last 8 characters
     console.log('✅ Full license found:', dvlaData.licenseNumber);
-    console.log('✅ License ending extracted:', dvlaData.licenseEnding);
+    console.log('✅ License ending:', dvlaData.licenseEnding);
   }
 
-  // Pattern 2: Partial format XXXXXXXX162JD9GA (backup method)
+  // NEW: Backup license ending extraction from partial format
   if (!dvlaData.licenseEnding) {
-    const partialMatches = [...text.matchAll(/(XXXXXXXX[A-Z0-9]{2}[A-Z]{2})/g)];
-    if (partialMatches.length > 0) {
-      const partialLicense = partialMatches[0][1];
-      dvlaData.licenseEnding = partialLicense.replace('XXXXXXXX', ''); // Remove XXXXXXXX prefix
-      console.log('✅ Partial license found:', partialLicense);
+    const partialMatch = text.match(/(XXXXXXXX[A-Z0-9]{2}[A-Z]{2})/);
+    if (partialMatch) {
+      dvlaData.licenseEnding = partialMatch[1].replace('XXXXXXXX', '');
       console.log('✅ License ending from partial:', dvlaData.licenseEnding);
-      dvlaData.extractionDetails.debugInfo.partialLicenseUsed = true;
     }
   }
 
-  // Pattern 3: License ending in document text (fallback)
-  if (!dvlaData.licenseEnding) {
-    // Look for patterns like "ending 162JD9GA" or "last digits 162JD9GA"
-    const endingPatterns = [
-      /ending\s+([A-Z0-9]{4,8})/i,
-      /last\s+digits?\s+([A-Z0-9]{4,8})/i,
-      /licence\s+number\s+[^\s]*([A-Z0-9]{4,8})/i
-    ];
-    
-    for (const pattern of endingPatterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        dvlaData.licenseEnding = match[1];
-        console.log('✅ License ending from text pattern:', dvlaData.licenseEnding);
-        dvlaData.extractionDetails.debugInfo.endingPatternUsed = true;
-        break;
-      }
-    }
-  }
-
-  // Safety check: Ensure licenseEnding is string or null, not undefined
-  if (!dvlaData.licenseEnding) {
-    dvlaData.licenseEnding = null;
-    console.log('⚠️ No license ending found');
-  }
-
-  // Log final license extraction results
-  dvlaData.extractionDetails.debugInfo.finalLicenseNumber = dvlaData.licenseNumber;
-  dvlaData.extractionDetails.debugInfo.finalLicenseEnding = dvlaData.licenseEnding;
-
-  // Extract driver name with enhanced patterns
-  console.log('👤 Extracting driver name...');
+  // Extract driver name (Session 18 logic)
   const namePatterns = [
     /Name[:\s]+([A-Z][A-Z\s]+[A-Z])/,
-    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/,
-    /Driver[:\s]+([A-Z][A-Z\s]+)/i
+    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/
   ];
   
   for (const pattern of namePatterns) {
@@ -277,51 +167,55 @@ function parseDvlaFromTextEnhanced(text) {
     }
   }
 
-  // Extract check code (DVLA format: Ab cd ef Gh)
-  console.log('🔑 Extracting DVLA check code...');
+  // Extract check code (Session 18 logic)
   const checkCodeMatch = text.match(/([A-Za-z]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2})/);
   if (checkCodeMatch) {
     dvlaData.checkCode = checkCodeMatch[1];
     console.log('✅ Found check code:', dvlaData.checkCode);
   }
 
-  // ENHANCED: Date extraction with UK-specific patterns
+  // Extract dates (Session 18 SIMPLE logic - no complex forEach)
   console.log('📅 Extracting dates...');
-  const datePatterns = [
-    // UK long format: "Date summary generated 15 July 2025 10:58"
-    /Date\s+summary\s+generated\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i,
-    // Standard formats
-    /(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/g,
-    /(\d{4}[\/\-\.]\d{2}[\/\-\.]\d{2})/g,
-    // UK date format: 15 July 2025
-    /(\d{1,2}\s+[A-Za-z]+\s+\d{4})/g
-  ];
   
-  datePatterns.forEach((pattern, index) => {
-    const matches = [...text.matchAll(pattern)];
-    matches.forEach(match => {
-      const dateStr = match[1];
-      const standardized = standardizeDate(dateStr);
-      dvlaData.extractionDetails.dateFormats.push({
-        pattern: index,
-        original: dateStr,
-        standardized: standardized
-      });
-    });
-  });
-
-  // Set the most recent/relevant date as generation date
-  if (dvlaData.extractionDetails.dateFormats.length > 0) {
-    // Prefer the first date found (usually the generation date)
-    dvlaData.dateGenerated = dvlaData.extractionDetails.dateFormats[0].standardized;
+  // UK long format first
+  const ukDateMatch = text.match(/Date\s+summary\s+generated\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i);
+  if (ukDateMatch) {
+    dvlaData.dateGenerated = standardizeDate(ukDateMatch[1]);
+    console.log('✅ Found UK date:', dvlaData.dateGenerated);
+  }
+  
+  // Backup: standard date formats
+  if (!dvlaData.dateGenerated) {
+    const dateMatch = text.match(/(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/);
+    if (dateMatch) {
+      dvlaData.dateGenerated = standardizeDate(dateMatch[1]);
+      console.log('✅ Found standard date:', dvlaData.dateGenerated);
+    }
   }
 
-  // FIXED: Smart endorsement extraction (no double counting)
-  console.log('⚖️ Extracting endorsements with smart deduplication...');
-  dvlaData.endorsements = extractEndorsementsNoDuplicates(text);
-  dvlaData.totalPoints = dvlaData.endorsements.reduce((sum, e) => sum + (e.points || 0), 0);
+  // Extract total points (Session 18 logic)
+  const pointsMatch = text.match(/(?:total|penalty)?\s*points?[:\s]*(\d+)/i);
+  if (pointsMatch) {
+    dvlaData.totalPoints = parseInt(pointsMatch[1]);
+    console.log('✅ Found total points:', dvlaData.totalPoints);
+  }
 
-  // Extract license categories
+  // Session 18 WORKING endorsement extraction (no complex deduplication)
+  const endorsementPattern = /([A-Z]{2}[0-9]{2})/g;
+  const endorsementMatches = text.match(endorsementPattern) || [];
+  
+  endorsementMatches.forEach(code => {
+    if (['SP', 'MS', 'CU', 'IN', 'DR', 'BA', 'DD', 'UT', 'TT'].some(prefix => code.startsWith(prefix))) {
+      dvlaData.endorsements.push({
+        code: code,
+        date: dvlaData.dateGenerated || new Date().toISOString().split('T')[0],
+        points: getPointsForEndorsement(code),
+        description: getEndorsementDescription(code)
+      });
+    }
+  });
+
+  // Extract license categories (Session 18 logic)
   const categoryMatch = text.match(/categories?[:\s]*([A-Z0-9\s,+]+)/i);
   if (categoryMatch) {
     dvlaData.categories = categoryMatch[1].split(/[,\s+]/).filter(c => c.length > 0);
@@ -332,256 +226,42 @@ function parseDvlaFromTextEnhanced(text) {
     dvlaData.drivingStatus = 'Current full licence';
   }
 
-  console.log('📋 DVLA parsing complete:', {
-    name: dvlaData.driverName,
-    licenseEnding: dvlaData.licenseEnding,
-    points: dvlaData.totalPoints,
-    endorsements: dvlaData.endorsements.length
-  });
-
   return dvlaData;
 }
 
-// NEW: Smart endorsement extraction with deduplication
-function extractEndorsementsNoDuplicates(text) {
-  console.log('🔍 Smart endorsement extraction starting...');
+// Session 18 validation logic
+function validateDvlaData(dvlaData) {
+  console.log('🔍 Validating DVLA data...');
   
-  const endorsements = [];
-  const seenCodes = new Set();
-  
-  // Priority 1: Specific endorsement codes with details (SP30, MS90, etc.)
-  const specificPatterns = [
-    // Pattern: "SP30 Penalty points: 3"
-    /([A-Z]{2}[0-9]{2})\s+[^0-9]*?(\d+)\s*points?/gi,
-    // Pattern: "SP30 Exceeding speed limit 3 points"
-    /([A-Z]{2}[0-9]{2})[^0-9]*?(\d+)\s*points?/gi,
-    // Pattern: Just the code "SP30" (we'll assign default points)
-    /\b([A-Z]{2}[0-9]{2})\b/gi
-  ];
-
-  specificPatterns.forEach((pattern, patternIndex) => {
-    console.log(`🔍 Checking pattern ${patternIndex + 1}...`);
-    
-    // Use matchAll for global patterns, match for non-global
-    let matches = [];
-    if (pattern.global) {
-      matches = [...text.matchAll(pattern)];
-    } else {
-      const singleMatch = text.match(pattern);
-      if (singleMatch) {
-        matches = [singleMatch];
-      }
-    }
-    
-    matches.forEach(match => {
-      const code = match[1];
-      const points = match[2] ? parseInt(match[2]) : getDefaultPointsForCode(code);
-      
-      console.log(`📝 Found endorsement: ${code} (${points} points)`);
-      
-      // Only add if we haven't seen this code before
-      if (!seenCodes.has(code) && isValidEndorsementCode(code)) {
-        seenCodes.add(code);
-        endorsements.push({
-          code: code,
-          date: new Date().toISOString().split('T')[0], // Default to today
-          points: points,
-          description: getEndorsementDescription(code),
-          source: `pattern_${patternIndex + 1}`
-        });
-        console.log(`✅ Added endorsement: ${code}`);
-      } else {
-        console.log(`⚠️ Skipped duplicate/invalid: ${code}`);
-      }
-    });
-  });
-
-  // Priority 2: Summary patterns (only if no specific codes found)
-  if (endorsements.length === 0) {
-    console.log('📊 No specific codes found, checking summary patterns...');
-    
-    const summaryPatterns = [
-      // "1 Offence 3 Points"
-      /(\d+)\s+offences?\s+(\d+)\s+points?/gi,
-      // "3 penalty points"
-      /(\d+)\s+penalty\s+points?/gi
-    ];
-
-    summaryPatterns.forEach((pattern, patternIndex) => {
-      let matches = [];
-      if (pattern.global) {
-        matches = [...text.matchAll(pattern)];
-      } else {
-        const singleMatch = text.match(pattern);
-        if (singleMatch) {
-          matches = [singleMatch];
-        }
-      }
-      
-      matches.forEach(match => {
-        const points = parseInt(match[2] || match[1]);
-        if (points > 0) {
-          endorsements.push({
-            code: `XX${points.toString().padStart(2, '0')}`, // Generic code
-            date: new Date().toISOString().split('T')[0],
-            points: points,
-            description: `Traffic offence (${points} points)`,
-            source: `summary_${patternIndex + 1}`
-          });
-          console.log(`✅ Added summary endorsement: ${points} points`);
-        }
-      });
-    });
-  }
-
-  console.log(`📋 Final endorsements: ${endorsements.length} found, ${seenCodes.size} unique codes`);
-  return endorsements;
-}
-
-// Helper: Check if endorsement code is valid
-function isValidEndorsementCode(code) {
-  const validPrefixes = ['SP', 'MS', 'CU', 'IN', 'DR', 'BA', 'DD', 'UT', 'TT', 'CD', 'LC'];
-  return validPrefixes.some(prefix => code.startsWith(prefix));
-}
-
-// Helper: Get default points for common codes
-function getDefaultPointsForCode(code) {
-  const pointsMap = {
-    'SP30': 3, 'SP50': 3, 'SP10': 3, 'SP20': 3, 'SP40': 3,
-    'MS90': 6, 'MS50': 3,
-    'CU80': 3, 'CU10': 3,
-    'IN10': 6, 'IN20': 6,
-    'DR10': 3, 'DR20': 3, 'DR30': 3
-  };
-  return pointsMap[code] || 3; // Default to 3 points
-}
-
-// ENHANCED: Validation with license ending verification
-function validateDvlaDataEnhanced(dvlaData) {
-  console.log('🔍 Enhanced DVLA validation with license ending check...');
-  
-  // Check core required fields
-  const hasDriverName = dvlaData.driverName && dvlaData.driverName.length > 2;
-  const hasCheckCode = dvlaData.checkCode && dvlaData.checkCode.length > 5;
-  const hasValidDate = dvlaData.dateGenerated && calculateDaysFromDate(dvlaData.dateGenerated) <= 30;
-  
-  // License ending is helpful but not mandatory for approval
-  const hasLicenseEnding = dvlaData.licenseEnding && dvlaData.licenseEnding.length >= 4;
-  
-  // FIXED: Don't require license number for approval (DVLA often shows partial)
-  dvlaData.isValid = hasDriverName && hasCheckCode && hasValidDate;
-  
-  // Clear previous issues
-  dvlaData.issues = [];
-  
-  if (!hasDriverName) {
+  if (!dvlaData.driverName) {
     dvlaData.issues.push('❌ Driver name not found');
+    dvlaData.isValid = false;
     dvlaData.confidence = 'low';
   }
   
-  if (!hasCheckCode) {
-    dvlaData.issues.push('❌ DVLA check code not found');
-    dvlaData.confidence = 'low';
+  if (!dvlaData.checkCode) {
+    dvlaData.issues.push('⚠️ DVLA check code not found');
   }
   
-  if (!hasValidDate) {
-    dvlaData.issues.push('⚠️ DVLA check date missing or older than 30 days');
-  }
-  
-  // License ending warnings (not blockers)
-  if (!hasLicenseEnding) {
-    dvlaData.issues.push('⚠️ License ending not extracted (anti-fraud check limited)');
-  } else {
-    dvlaData.issues.push(`✅ License ending: ${dvlaData.licenseEnding} (anti-fraud ready)`);
-  }
-  
-  // Check document age
+  // Check if check is recent (within 30 days)
   if (dvlaData.dateGenerated) {
     const checkAge = calculateDaysFromDate(dvlaData.dateGenerated);
     dvlaData.ageInDays = checkAge;
     
     if (checkAge > 30) {
       dvlaData.issues.push('⚠️ DVLA check is older than 30 days');
-      dvlaData.isValid = false;
-    } else {
-      dvlaData.issues.push(`✅ DVLA check is ${checkAge} days old (fresh)`);
     }
   }
   
-  // Calculate insurance decision
+  // Calculate insurance decision (Session 18 logic)
   dvlaData.insuranceDecision = calculateInsuranceDecision(dvlaData);
   dvlaData.extractionSuccess = dvlaData.isValid;
   
-  console.log(`🚗 Enhanced validation complete:`, {
-    valid: dvlaData.isValid,
-    issues: dvlaData.issues.length,
-    licenseEnding: dvlaData.licenseEnding,
-    points: dvlaData.totalPoints
-  });
-  
+  console.log(`🚗 DVLA validation complete: ${dvlaData.issues.length} issues, ${dvlaData.totalPoints} points`);
   return dvlaData;
 }
 
-// (Rest of the functions remain the same - AWS signature, insurance calculation, etc.)
-
-// AWS Textract call function (unchanged)
-async function callAwsTextract(imageData, fileType) {
-  console.log('📞 Calling AWS Textract API...');
-  
-  const region = process.env.OOOSH_AWS_REGION || 'eu-west-2';
-  const endpoint = `https://textract.${region}.amazonaws.com/`;
-  
-  // Validate image size (AWS limit is 10MB)
-  const imageSizeBytes = (imageData.length * 3) / 4;
-  console.log(`📏 Image size: ${Math.round(imageSizeBytes / 1024)}KB`);
-  
-  if (imageSizeBytes > 10000000) {
-    throw new Error('Image too large for AWS Textract (max 10MB)');
-  }
-  
-  // Clean base64
-  const cleanBase64 = imageData.replace(/^data:image\/[^;]+;base64,/, '');
-  
-  // Use DetectDocumentText for better PDF compatibility
-  const requestBody = JSON.stringify({
-    Document: { Bytes: cleanBase64 }
-  });
-  
-  // Create AWS signature
-  const signature = await createAwsSignature('POST', 'Textract.DetectDocumentText', requestBody, region);
-  
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-amz-json-1.1',
-      'X-Amz-Target': 'Textract.DetectDocumentText',
-      'Authorization': signature.authHeader,
-      'X-Amz-Date': signature.timestamp,
-      'X-Amz-Content-Sha256': signature.contentHash
-    },
-    body: requestBody
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('AWS Textract error:', response.status, errorText);
-    throw new Error(`AWS Textract error (${response.status}): ${errorText}`);
-  }
-
-  const result = await response.json();
-  console.log('📄 AWS Textract response received');
-  
-  // Extract all text from the response
-  const extractedText = extractTextFromTextractResponse(result);
-  
-  return {
-    extractedText: extractedText,
-    confidence: calculateAverageConfidence(result),
-    rawResponse: result
-  };
-}
-
-// Insurance decision calculation (Session 18 logic)
+// Session 18 insurance decision (WORKING)
 function calculateInsuranceDecision(dvlaData) {
   const decision = {
     approved: false,
@@ -610,7 +290,7 @@ function calculateInsuranceDecision(dvlaData) {
     return decision;
   }
 
-  // Points-based decision logic (Session 18 validated)
+  // Points-based logic (Session 18)
   if (points === 0) {
     decision.approved = true;
     decision.riskLevel = 'low';
@@ -620,7 +300,7 @@ function calculateInsuranceDecision(dvlaData) {
     decision.riskLevel = 'standard';
     decision.reasons.push('Minor points - standard approval');
   } else if (points <= 6) {
-    const hasSpeedingOnly = endorsements.every(e => e.code.startsWith('SP'));
+    const hasSpeedingOnly = endorsements.every(e => e.code && e.code.startsWith('SP'));
     if (hasSpeedingOnly) {
       decision.approved = true;
       decision.riskLevel = 'medium';
@@ -642,7 +322,7 @@ function calculateInsuranceDecision(dvlaData) {
   return decision;
 }
 
-// Helper functions (unchanged from Session 18)
+// Helper functions (Session 18 versions)
 function standardizeDate(dateStr) {
   try {
     // Handle UK long format: "15 July 2025"
@@ -678,6 +358,13 @@ function calculateDaysFromDate(dateString) {
   }
 }
 
+function getPointsForEndorsement(code) {
+  const pointsMap = {
+    'SP30': 3, 'SP50': 3, 'MS90': 6, 'CU80': 3, 'IN10': 6
+  };
+  return pointsMap[code] || 3;
+}
+
 function getEndorsementDescription(code) {
   const descriptions = {
     'SP30': 'Exceeding statutory speed limit on a public road',
@@ -687,6 +374,54 @@ function getEndorsementDescription(code) {
     'IN10': 'Using a vehicle uninsured against third party risks'
   };
   return descriptions[code] || 'Traffic offence';
+}
+
+// AWS Textract call (unchanged from Session 18)
+async function callAwsTextract(imageData, fileType) {
+  console.log('📞 Calling AWS Textract API...');
+  
+  const region = process.env.OOOSH_AWS_REGION || 'eu-west-2';
+  const endpoint = `https://textract.${region}.amazonaws.com/`;
+  
+  const imageSizeBytes = (imageData.length * 3) / 4;
+  console.log(`📏 Image size: ${Math.round(imageSizeBytes / 1024)}KB`);
+  
+  if (imageSizeBytes > 10000000) {
+    throw new Error('Image too large for AWS Textract (max 10MB)');
+  }
+  
+  const cleanBase64 = imageData.replace(/^data:image\/[^;]+;base64,/, '');
+  
+  const requestBody = JSON.stringify({
+    Document: { Bytes: cleanBase64 }
+  });
+  
+  const signature = await createAwsSignature('POST', 'Textract.DetectDocumentText', requestBody, region);
+  
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-amz-json-1.1',
+      'X-Amz-Target': 'Textract.DetectDocumentText',
+      'Authorization': signature.authHeader,
+      'X-Amz-Date': signature.timestamp,
+      'X-Amz-Content-Sha256': signature.contentHash
+    },
+    body: requestBody
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`AWS Textract error (${response.status}): ${errorText}`);
+  }
+
+  const result = await response.json();
+  const extractedText = extractTextFromTextractResponse(result);
+  
+  return {
+    extractedText: extractedText,
+    confidence: calculateAverageConfidence(result)
+  };
 }
 
 function extractTextFromTextractResponse(textractResponse) {
@@ -714,53 +449,7 @@ function calculateAverageConfidence(textractResponse) {
   return Math.round(avgConfidence);
 }
 
-// Enhanced mock data for testing (when AWS not available)
-function getEnhancedMockDvlaAnalysis() {
-  return {
-    licenseNumber: "WOOD661120JO9LA",
-    licenseEnding: "JO9LA", // NEW: For anti-fraud validation
-    driverName: "JONATHAN WOOD",
-    checkCode: "Kd m3 ch Nn",
-    dateGenerated: "2025-07-21",
-    validFrom: "2006-08-01",
-    validTo: "2032-08-01",
-    drivingStatus: "Current full licence",
-    endorsements: [{
-      code: "SP30",
-      date: "2023-03-15",
-      points: 3,
-      description: "Exceeding statutory speed limit on a public road"
-    }],
-    totalPoints: 3,
-    restrictions: [],
-    categories: ["B", "BE"],
-    isValid: true,
-    issues: ["✅ License ending: JO9LA (anti-fraud ready)", "✅ DVLA check is 26 days old (fresh)"],
-    confidence: 85,
-    ageInDays: 26,
-    extractionSuccess: true,
-    insuranceDecision: {
-      approved: true,
-      excess: 0,
-      manualReview: false,
-      reasons: ["Minor points - standard approval"],
-      riskLevel: "standard"
-    },
-    extractionDetails: {
-      licensePatterns: [{pattern: 0, found: "WOOD661120JO9LA", position: 150}],
-      endorsementSources: [{code: "SP30", source: "pattern_1"}],
-      dateFormats: [{pattern: 0, original: "21 July 2025", standardized: "2025-07-21"}],
-      debugInfo: {
-        finalLicenseNumber: "WOOD661120JO9LA",
-        finalLicenseEnding: "JO9LA"
-      }
-    },
-    mockMode: true,
-    ocrProvider: 'AWS Textract (Enhanced Mock)'
-  };
-}
-
-// AWS signature creation and other helper functions remain unchanged...
+// AWS signature creation (unchanged)
 async function createAwsSignature(method, target, body, region) {
   const crypto = require('crypto');
   
@@ -806,15 +495,12 @@ function getSignatureKey(key, dateStamp, regionName, serviceName) {
   return crypto.createHmac('sha256', kService).update('aws4_request').digest();
 }
 
-// POA processing functions (unchanged)
-async function testSinglePoaExtraction(imageData, documentType = 'unknown', licenseAddress = '123 Test Street, London, SW1A 1AA', fileType = 'image') {
-  console.log('Testing single POA extraction');
+// POA functions (simple versions)
+async function testSinglePoaExtraction(imageData, documentType, licenseAddress, fileType) {
   return getMockPoaData('Single-POA');
 }
 
 async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress, fileType) {
-  console.log('🔄 Testing DUAL POA cross-validation workflow');
-  
   const poa1Analysis = getMockPoaData('POA1');
   const poa2Analysis = getMockPoaData('POA2');
   const crossValidation = performPoaCrossValidation(poa1Analysis, poa2Analysis);
@@ -824,109 +510,48 @@ async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress
     poa1: poa1Analysis,
     poa2: poa2Analysis,
     crossValidation: crossValidation,
-    overallValid: crossValidation.approved,
-    ocrProvider: 'Mock Data'
+    overallValid: crossValidation.approved
   };
 }
 
 function performPoaCrossValidation(poa1, poa2) {
   const validation = {
     approved: false,
-    issues: [],
-    checks: {
-      bothExtracted: true,
-      differentProviders: false,
-      differentAccountNumbers: true
-    }
+    issues: []
   };
 
   const sameProvider = poa1.providerName?.toLowerCase() === poa2.providerName?.toLowerCase();
-  validation.checks.differentProviders = !sameProvider;
   
   if (sameProvider) {
     validation.issues.push(`❌ Both POAs are from the same provider: ${poa1.providerName}`);
   } else {
     validation.issues.push(`✅ Different providers: ${poa1.providerName} vs ${poa2.providerName}`);
+    validation.approved = true;
   }
 
-  validation.approved = validation.checks.bothExtracted && validation.checks.differentProviders && validation.checks.differentAccountNumbers;
   return validation;
 }
 
 function getMockPoaData(documentId) {
   const mockData = {
     POA1: {
-      documentId: 'POA1',
       documentType: 'utility_bill',
       providerName: 'British Gas',
       documentDate: '2025-06-15',
-      accountNumber: '****1234',
-      confidence: 'high',
-      extractionSuccess: true,
-      mockMode: true
+      accountNumber: '****1234'
     },
     POA2: {
-      documentId: 'POA2',
       documentType: 'bank_statement',
       providerName: 'HSBC Bank',
       documentDate: '2025-06-20',
-      accountNumber: '****5678',
-      confidence: 'high',
-      extractionSuccess: true,
-      mockMode: true
+      accountNumber: '****5678'
     },
     'Single-POA': {
-      documentId: 'Single-POA',
       documentType: 'utility_bill',
       providerName: 'British Gas',
       documentDate: '2025-06-15',
-      accountNumber: '****1234',
-      confidence: 'high',
-      extractionSuccess: true,
-      mockMode: true
+      accountNumber: '****1234'
     }
   };
   return mockData[documentId] || mockData.POA1;
-}
-
-function createDvlaFallback(fileType, errorMessage) {
-  return {
-    licenseNumber: 'FALLBACK751120FB9AB',
-    licenseEnding: 'FB9AB',
-    driverName: 'Fallback Driver',
-    checkCode: 'Fb 12 ck 34',
-    dateGenerated: '2025-07-21',
-    validFrom: '2010-01-01',
-    validTo: '2030-01-01',
-    drivingStatus: 'Current full licence',
-    endorsements: [],
-    totalPoints: 0,
-    restrictions: [],
-    categories: ['B'],
-    isValid: true,
-    issues: [`⚠️ AWS Textract failed: ${errorMessage}`, '⚠️ Using fallback data'],
-    confidence: 0,
-    ageInDays: 0,
-    extractionSuccess: false,
-    parseError: errorMessage,
-    insuranceDecision: {
-      approved: true,
-      excess: 0,
-      manualReview: false,
-      reasons: ['Clean license - no points (fallback)'],
-      riskLevel: 'low'
-    },
-    extractionDetails: {
-      licensePatterns: [],
-      endorsementSources: [],
-      dateFormats: [],
-      debugInfo: {
-        finalLicenseNumber: 'FALLBACK751120FB9AB',
-        finalLicenseEnding: 'FB9AB',
-        fallbackMode: true
-      }
-    },
-    fallbackMode: true,
-    ocrProvider: 'Fallback'
-  };
 }
