@@ -198,20 +198,26 @@ function parseDvlaFromTextEnhanced(text) {
   if (!dvlaData.licenseEnding) {
     // Look for patterns like "ending 162JD9GA" or "last digits 162JD9GA"
     const endingPatterns = [
-      /ending\s+([A-Z0-9]{2}[A-Z]{2})/gi,
-      /last\s+digits?\s+([A-Z0-9]{2}[A-Z]{2})/gi,
-      /licence\s+number\s+[^\s]*([A-Z0-9]{2}[A-Z]{2})/gi
+      /ending\s+([A-Z0-9]{4,8})/i,
+      /last\s+digits?\s+([A-Z0-9]{4,8})/i,
+      /licence\s+number\s+[^\s]*([A-Z0-9]{4,8})/i
     ];
     
     for (const pattern of endingPatterns) {
       const match = text.match(pattern);
-      if (match) {
+      if (match && match[1]) {
         dvlaData.licenseEnding = match[1];
         console.log('✅ License ending from text pattern:', dvlaData.licenseEnding);
         dvlaData.extractionDetails.debugInfo.endingPatternUsed = true;
         break;
       }
     }
+  }
+
+  // Safety check: Ensure licenseEnding is string or null, not undefined
+  if (!dvlaData.licenseEnding) {
+    dvlaData.licenseEnding = null;
+    console.log('⚠️ No license ending found');
   }
 
   // Log final license extraction results
@@ -221,14 +227,14 @@ function parseDvlaFromTextEnhanced(text) {
   // Extract driver name with enhanced patterns
   console.log('👤 Extracting driver name...');
   const namePatterns = [
-    /Name[:\s]+([A-Z][A-Z\s]+[A-Z])/gi,
-    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/gi,
-    /Driver[:\s]+([A-Z][A-Z\s]+)/gi
+    /Name[:\s]+([A-Z][A-Z\s]+[A-Z])/,
+    /([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})?)/,
+    /Driver[:\s]+([A-Z][A-Z\s]+)/i
   ];
   
   for (const pattern of namePatterns) {
     const nameMatch = text.match(pattern);
-    if (nameMatch && nameMatch[1].length > 5 && nameMatch[1].length < 50) {
+    if (nameMatch && nameMatch[1] && nameMatch[1].length > 5 && nameMatch[1].length < 50) {
       dvlaData.driverName = nameMatch[1].trim();
       console.log('✅ Found driver name:', dvlaData.driverName);
       break;
@@ -237,9 +243,9 @@ function parseDvlaFromTextEnhanced(text) {
 
   // Extract check code (DVLA format: Ab cd ef Gh)
   console.log('🔑 Extracting DVLA check code...');
-  const checkCodeMatch = text.match(/([A-Za-z]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2})/gi);
-  if (checkCodeMatch && checkCodeMatch.length > 0) {
-    dvlaData.checkCode = checkCodeMatch[0];
+  const checkCodeMatch = text.match(/([A-Za-z]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2}\s+[A-Za-z0-9]{1,2})/);
+  if (checkCodeMatch) {
+    dvlaData.checkCode = checkCodeMatch[1];
     console.log('✅ Found check code:', dvlaData.checkCode);
   }
 
@@ -280,9 +286,9 @@ function parseDvlaFromTextEnhanced(text) {
   dvlaData.totalPoints = dvlaData.endorsements.reduce((sum, e) => sum + (e.points || 0), 0);
 
   // Extract license categories
-  const categoryMatch = text.match(/categories?[:\s]*([A-Z0-9\s,+]+)/gi);
-  if (categoryMatch && categoryMatch.length > 0) {
-    dvlaData.categories = categoryMatch[0].replace(/categories?[:\s]*/i, '').split(/[,\s+]/).filter(c => c.length > 0);
+  const categoryMatch = text.match(/categories?[:\s]*([A-Z0-9\s,+]+)/i);
+  if (categoryMatch) {
+    dvlaData.categories = categoryMatch[1].split(/[,\s+]/).filter(c => c.length > 0);
   }
 
   // Check for driving status
