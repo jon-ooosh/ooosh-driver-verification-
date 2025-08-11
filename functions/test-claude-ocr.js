@@ -234,12 +234,16 @@ function parseDvlaFromText(text) {
   
   if (fullLicenseMatch) {
     dvlaData.licenseNumber = fullLicenseMatch[1];
+    dvlaData.licenseEnding = fullLicenseMatch[1].slice(-8); // Last 8 characters
     console.log('✅ Found full license number:', dvlaData.licenseNumber);
   } else if (partialLicenseMatch) {
     dvlaData.licenseNumber = partialLicenseMatch[1];
+    dvlaData.licenseEnding = partialLicenseMatch[1].replace('XXXXXXXX', ''); // Remove X's
     console.log('✅ Found partial license number (DVLA format):', dvlaData.licenseNumber);
+    console.log('✅ Extracted license ending for validation:', dvlaData.licenseEnding);
   } else if (anyLicenseMatch) {
     dvlaData.licenseNumber = 'XXXXXXXX' + anyLicenseMatch[1];
+    dvlaData.licenseEnding = anyLicenseMatch[1];
     console.log('✅ Found license ending (reconstructed):', dvlaData.licenseNumber);
   }
 
@@ -265,13 +269,33 @@ function parseDvlaFromText(text) {
     console.log('✅ Found check code:', dvlaData.checkCode);
   }
 
-  // Extract dates
-  const dateMatches = text.match(/(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/g);
-  if (dateMatches && dateMatches.length > 0) {
-    dvlaData.dateGenerated = standardizeDate(dateMatches[0]);
-    if (dateMatches.length > 1) {
-      dvlaData.validTo = standardizeDate(dateMatches[dateMatches.length - 1]);
+  // Extract dates with specific patterns for DVLA format
+  // Look for "Date summary generated" specifically
+  const generatedDateMatch = text.match(/Date summary generated[:\s]+(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})/i);
+  if (generatedDateMatch) {
+    dvlaData.dateGenerated = standardizeDate(generatedDateMatch[1]);
+    console.log('✅ Found generation date:', dvlaData.dateGenerated);
+  } else {
+    // Fallback to generic date patterns
+    const dateMatches = text.match(/(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/g);
+    if (dateMatches && dateMatches.length > 0) {
+      dvlaData.dateGenerated = standardizeDate(dateMatches[0]);
+      console.log('⚠️ Using fallback date pattern:', dvlaData.dateGenerated);
     }
+  }
+  
+  // Look for license validity dates
+  const validFromMatch = text.match(/Licence valid from[:\s]+(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})/i);
+  const validToMatch = text.match(/Licence valid to[:\s]+(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})/i);
+  
+  if (validFromMatch) {
+    dvlaData.validFrom = standardizeDate(validFromMatch[1]);
+    console.log('✅ Found license valid from:', dvlaData.validFrom);
+  }
+  
+  if (validToMatch) {
+    dvlaData.validTo = standardizeDate(validToMatch[1]);
+    console.log('✅ Found license valid to:', dvlaData.validTo);
   }
 
   // 🔧 FIXED: Smart endorsement extraction to prevent double-counting
@@ -438,24 +462,51 @@ function validateDvlaData(dvlaData) {
     dvlaData.issues.push('⚠️ DVLA check code not found');
   }
   
-  // Check if check is recent (within 10 days)
+  // 🔧 NEW: Check if check is recent (within 30 days) and add to data
   if (dvlaData.dateGenerated) {
     const checkAge = calculateDaysFromDate(dvlaData.dateGenerated);
     dvlaData.ageInDays = checkAge;
     
-    if (checkAge > 10) {
-      dvlaData.issues.push('⚠️ DVLA check is older than 10 days');
+    if (checkAge > 30) {
+      dvlaData.issues.push(`❌ DVLA check is ${checkAge} days old (max 30 days allowed)`);
+      dvlaData.isValid = false;
+      dvlaData.confidence = 'low';
+    } else if (checkAge > 21) {
+      dvlaData.issues.push(`⚠️ DVLA check is ${checkAge} days old (expires soon)`);
+    } else {
+      console.log(`✅ DVLA check age: ${checkAge} days (within 30 day limit)`);
     }
+  } else {
+    dvlaData.issues.push('⚠️ Could not determine DVLA check generation date');
+    dvlaData.ageInDays = 999; // Unknown age
   }
   
   // 🔧 FIXED: Don't require license number for validation - points calculation is what matters
-  dvlaData.isValid = dvlaData.driverName && dvlaData.checkCode; // Basic validation
+  // But DO require name and valid date
+  dvlaData.isValid = dvlaData.driverName && dvlaData.checkCode && (dvlaData.ageInDays <= 30);
   dvlaData.extractionSuccess = dvlaData.isValid;
+  
+  // 🔧 NEW: Add license validation capability for future Idenfy integration
+  if (dvlaData.licenseEnding) {
+    dvlaData.licenseValidation = {
+      ending: dvlaData.licenseEnding,
+      canValidateAgainstIdenfy: true,
+      mockIdenfyEnding: '162JD9GA', // For testing - should match Jason's document
+      mockValidation: dvlaData.licenseEnding === '162JD9GA' ? 'MATCH' : 'NO_MATCH'
+    };
+    
+    console.log('🔍 License ending for validation:', dvlaData.licenseEnding);
+    console.log('🧪 Mock validation result:', dvlaData.licenseValidation.mockValidation);
+    
+    if (dvlaData.licenseValidation.mockValidation === 'NO_MATCH') {
+      dvlaData.issues.push('⚠️ License ending does not match expected (mock test)');
+    }
+  }
   
   // Calculate insurance decision based on points, not license number
   dvlaData.insuranceDecision = calculateInsuranceDecision(dvlaData);
   
-  console.log(`🚗 DVLA validation complete: ${dvlaData.issues.length} issues, ${dvlaData.totalPoints} points`);
+  console.log(`🚗 DVLA validation complete: ${dvlaData.issues.length} issues, ${dvlaData.totalPoints} points, ${dvlaData.ageInDays} days old`);
   return dvlaData;
 }
 
@@ -599,6 +650,16 @@ function calculateDaysFromDate(dateString) {
 
 function standardizeDate(dateStr) {
   try {
+    // Handle DVLA format: "15 July 2025 10:58" or "15 July 2025"
+    if (dateStr.match(/\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}/i)) {
+      const cleanDate = dateStr.replace(/\s+\d{2}:\d{2}$/, ''); // Remove time if present
+      const date = new Date(cleanDate);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+    
+    // Handle standard formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
     const date = new Date(dateStr.replace(/[\/\.]/g, '-'));
     if (!isNaN(date.getTime())) {
       return date.toISOString().split('T')[0];
