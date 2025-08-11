@@ -231,44 +231,40 @@ function parseDvlaFromText(text) {
     ageInDays: null
   };
 
-  // 1. EXTRACT LICENSE NUMBER - UK DVLA format: XXXXXXXX162JD9GA
+  // 1. EXTRACT LICENSE NUMBER - UK DVLA format: XXXXXXXX162JD9GA, XXXXXXXX181N99LJ
   const licensePatterns = [
-    /XXXXXXXX\d{3}[A-Z]{2}\d[A-Z]{2}/g,  // Main pattern from your docs
-    /([A-Z]{2,5}\d{6}[A-Z0-9]{2}[A-Z]{2})/g,  // Alternative format
-    /Driving licence number[:\s]*([X]+\d{3}[A-Z]{2}\d[A-Z]{2})/i
+    /XXXXXXXX\d{3}[A-Z]{1,2}\d{1,2}[A-Z]{2}/g,  // XXXXXXXX181N99LJ format
+    /XXXXXXXX\d{3}[A-Z]{2}\d[A-Z]{2}/g,         // XXXXXXXX162JD9GA format  
+    /Driving licence number[:\s]*([X]+\d{3}[A-Z]{1,2}\d{1,2}[A-Z]{2})/i
   ];
   
   for (const pattern of licensePatterns) {
     const licenseMatch = text.match(pattern);
     if (licenseMatch) {
-      dvlaData.licenseNumber = licenseMatch[0];
+      dvlaData.licenseNumber = Array.isArray(licenseMatch) ? licenseMatch[0] : licenseMatch;
       console.log('✅ Found license number:', dvlaData.licenseNumber);
       break;
     }
   }
 
-  // 2. EXTRACT DRIVER NAME - Various patterns from your samples
+  // 2. EXTRACT DRIVER NAME - Clean extraction
   const namePatterns = [
-    /Driver's full name[:\s]+(MR\s+[A-Z\s]+)/i,
-    /Driver's full name[:\s]+([A-Z][A-Z\s]{5,50})/i,
-    /(MR\s+[A-Z]+(?:\s+[A-Z]+){1,3})/g,
-    /^(MR\s+[A-Z\s]+)$/gm  // Line-based matching
+    /Driver's full name[:\s]+(MR\s+[A-Z\s]+?)(?:\n|Date)/i,  // Stop at newline or "Date"
+    /(MR\s+[A-Z]+(?:\s+[A-Z]+){1,3})(?=\s*\n|\s*Date|\s*Driving)/g  // Positive lookahead to stop
   ];
   
   for (const pattern of namePatterns) {
     const nameMatch = text.match(pattern);
-    if (nameMatch && nameMatch[1] && nameMatch[1].length > 5 && nameMatch[1].length < 50) {
-      dvlaData.driverName = nameMatch[1].trim();
+    if (nameMatch && nameMatch[1] && nameMatch[1].length > 5 && nameMatch[1].length < 40) {
+      dvlaData.driverName = nameMatch[1].trim().replace(/\n.*$/, ''); // Remove anything after newline
       console.log('✅ Found driver name:', dvlaData.driverName);
       break;
     }
   }
 
-  // 3. EXTRACT CHECK CODE - Format: "43 p9 Fk Hr"
+  // 3. EXTRACT CHECK CODE - Clean extraction
   const checkCodePatterns = [
-    /Your check code[:\s]+([A-Za-z0-9\s]{8,15})/i,
-    /Check code[:\s]*([A-Za-z0-9]{2}\s+[A-Za-z0-9]{2}\s+[A-Za-z0-9]{2}\s+[A-Za-z0-9]{2})/i,
-    /([A-Za-z0-9]{1,3}\s+[A-Za-z0-9]{1,3}\s+[A-Za-z0-9]{1,3}\s+[A-Za-z0-9]{1,3})/g
+    /Your check code[:\s]+([A-Za-z0-9]{1,3}\s+[A-Za-z0-9]{1,3}\s+[A-Za-z0-9]{1,3}\s+[A-Za-z0-9]{1,3})(?:\s*\n|\s*is)/i
   ];
   
   for (const pattern of checkCodePatterns) {
@@ -332,6 +328,307 @@ function parseDvlaFromText(text) {
   return dvlaData;
 }
 
+// FIXED ENDORSEMENT EXTRACTION - No false positives
+function extractEndorsements(text) {
+  const endorsements = [];
+  
+  // First check for clean license explicitly
+  const cleanLicensePatterns = [
+    /0\s+Offences?\s+0\s+Points?/i,
+    /Endorsements[^0-9]*0[^0-9]+0/i,
+    /No\s+endorsements/i
+  ];
+  
+  for (const pattern of cleanLicensePatterns) {
+    if (text.match(pattern)) {
+      console.log('✅ Clean license detected - no endorsements');
+      return [];
+    }
+  }
+  
+  // Look for specific endorsement pages and sections
+  const endorsementSections = [];
+  
+  // Split text to find endorsement-specific content
+  const lines = text.split('\n');
+  let inEndorsementSection = false;
+  let currentSection = '';
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Start of endorsement section
+    if (line.match(/Exceeding.*?(SP\d{2})/i)) {
+      inEndorsementSection = true;
+      currentSection = line;
+    }
+    // Continuation of endorsement details
+    else if (inEndorsementSection && (line.includes('Penalty points') || line.includes('Offence date'))) {
+      currentSection += '\n' + line;
+    }
+    // End of endorsement section
+    else if (inEndorsementSection && (line.includes('Driving licence number') || line === '')) {
+      endorsementSections.push(currentSection);
+      currentSection = '';
+      inEndorsementSection = false;
+    }
+  }
+  
+  // Process each endorsement section
+  for (const section of endorsementSections) {
+    const endorsement = parseEndorsementSection(section);
+    if (endorsement) {
+      endorsements.push(endorsement);
+    }
+  }
+  
+  // Fallback: Look for summary format "1 Offence 3 Points"
+  if (endorsements.length === 0) {
+    const summaryPattern = /(\d+)\s+Offence[s]?\s*(\d+)\s+Points?/i;
+    const summaryMatch = text.match(summaryPattern);
+    
+    if (summaryMatch) {
+      const totalOffences = parseInt(summaryMatch[1]);
+      const totalPoints = parseInt(summaryMatch[2]);
+      
+      if (totalOffences > 0 && totalPoints > 0) {
+        console.log(`✅ Found endorsement summary: ${totalOffences} offences, ${totalPoints} points`);
+        
+        // Look for the actual endorsement type nearby
+        const nearbyText = text.substring(Math.max(0, summaryMatch.index - 200), summaryMatch.index + 200);
+        const endorsementCodes = nearbyText.match(/(SP\d{2}|MS\d{2}|CU\d{2}|IN\d{2}|DR\d{2})/gi) || [];
+        
+        if (endorsementCodes.length > 0) {
+          // Use actual found codes
+          endorsementCodes.slice(0, totalOffences).forEach((code, index) => {
+            endorsements.push({
+              code: code.toUpperCase(),
+              points: Math.ceil(totalPoints / totalOffences),
+              date: new Date().toISOString().split('T')[0],
+              description: getEndorsementDescription(code.toUpperCase())
+            });
+          });
+        } else {
+          // Default to common offense
+          endorsements.push({
+            code: 'SP30',
+            points: totalPoints,
+            date: new Date().toISOString().split('T')[0],
+            description: 'Traffic offence (from summary)'
+          });
+        }
+      }
+    }
+  }
+  
+  return endorsements;
+}
+
+// Parse individual endorsement section
+function parseEndorsementSection(section) {
+  const codeMatch = section.match(/(SP\d{2}|MS\d{2}|CU\d{2}|IN\d{2}|DR\d{2}|BA\d{2}|DD\d{2}|UT\d{2}|TT\d{2})/i);
+  const pointsMatch = section.match(/Penalty points?[:\s]*(\d+)/i);
+  const dateMatch = section.match(/Offence date[:\s]*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i);
+  
+  if (codeMatch) {
+    return {
+      code: codeMatch[1].toUpperCase(),
+      points: pointsMatch ? parseInt(pointsMatch[1]) : getDefaultPointsForCode(codeMatch[1]),
+      date: dateMatch ? parseUkDate(dateMatch[1]) : new Date().toISOString().split('T')[0],
+      description: getEndorsementDescription(codeMatch[1].toUpperCase())
+    };
+  }
+  
+  return null;
+}
+
+// ENHANCED INSURANCE DECISION - Your exact criteria
+function calculateInsuranceDecisionEnhanced(dvlaData) {
+  const decision = {
+    approved: false,
+    excess: 0,
+    manualReview: false,
+    reasons: [],
+    riskLevel: 'standard'
+  };
+
+  if (!dvlaData.isValid) {
+    decision.manualReview = true;
+    decision.reasons.push('DVLA check could not be validated');
+    return decision;
+  }
+
+  // Check if document is too old (30+ days)
+  if (dvlaData.ageInDays && dvlaData.ageInDays > 30) {
+    decision.manualReview = true;
+    decision.reasons.push(`DVLA check is ${dvlaData.ageInDays} days old (max 30 days allowed)`);
+    return decision;
+  }
+
+  const points = dvlaData.totalPoints || 0;
+  const endorsements = dvlaData.endorsements || [];
+
+  // SERIOUS OFFENSES - Auto manual review
+  const seriousOffenses = ['MS90', 'IN10', 'DR10', 'DR20', 'DR30', 'DR40', 'DR50', 'DR60', 'DR70'];
+  const hasSeriousOffense = endorsements.some(e => seriousOffenses.includes(e.code));
+
+  if (hasSeriousOffense) {
+    decision.manualReview = true;
+    decision.reasons.push('Serious driving offense detected - requires underwriter review');
+    return decision;
+  }
+
+  // POINTS-BASED DECISIONS
+  if (points === 0) {
+    decision.approved = true;
+    decision.riskLevel = 'low';
+    decision.reasons.push('Clean license - no points');
+  } else if (points <= 3) {
+    decision.approved = true;
+    decision.riskLevel = 'standard';
+    decision.reasons.push('Minor points - standard approval');
+  } else if (points <= 6) {
+    // Check if speeding only
+    const hasSpeedingOnly = endorsements.every(e => e.code && e.code.startsWith('SP'));
+    if (hasSpeedingOnly) {
+      decision.approved = true;
+      decision.riskLevel = 'medium';
+      decision.reasons.push('Speeding points only - approved');
+    } else {
+      decision.manualReview = true;
+      decision.reasons.push('Mixed offenses with 4-6 points - requires review');
+    }
+  } else if (points <= 9) {
+    decision.approved = true;
+    decision.excess = 500;
+    decision.riskLevel = 'high';
+    decision.reasons.push('7-9 points - approved with £500 excess');
+  } else {
+    decision.approved = false;
+    decision.reasons.push('10+ points - exceeds insurance limits');
+  }
+
+  // Check for recent offenses (add excess for recent violations)
+  const recentOffenses = endorsements.filter(e => {
+    if (!e.date) return false;
+    const offenseDate = new Date(e.date);
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+    return offenseDate > twelveMonthsAgo;
+  });
+
+  if (recentOffenses.length > 0) {
+    decision.reasons.push(`${recentOffenses.length} recent offense(s) in last 12 months`);
+    if (decision.excess < 250) {
+      decision.excess = 250;
+    }
+  }
+
+  return decision;
+}
+
+// HELPER FUNCTIONS
+function parseUkDate(dateStr) {
+  try {
+    // Handle formats like "15 July 2025 10:58" or "15 July 2025"
+    const cleanDate = dateStr.trim();
+    
+    // Try direct parsing first
+    const date = new Date(cleanDate.replace(/(\d{1,2}:\d{2}).*$/, '').trim());
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+    
+    // Try manual parsing for UK format
+    const ukDateMatch = cleanDate.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+    if (ukDateMatch) {
+      const [, day, month, year] = ukDateMatch;
+      const monthNames = {
+        'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+        'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
+      };
+      const monthIndex = monthNames[month.toLowerCase()];
+      if (monthIndex !== undefined) {
+        const parsedDate = new Date(year, monthIndex, day);
+        return parsedDate.toISOString().split('T')[0];
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('Could not parse UK date:', dateStr);
+    return null;
+  }
+}
+
+function calculateDaysFromDate(dateString) {
+  try {
+    const parsedDate = new Date(dateString);
+    if (isNaN(parsedDate.getTime())) return 999;
+    
+    const today = new Date();
+    const diffTime = today.getTime() - parsedDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  } catch (error) {
+    return 999;
+  }
+}
+
+function getDefaultPointsForCode(code) {
+  const pointsMap = {
+    'SP30': 3, 'SP50': 3, 'SP10': 3, 'SP20': 3, 'SP40': 3, 'SP60': 3,
+    'MS90': 6, 'MS50': 3, 'MS10': 3,
+    'CU80': 3, 'CU10': 3,
+    'IN10': 6,
+    'DR10': 3, 'DR40': 10, 'DR50': 4, 'DR60': 6
+  };
+  return pointsMap[code] || 3;
+}
+
+function getEndorsementDescription(code) {
+  const descriptions = {
+    'SP30': 'Exceeding statutory speed limit on a public road',
+    'SP50': 'Exceeding speed limit on a motorway',
+    'SP10': 'Exceeding goods vehicle speed limit',
+    'MS90': 'Failure to give information as to identity of driver',
+    'MS50': 'Motor racing on the highway',
+    'CU80': 'Breach of requirements as to control of vehicle',
+    'IN10': 'Using a vehicle uninsured against third party risks',
+    'DR10': 'Driving or attempting to drive with alcohol concentration above limit',
+    'DR40': 'In charge of vehicle while alcohol concentration above limit',
+    'DR50': 'Refusing to provide a specimen for analysis',
+    'DR60': 'Failure to provide a specimen for analysis'
+  };
+  return descriptions[code] || 'Traffic offence';
+}
+
+function validateDvlaData(dvlaData) {
+  console.log('🔍 Validating extracted DVLA data...');
+  
+  if (!dvlaData.licenseNumber) {
+    dvlaData.issues.push('❌ License number not found');
+    dvlaData.isValid = false;
+    dvlaData.confidence = 'low';
+  }
+  
+  if (!dvlaData.driverName) {
+    dvlaData.issues.push('⚠️ Driver name not found');
+    if (dvlaData.confidence === 'high') dvlaData.confidence = 'medium';
+  }
+  
+  if (!dvlaData.checkCode) {
+    dvlaData.issues.push('⚠️ DVLA check code not found');
+  }
+  
+  if (!dvlaData.dateGenerated) {
+    dvlaData.issues.push('⚠️ Generation date not found');
+  } else if (dvlaData.ageInDays > 30) {
+    dvlaData.issues.push(`⚠️ DVLA check is ${dvlaData.ageInDays} days old (max 30 days)`);
+  }
+  
+  return dvlaData;
+}
 // ENHANCED ENDORSEMENT EXTRACTION
 function extractEndorsements(text) {
   const endorsements = [];
