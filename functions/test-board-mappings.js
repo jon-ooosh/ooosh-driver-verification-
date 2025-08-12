@@ -75,10 +75,15 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Test 5: Cleanup Test Items
-    console.log('🧹 Cleaning up test items...');
-    const cleanupResults = await cleanupTestItems(testItemAId, testResults.copyTest.itemId);
-    testResults.cleanup = cleanupResults;
+    // Test 5: Keep Test Items for Manual Inspection
+    console.log('📋 Keeping test items for manual inspection...');
+    testResults.keepForInspection = {
+      boardAItemId: testItemAId,
+      boardBItemId: testResults.copyTest.itemId,
+      message: 'Test items preserved for manual verification',
+      boardAUrl: `https://oooshtours.monday.com/boards/9798399405/views/207920414?pulse=${testItemAId}`,
+      boardBUrl: `https://oooshtours.monday.com/boards/841453886/views/207920414?pulse=${testResults.copyTest.itemId}`
+    };
 
     // Final Summary
     testResults.summary.success = testResults.summary.issues.length === 0;
