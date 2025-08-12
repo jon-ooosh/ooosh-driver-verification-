@@ -1,16 +1,8 @@
 // File: functions/verify-code.js
 // OOOSH Driver Verification - Verify Email Code Function
-// FIXED VERSION with TESTING BACKDOOR for development
+// PRODUCTION VERSION - All test backdoors removed
 
 const fetch = require('node-fetch');
-
-// 🚨 TESTING BACKDOOR - REMOVE BEFORE PRODUCTION! 🚨
-const TEST_EMAILS = [
-  'test@oooshtours.co.uk',
-  'jon@oooshtours.co.uk', // For easy testing
-  'demo@oooshtours.co.uk',
-  'dev@oooshtours.co.uk'
-];
 
 exports.handler = async (event, context) => {
   console.log('Verify code function called with method:', event.httpMethod);
@@ -51,7 +43,7 @@ exports.handler = async (event, context) => {
     }
 
     const { email, code, jobId } = JSON.parse(event.body);
-    console.log('Verify code request:', { email, code, jobId });
+    console.log('Verify code request:', { email: email, jobId: jobId, codeLength: code ? code.length : 0 });
 
     if (!email || !code || !jobId) {
       return {
@@ -61,54 +53,32 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // 🚨 TESTING BACKDOOR - Auto-verify test emails 🚨
-    if (TEST_EMAILS.includes(email.toLowerCase())) {
-      console.log('🚨 TESTING BACKDOOR: Auto-verifying test email:', email);
-      console.log('🚨 ANY CODE ACCEPTED FOR TEST EMAILS - REMOVE IN PRODUCTION!');
-      
-      // Create driver record for test email
-      await createTestDriverRecord(email, jobId);
-      
+    // Validate code format (must be 6 digits)
+    if (!/^\d{6}$/.test(code)) {
       return {
-        statusCode: 200,
+        statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          success: true, 
-          verified: true,
-          message: 'Email verified successfully (TEST MODE)',
-          testMode: true
+          success: false, 
+          error: 'Invalid verification code format' 
         })
       };
     }
 
     // Check if Google Apps Script URL is configured
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
-      console.log('GOOGLE_APPS_SCRIPT_URL not configured, using mock verification');
-      
-      // Mock verification - accept any 6-digit code for development
-      if (code.length === 6 && /^\d{6}$/.test(code)) {
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            success: true, 
-            verified: true,
-            message: 'Email verified successfully (mock)' 
-          })
-        };
-      } else {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ 
-            success: false, 
-            error: 'Invalid verification code' 
-          })
-        };
-      }
+      console.error('GOOGLE_APPS_SCRIPT_URL not configured');
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Email verification service not configured' 
+        })
+      };
     }
 
-    // Call Google Apps Script for real verification
+    // Call Google Apps Script for verification
     console.log('Calling Google Apps Script for verification');
     
     const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
@@ -127,9 +97,7 @@ exports.handler = async (event, context) => {
     const result = await response.json();
     console.log('Apps Script verification response:', result);
 
-    // *** CRITICAL FIX: Proper error handling for wrong codes ***
-    
-    // Check if the Apps Script returned an error
+    // Handle verification result
     if (result.error) {
       console.log('Verification failed:', result.error);
       return {
@@ -155,12 +123,45 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Verification successful
-    console.log('Verification successful');
+    // Verification successful - create Monday.com driver record
+    console.log('Email verification successful, creating driver record');
+    
+    try {
+      // Create driver in Monday.com
+      const driverResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'create-driver',
+          email: email,
+          jobId: jobId
+        })
+      });
+
+      if (driverResponse.ok) {
+        const driverResult = await driverResponse.json();
+        console.log('Driver record created in Monday.com:', driverResult.success);
+      } else {
+        console.error('Failed to create driver record in Monday.com');
+        // Don't fail verification if Monday.com fails - user verified email successfully
+      }
+    } catch (mondayError) {
+      console.error('Error creating Monday.com driver record:', mondayError);
+      // Continue - email verification succeeded
+    }
+
+    // Return success
+    console.log('Verification completed successfully');
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(result)
+      body: JSON.stringify({ 
+        success: true, 
+        verified: true,
+        message: 'Email verified successfully' 
+      })
     };
 
   } catch (error) {
@@ -175,35 +176,3 @@ exports.handler = async (event, context) => {
     };
   }
 };
-
-// Create test driver record for backdoor emails
-async function createTestDriverRecord(email, jobId) {
-  try {
-    if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
-      console.log('No Google Apps Script URL - skipping test driver creation');
-      return;
-    }
-
-    // Call Google Apps Script to create driver record
-    const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'create-test-driver',
-        email: email,
-        jobId: jobId
-      })
-    });
-
-    if (response.ok) {
-      console.log('Test driver record created successfully');
-    } else {
-      console.error('Failed to create test driver record');
-    }
-
-  } catch (error) {
-    console.error('Error creating test driver record:', error);
-  }
-}
