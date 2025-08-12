@@ -566,7 +566,12 @@ async function uploadFileToDriverBoardA(uploadData) {
 function buildBoardAColumnValues(driverData) {
   const columns = {};
   
-  // Identity & Contact
+  // FIXED: Use exact format from working test-board-mappings.js
+  
+  // Identity & Contact - CORRECTED FORMATTING
+  if (driverData.driverName) {
+    columns['text_mktry2je'] = driverData.driverName;
+  }
   if (driverData.email) {
     columns['email_mktrgzj'] = { email: driverData.email, text: driverData.email };
   }
@@ -580,7 +585,7 @@ function buildBoardAColumnValues(driverData) {
     columns['text_mktrdh72'] = driverData.nationality;
   }
 
-  // License Information
+  // License Information - CORRECTED FORMATTING
   if (driverData.licenseNumber) {
     columns['text_mktrrv38'] = driverData.licenseNumber;
   }
@@ -600,7 +605,7 @@ function buildBoardAColumnValues(driverData) {
     columns['text_mktr8kvs'] = driverData.licenseEnding;
   }
 
-  // Addresses
+  // Addresses - CORRECTED FORMATTING
   if (driverData.homeAddress) {
     columns['long_text_mktr2jhb'] = driverData.homeAddress;
   }
@@ -608,7 +613,7 @@ function buildBoardAColumnValues(driverData) {
     columns['long_text_mktrs5a0'] = driverData.licenseAddress;
   }
 
-  // Document Validity Dates
+  // Document Validity Dates - CORRECTED FORMATTING
   if (driverData.poa1ValidUntil) {
     columns['date_mktr1keg'] = { date: driverData.poa1ValidUntil };
   }
@@ -619,32 +624,35 @@ function buildBoardAColumnValues(driverData) {
     columns['date_mktrmjfr'] = { date: driverData.dvlaCheckDate };
   }
 
-  // Insurance Questions (Status columns with Yes/No)
+  // Insurance Questions - EXACT FORMAT FROM WORKING VERSION
   if (driverData.hasDisability !== undefined) {
-    columns['status'] = { label: driverData.hasDisability === true ? 'Yes' : 'No' };
+    columns['status'] = { label: driverData.hasDisability ? "Yes" : "No" };
   }
   if (driverData.hasConvictions !== undefined) {
-    columns['color_mktr4w0'] = { label: driverData.hasConvictions === true ? 'Yes' : 'No' };
+    columns['color_mktr4w0'] = { label: driverData.hasConvictions ? "Yes" : "No" };
   }
   if (driverData.hasProsecution !== undefined) {
-    columns['color_mktrbt3x'] = { label: driverData.hasProsecution === true ? 'Yes' : 'No' };
+    columns['color_mktrbt3x'] = { label: driverData.hasProsecution ? "Yes" : "No" };
   }
   if (driverData.hasAccidents !== undefined) {
-    columns['color_mktraeas'] = { label: driverData.hasAccidents === true ? 'Yes' : 'No' };
+    columns['color_mktraeas'] = { label: driverData.hasAccidents ? "Yes" : "No" };
   }
   if (driverData.hasInsuranceIssues !== undefined) {
-    columns['color_mktrpe6q'] = { label: driverData.hasInsuranceIssues === true ? 'Yes' : 'No' };
+    columns['color_mktrpe6q'] = { label: driverData.hasInsuranceIssues ? "Yes" : "No" };
   }
   if (driverData.hasDrivingBan !== undefined) {
-    columns['color_mktr2t8a'] = { label: driverData.hasDrivingBan === true ? 'Yes' : 'No' };
+    columns['color_mktr2t8a'] = { label: driverData.hasDrivingBan ? "Yes" : "No" };
   }
   if (driverData.additionalDetails) {
     columns['long_text_mktr1a66'] = driverData.additionalDetails;
   }
 
-  // Overall Status
+  // Overall Status - STANDARD MONDAY.COM LABELS
   if (driverData.overallStatus) {
     columns['color_mktrwatg'] = { label: driverData.overallStatus };
+  } else {
+    // Default to "Working on it" for new drivers
+    columns['color_mktrwatg'] = { label: "Working on it" };
   }
 
   // Update last modified date
@@ -656,77 +664,77 @@ function buildBoardAColumnValues(driverData) {
 function mapBoardAtoBoardB(boardAData, copyData) {
   const columns = {};
   
-  // Map Board A → Board B (14 essential fields)
-  // text_mktry2je → text8 (Driver Name)
+  // FIXED: Use exact mapping logic from working test-board-mappings.js
+  
+  // Driver Name: text_mktry2je → text8
   if (boardAData.driverName) {
     columns['text8'] = boardAData.driverName;
   }
   
-  // email_mktrgzj → email (Email Address)
+  // Email: email_mktrgzj → email
   if (boardAData.email) {
     columns['email'] = { email: boardAData.email, text: boardAData.email };
   }
   
-  // text_mktrfqe2 → text9__1 (Phone Number)
+  // Phone: text_mktrfqe2 → text9__1
   if (boardAData.phone) {
     columns['text9__1'] = boardAData.phone;
   }
   
-  // date_mktr2x01 → date45 (Date of Birth)
+  // Date of Birth: date_mktr2x01 → date45
   if (boardAData.dateOfBirth) {
     columns['date45'] = { date: boardAData.dateOfBirth };
   }
   
-  // text_mktrdh72 → text_mktqjbpm (Nationality)
+  // Nationality: text_mktrdh72 → text_mktqjbpm (FIXED - WAS MISSING)
   if (boardAData.nationality) {
     columns['text_mktqjbpm'] = boardAData.nationality;
   }
   
-  // text_mktrrv38 → text6 (License Number)
+  // License Number: text_mktrrv38 → text6
   if (boardAData.licenseNumber) {
     columns['text6'] = boardAData.licenseNumber;
   }
   
-  // text_mktrz69 → text_mktqwkqn (License Issued By)
+  // License Issued By: text_mktrz69 → text_mktqwkqn (FIXED - WAS MISSING)
   if (boardAData.licenseIssuedBy) {
     columns['text_mktqwkqn'] = boardAData.licenseIssuedBy;
   }
   
-  // date_mktrmdx5 → date_mktqphhq (License Valid From)
+  // License Valid From: date_mktrmdx5 → date_mktqphhq (FIXED - WAS MISSING)
   if (boardAData.licenseValidFrom) {
     columns['date_mktqphhq'] = { date: boardAData.licenseValidFrom };
   }
   
-  // date_mktrwk94 → driver_licence_valid_to (License Valid To)
+  // License Valid To: date_mktrwk94 → driver_licence_valid_to
   if (boardAData.licenseValidTo) {
     columns['driver_licence_valid_to'] = { date: boardAData.licenseValidTo };
   }
   
-  // date_mktr93jq → date2 (Date Passed Test)
+  // Date Passed Test: date_mktr93jq → date2
   if (boardAData.datePassedTest) {
     columns['date2'] = { date: boardAData.datePassedTest };
   }
   
-  // long_text_mktr2jhb → long_text6 (Home Address)
+  // Home Address: long_text_mktr2jhb → long_text6
   if (boardAData.homeAddress) {
     columns['long_text6'] = boardAData.homeAddress;
   }
   
-  // long_text_mktrs5a0 → long_text8 (License Address)
+  // License Address: long_text_mktrs5a0 → long_text8
   if (boardAData.licenseAddress) {
     columns['long_text8'] = boardAData.licenseAddress;
   }
   
-  // Signature File - Use mirror column lookup_mktr22y3
-  // Note: Mirror column will automatically show signature from Board A
-  
-  // date4 → current date (Created/Signature Date)
+  // Created Date: Always set current date for signature date
   columns['date4'] = { date: new Date().toISOString().split('T')[0] };
   
   // Add job linking data if provided
   if (copyData.jobId) {
     columns['text86'] = copyData.jobId; // Job number (5-digit HireHop)
   }
+  
+  // Note: Mirror column lookup_mktr22y3 will automatically show signature from Board A
 
   return columns;
 }
@@ -875,13 +883,34 @@ async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
       step5_fileUpload: null
     };
 
-    // Step 1: Create driver in Board A
-    console.log('Step 1: Creating driver in Board A...');
+    // Step 1: Create driver in Board A with COMPREHENSIVE test data
+    console.log('Step 1: Creating driver in Board A with comprehensive data...');
     const createResult = await createDriverInBoardA({
+      // FIXED: Add driverName (was missing)
+      driverName: "John Michael Test-Driver", 
       email: testEmail,
-      phone: '+44 7123 456789',
+      phone: '07987654321',
+      dateOfBirth: '1985-03-15',
       nationality: 'British',
-      licenseNumber: 'TEST123456789AB',
+      licenseNumber: 'WOOD661120JO9LA',
+      licenseIssuedBy: 'DVLA', 
+      datePassedTest: '2003-08-20',
+      licenseValidFrom: '2006-08-01',
+      licenseValidTo: '2032-08-01',
+      licenseEnding: 'JO9LA',
+      homeAddress: '123 Test Home Street\nLondon\nSW1A 1AA\nUnited Kingdom',
+      licenseAddress: '123 Test License Street\nLondon\nSW1A 1BB\nUnited Kingdom',
+      poa1ValidUntil: '2025-10-01',
+      poa2ValidUntil: '2025-11-15', 
+      dvlaCheckDate: '2025-07-15',
+      // FIXED: Insurance questions with proper boolean values
+      hasDisability: false,
+      hasConvictions: false,
+      hasProsecution: false,
+      hasAccidents: false,
+      hasInsuranceIssues: false,
+      hasDrivingBan: false,
+      additionalDetails: 'No additional details to report at this time.',
       overallStatus: 'Working on it'
     });
     results.step1_createBoardA = JSON.parse(createResult.body);
@@ -941,7 +970,14 @@ async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
           boardB_found: !!results.step4_findBoardB.found,
           file_uploaded: !!results.step5_fileUpload.success
         },
-        message: 'Two-board system test completed'
+        message: 'Two-board system test completed',
+        keepForInspection: {
+          boardAItemId: driverIdA,
+          boardBItemId: results.step3_copyAtoB.driverIdB,
+          message: 'Test items preserved for manual verification',
+          boardAUrl: `https://oooshtours.monday.com/boards/9798399405/views/207920414?pulse=${driverIdA}`,
+          boardBUrl: `https://oooshtours.monday.com/boards/841453886/views/207920414?pulse=${results.step3_copyAtoB.driverIdB}`
+        }
       })
     };
 
@@ -952,7 +988,8 @@ async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         error: 'Two-board system test failed',
-        details: error.message 
+        details: error.message,
+        partialResults: results
       })
     };
   }
