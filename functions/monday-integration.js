@@ -943,18 +943,11 @@ async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
     const findBResult = await findDriverInBoardB(testEmail);
     results.step4_findBoardB = JSON.parse(findBResult.body);
 
-    // Step 5: Test file upload to Board A
-    console.log('Step 5: Testing file upload to Board A...');
-    const testFileData = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==', 'base64').toString('base64');
+    // Step 5: Test ALL file uploads to Board A (7 file columns)
+    console.log('Step 5: Testing ALL file uploads to Board A...');
     
-    const fileUploadResult = await uploadFileToDriverBoardA({
-      driverId: driverIdA,
-      columnId: 'file_mktrfanc', // Signature file column
-      fileData: testFileData,
-      fileName: 'test-signature.png',
-      contentType: 'image/png'
-    });
-    results.step5_fileUpload = JSON.parse(fileUploadResult.body);
+    const fileUploadResults = await testAllFileUploadsBoardA(driverIdA);
+    results.step5_fileUpload = fileUploadResults;
 
     return {
       statusCode: 200,
@@ -968,7 +961,7 @@ async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
           boardA_found: !!results.step2_findBoardA.found,
           copy_successful: !!results.step3_copyAtoB.success,
           boardB_found: !!results.step4_findBoardB.found,
-          file_uploaded: !!results.step5_fileUpload.success
+          all_files_uploaded: results.step5_fileUpload && results.step5_fileUpload.overallSuccess
         },
         message: 'Two-board system test completed',
         keepForInspection: {
@@ -995,34 +988,73 @@ async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
   }
 }
 
-async function testFileUpload(testData) {
-  console.log('Testing file upload specifically...');
+// Test all 7 file uploads to Board A - FROM WORKING test-board-mappings.js
+async function testAllFileUploadsBoardA(driverId) {
+  console.log('🔄 Testing ALL 7 file uploads to Board A...');
   
-  try {
-    // Create a small test PNG (1x1 pixel)
-    const testFileData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-    
-    const uploadResult = await uploadFileToDriverBoardA({
-      driverId: testData.driverId || '1234567890', // Use provided or placeholder
-      columnId: testData.columnId || 'file_mktrfanc',
-      fileData: testFileData,
-      fileName: 'test-file.png',
-      contentType: 'image/png'
-    });
-
-    return uploadResult;
-
-  } catch (error) {
-    console.error('File upload test failed:', error);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'File upload test failed',
-        details: error.message 
-      })
-    };
+  const fileResults = {};
+  
+  // All 7 file columns in Board A (from working version)
+  const fileColumns = {
+    file_mktrypb7: 'License Front Image',
+    file_mktr76g6: 'License Back Image', 
+    file_mktr56t0: 'Passport/Secondary ID',
+    file_mktrf9jv: 'POA Document 1',
+    file_mktr3fdw: 'POA Document 2',
+    file_mktrwhn8: 'DVLA Check Document',
+    file_mktrfanc: 'Signature File'
+  };
+  
+  // Test file data (1x1 pixel PNG)
+  const testFileData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+  
+  // Upload to each column
+  let successful = 0;
+  let failed = 0;
+  
+  for (const [columnId, columnName] of Object.entries(fileColumns)) {
+    try {
+      console.log(`📁 Testing file upload to ${columnName}...`);
+      
+      const uploadResult = await uploadFileToDriverBoardA({
+        driverId: driverId,
+        columnId: columnId,
+        fileData: testFileData,
+        fileName: `test_${columnName.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+        contentType: 'image/png'
+      });
+      
+      const result = JSON.parse(uploadResult.body);
+      fileResults[columnId] = result;
+      
+      if (result.success) {
+        successful++;
+        console.log(`✅ ${columnName} uploaded successfully`);
+      } else {
+        failed++;
+        console.log(`❌ ${columnName} upload failed: ${result.error}`);
+      }
+      
+      // Small delay between uploads to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      console.error(`File upload error for ${columnName}:`, error);
+      fileResults[columnId] = { success: false, error: error.message };
+      failed++;
+    }
   }
+  
+  console.log(`📊 File upload summary: ${successful}/${Object.keys(fileColumns).length} successful`);
+  
+  return {
+    overallSuccess: failed === 0,
+    successful: successful,
+    failed: failed,
+    total: Object.keys(fileColumns).length,
+    details: fileResults,
+    message: `File uploads: ${successful} successful, ${failed} failed`
+  };
 }
 
 // ========================================
