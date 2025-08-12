@@ -313,7 +313,7 @@ async function createTestItemBoardA() {
     if (response.data && response.data.create_item) {
       const itemId = response.data.create_item.id;
       
-      // COMPREHENSIVE test data - ALL COLUMNS
+      // COMPREHENSIVE test data - ALL COLUMNS WITH CORRECT STATUS LABELS
       const comprehensiveData = {
         // Identity & Contact
         text_mktry2je: "John Michael Test-Driver",
@@ -339,17 +339,17 @@ async function createTestItemBoardA() {
         date_mktra1a6: { date: "2025-11-15" }, // POA2 valid until  
         date_mktrmjfr: { date: "2025-07-15" }, // DVLA check date
         
-        // Insurance Questions (Status columns - need to check what labels exist)
-        status: { label: "Working on it" }, // Has Disability
-        color_mktr4w0: { label: "Working on it" }, // Has Convictions
-        color_mktrbt3x: { label: "Done" }, // Has Prosecution
-        color_mktraeas: { label: "Working on it" }, // Has Accidents
-        color_mktrpe6q: { label: "Done" }, // Has Insurance Issues
-        color_mktr2t8a: { label: "Working on it" }, // Has Driving Ban
+        // Insurance Questions (Status columns - FIXED WITH CORRECT LABELS)
+        status: { label: "No" }, // Has Disability
+        color_mktr4w0: { label: "No" }, // Has Convictions
+        color_mktrbt3x: { label: "No" }, // Has Prosecution
+        color_mktraeas: { label: "No" }, // Has Accidents
+        color_mktrpe6q: { label: "No" }, // Has Insurance Issues
+        color_mktr2t8a: { label: "No" }, // Has Driving Ban
         long_text_mktr1a66: "No additional details to report at this time.",
         
-        // Overall Status
-        color_mktrwatg: { label: "Working on it" }
+        // Overall Status - need to check what labels this column has
+        color_mktrwatg: { label: "Done" } // Try "Done" instead of "Working on it"
       };
       
       // Update with comprehensive test data
