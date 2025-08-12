@@ -1,7 +1,7 @@
 // File: functions/send-verification-code.js
 // OOOSH Driver Verification - Send Email Verification Code Function
-// Replace your existing functions/send-verification-code.js with this content
- 
+// PRODUCTION VERSION - All test backdoors removed
+
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
@@ -56,26 +56,28 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Validate email format
+    if (!email.includes('@')) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid email format' })
+      };
+    }
+
     // Check if Google Apps Script URL is configured
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
-      console.log('GOOGLE_APPS_SCRIPT_URL not configured, using mock response');
-      
-      // Return mock response for development
-      const debugCode = Math.floor(100000 + Math.random() * 900000).toString();
-      console.log('DEBUG: Generated verification code:', debugCode);
-      
+      console.error('GOOGLE_APPS_SCRIPT_URL not configured');
       return {
-        statusCode: 200,
+        statusCode: 500,
         headers,
         body: JSON.stringify({ 
-          success: true, 
-          message: 'Verification code sent',
-          debugCode: debugCode // For development only
+          error: 'Email verification service not configured' 
         })
       };
     }
 
-    // Call Google Apps Script
+    // Call Google Apps Script to send verification email
     console.log('Calling Google Apps Script:', process.env.GOOGLE_APPS_SCRIPT_URL);
     
     const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
@@ -94,8 +96,18 @@ exports.handler = async (event, context) => {
     const result = await response.json();
     console.log('Apps Script response:', result);
 
+    if (!response.ok) {
+      throw new Error(result.error || `HTTP error! status: ${response.status}`);
+    }
+
+    // Check if email sending was successful
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to send verification email');
+    }
+
+    console.log('Verification email sent successfully');
     return {
-      statusCode: response.status,
+      statusCode: 200,
       headers,
       body: JSON.stringify(result)
     };
@@ -103,14 +115,12 @@ exports.handler = async (event, context) => {
   } catch (error) {
     console.error('Email verification error:', error);
     
-    // Return detailed error for debugging
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-        error: 'Internal server error',
-        details: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        error: 'Failed to send verification email',
+        details: error.message
       })
     };
   }
