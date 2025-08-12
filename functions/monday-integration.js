@@ -92,9 +92,46 @@ exports.handler = async (event, context) => {
 // ========================================
 
 async function createDriverInBoardA(driverData) {
-  console.log('Creating driver in Board A (Database):', driverData.email);
+  console.log('Creating/updating driver in Board A (Database):', driverData.email);
   
   try {
+    // STEP 1: Check if driver already exists by email
+    console.log('🔍 Checking if driver already exists...');
+    const findResult = await findDriverInBoardA(driverData.email);
+    const findData = JSON.parse(findResult.body);
+    
+    if (findData.found) {
+      // Driver exists - UPDATE instead of create
+      console.log('📝 Driver exists, updating existing record:', findData.driverId);
+      
+      const updateResult = await updateDriverInBoardA({
+        driverId: findData.driverId,
+        ...driverData
+      });
+      
+      // Parse the update result and return with creation-style response
+      const updateData = JSON.parse(updateResult.body);
+      
+      if (updateData.success) {
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            driverId: findData.driverId,
+            boardA: true,
+            existing: true,
+            message: 'Existing driver updated in Board A (Database)'
+          })
+        };
+      } else {
+        throw new Error('Failed to update existing driver');
+      }
+    }
+    
+    // STEP 2: Driver doesn't exist - CREATE new record
+    console.log('👤 New driver, creating fresh record...');
+
     const query = `
       mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
         create_item (board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
@@ -120,7 +157,7 @@ async function createDriverInBoardA(driverData) {
     }
 
     const driverId = response.data.create_item.id;
-    console.log('Driver created in Board A:', driverId);
+    console.log('✅ New driver created in Board A:', driverId);
 
     return {
       statusCode: 200,
@@ -129,17 +166,18 @@ async function createDriverInBoardA(driverData) {
         success: true,
         driverId: driverId,
         boardA: true,
-        message: 'Driver created in Board A (Database)'
+        existing: false,
+        message: 'New driver created in Board A (Database)'
       })
     };
 
   } catch (error) {
-    console.error('Create driver Board A error:', error);
+    console.error('Create/update driver Board A error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        error: 'Failed to create driver in Board A',
+        error: 'Failed to create/update driver in Board A',
         details: error.message 
       })
     };
