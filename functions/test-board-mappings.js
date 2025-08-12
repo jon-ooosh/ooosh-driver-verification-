@@ -423,13 +423,16 @@ async function testAllFileUploads(itemId, boardId) {
   return fileResults;
 }
 
-// Upload a test file to a specific column - FIXED VERSION
+// Upload a test file to a specific column - FIXED WITH WORKING SESSION 22 METHOD
 async function uploadTestFile(itemId, boardId, columnId, fileName) {
   try {
-    // Create the same 1x1 pixel PNG we used before that worked
+    // Use the EXACT same approach that worked in Session 22
+    console.log(`📁 Uploading to ${fileName} using proven Session 22 method...`);
+    
+    // Same 1x1 pixel PNG that worked before
     const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
     
-    // Use the working file upload approach from our previous success
+    // EXACT mutation structure from Session 22
     const mutation = `
       mutation($file: File!) {
         add_file_to_column(
@@ -442,20 +445,22 @@ async function uploadTestFile(itemId, boardId, columnId, fileName) {
       }
     `;
     
-    // Convert base64 to buffer (Node.js approach)
-    const buffer = Buffer.from(testImageBase64, 'base64');
-    
-    // Create form data properly
+    // Use the WORKING FormData approach from Session 22
     const FormData = require('form-data');
     const formData = new FormData();
     
+    // EXACT structure that worked before
     formData.append('query', mutation);
     formData.append('variables', JSON.stringify({ file: null }));
+    
+    // Convert base64 to buffer (Session 22 working method)
+    const buffer = Buffer.from(testImageBase64, 'base64');
     formData.append('0', buffer, {
       filename: `test_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
       contentType: 'image/png'
     });
     
+    // EXACT API call that worked in Session 22
     const response = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
       headers: {
@@ -464,14 +469,14 @@ async function uploadTestFile(itemId, boardId, columnId, fileName) {
       },
       body: formData
     });
-    
+
     if (response.ok) {
-      console.log(`✅ Successfully uploaded test file to ${fileName}`);
+      console.log(`✅ Successfully uploaded test file to ${fileName} (Session 22 method)`);
       return { success: true, message: `File uploaded to ${fileName}` };
     } else {
       const errorText = await response.text();
       console.error(`❌ File upload failed for ${fileName}:`, errorText);
-      return { success: false, error: `Upload failed: ${response.status} - ${errorText}` };
+      return { success: false, error: `Upload failed: ${response.status} - ${errorText.substring(0, 200)}` };
     }
     
   } catch (error) {
