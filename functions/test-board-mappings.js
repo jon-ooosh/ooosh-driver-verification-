@@ -288,7 +288,7 @@ async function testBoardB() {
   }
 }
 
-// Create test item in Board A
+// Create test item in Board A with ALL columns populated
 async function createTestItemBoardA() {
   try {
     const boardId = '9798399405';
@@ -298,7 +298,7 @@ async function createTestItemBoardA() {
       mutation {
         create_item(
           board_id: ${boardId},
-          item_name: "TEST DRIVER - ${testEmail}"
+          item_name: "COMPREHENSIVE TEST DRIVER - ${testEmail}"
         ) {
           id
         }
@@ -310,22 +310,52 @@ async function createTestItemBoardA() {
     if (response.data && response.data.create_item) {
       const itemId = response.data.create_item.id;
       
-      // Update with test data
+      // COMPREHENSIVE test data - ALL COLUMNS
+      const comprehensiveData = {
+        // Identity & Contact
+        text_mktry2je: "John Michael Test-Driver",
+        email_mktrgzj: { email: testEmail, text: testEmail },
+        text_mktrfqe2: "07987654321",
+        date_mktr2x01: { date: "1985-03-15" },
+        text_mktrdh72: "British",
+        
+        // License Information
+        text_mktrrv38: "WOOD661120JO9LA",
+        text_mktrz69: "DVLA",
+        date_mktr93jq: { date: "2003-08-20" },
+        date_mktrmdx5: { date: "2006-08-01" },
+        date_mktrwk94: { date: "2032-08-01" },
+        text_mktr8kvs: "JO9LA",
+        
+        // Addresses
+        long_text_mktr2jhb: "123 Test Home Street\nLondon\nSW1A 1AA\nUnited Kingdom",
+        long_text_mktrs5a0: "123 Test License Street\nLondon\nSW1A 1BB\nUnited Kingdom",
+        
+        // Document Validity Dates
+        date_mktr1keg: { date: "2025-10-01" }, // POA1 valid until
+        date_mktra1a6: { date: "2025-11-15" }, // POA2 valid until  
+        date_mktrmjfr: { date: "2025-07-15" }, // DVLA check date
+        
+        // Insurance Questions (Status columns - need to check what labels exist)
+        status: { label: "Working on it" }, // Has Disability
+        color_mktr4w0: { label: "Working on it" }, // Has Convictions
+        color_mktrbt3x: { label: "Done" }, // Has Prosecution
+        color_mktraeas: { label: "Working on it" }, // Has Accidents
+        color_mktrpe6q: { label: "Done" }, // Has Insurance Issues
+        color_mktr2t8a: { label: "Working on it" }, // Has Driving Ban
+        long_text_mktr1a66: "No additional details to report at this time.",
+        
+        // Overall Status
+        color_mktrwatg: { label: "Working on it" }
+      };
+      
+      // Update with comprehensive test data
       const updateMutation = `
         mutation {
           change_multiple_column_values(
             item_id: ${itemId},
             board_id: ${boardId},
-            column_values: ${JSON.stringify(JSON.stringify({
-              text_mktry2je: "Test Driver Name",
-              email_mktrgzj: { email: testEmail, text: testEmail },
-              text_mktrfqe2: "07123456789",
-              date_mktr2x01: { date: "1990-01-01" },
-              text_mktrdh72: "British",
-              text_mktrrv38: "TEST123456789AB",
-              text_mktr8kvs: "89AB",
-              color_mktrwatg: { label: "Working on it" }
-            }))}
+            column_values: ${JSON.stringify(JSON.stringify(comprehensiveData))}
           ) {
             id
           }
@@ -333,26 +363,127 @@ async function createTestItemBoardA() {
       `;
       
       await mondayApiCall(updateMutation);
+      console.log('✅ Updated Board A item with comprehensive data');
       
-      return { success: true, itemId: itemId, email: testEmail };
+      // Now test file uploads
+      const fileUploadResults = await testAllFileUploads(itemId, boardId);
+      
+      return { 
+        success: true, 
+        itemId: itemId, 
+        email: testEmail,
+        fieldsPopulated: Object.keys(comprehensiveData).length,
+        fileUploads: fileUploadResults
+      };
     } else {
       return { success: false, error: 'Failed to create item in Board A' };
     }
 
   } catch (error) {
-    console.error('Board A item creation error:', error);
+    console.error('Board A comprehensive creation error:', error);
     return { success: false, error: error.message };
   }
 }
 
-// Test A→B copy mechanism
+// Test all file uploads to Board A
+async function testAllFileUploads(itemId, boardId) {
+  const fileResults = {};
+  
+  // Test file columns in Board A
+  const fileColumns = {
+    file_mktrypb7: 'License Front Image',
+    file_mktr76g6: 'License Back Image', 
+    file_mktr56t0: 'Passport/Secondary ID',
+    file_mktrf9jv: 'POA Document 1',
+    file_mktr3fdw: 'POA Document 2',
+    file_mktrwhn8: 'DVLA Check Document',
+    file_mktrfanc: 'Signature File'
+  };
+  
+  // Create small test files for each column
+  for (const [columnId, columnName] of Object.entries(fileColumns)) {
+    try {
+      console.log(`📁 Testing file upload to ${columnName}...`);
+      
+      const result = await uploadTestFile(itemId, boardId, columnId, columnName);
+      fileResults[columnId] = result;
+      
+      // Small delay between uploads
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      console.error(`File upload error for ${columnName}:`, error);
+      fileResults[columnId] = { success: false, error: error.message };
+    }
+  }
+  
+  return fileResults;
+}
+
+// Upload a test file to a specific column
+async function uploadTestFile(itemId, boardId, columnId, fileName) {
+  try {
+    // Create a simple 1x1 pixel PNG as base64
+    const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+    
+    const mutation = `
+      mutation($file: File!) {
+        add_file_to_column(
+          item_id: ${itemId},
+          column_id: "${columnId}", 
+          file: $file
+        ) {
+          id
+        }
+      }
+    `;
+    
+    const formData = new FormData();
+    formData.append('query', mutation);
+    formData.append('variables', JSON.stringify({ file: null }));
+    
+    // Convert base64 to blob
+    const binaryString = atob(testImageBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'image/png' });
+    formData.append('0', blob, `test_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.png`);
+    
+    const response = await fetch('https://api.monday.com/v2/file', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
+      },
+      body: formData
+    });
+    
+    if (response.ok) {
+      console.log(`✅ Successfully uploaded test file to ${fileName}`);
+      return { success: true, message: `File uploaded to ${fileName}` };
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ File upload failed for ${fileName}:`, errorText);
+      return { success: false, error: `Upload failed: ${response.status}` };
+    }
+    
+  } catch (error) {
+    console.error(`File upload error for ${fileName}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Test A→B copy mechanism with ALL fields
 async function testABCopy(itemAId) {
   try {
     if (!itemAId) {
       return { success: false, error: 'No Board A item ID provided' };
     }
 
-    // Get data from Board A item
+    console.log('📋 Getting comprehensive data from Board A...');
+    
+    // Get ALL data from Board A item
     const queryA = `
       query {
         items(ids: [${itemAId}]) {
@@ -380,29 +511,77 @@ async function testABCopy(itemAId) {
       columnsA[col.id] = col.value;
     });
 
-    // Map Board A → Board B (11 essential fields)
+    console.log('📊 Board A data retrieved:', Object.keys(columnsA).length, 'columns');
+
+    // COMPREHENSIVE Board A → Board B mapping (ALL 11 essential fields)
     const boardBData = {};
     
     // Text mappings
-    if (columnsA['text_mktry2je']) boardBData['text8'] = JSON.parse(columnsA['text_mktry2je'] || '""');
+    if (columnsA['text_mktry2je']) {
+      const value = JSON.parse(columnsA['text_mktry2je'] || '""');
+      if (value) boardBData['text8'] = value;
+    }
+    
     if (columnsA['email_mktrgzj']) {
       const emailData = JSON.parse(columnsA['email_mktrgzj'] || '{}');
-      boardBData['email'] = { email: emailData.email || '', text: emailData.text || '' };
+      if (emailData.email) {
+        boardBData['email'] = { 
+          email: emailData.email, 
+          text: emailData.text || emailData.email 
+        };
+      }
     }
-    if (columnsA['text_mktrfqe2']) boardBData['text9__1'] = JSON.parse(columnsA['text_mktrfqe2'] || '""');
-    if (columnsA['text_mktrrv38']) boardBData['text6'] = JSON.parse(columnsA['text_mktrrv38'] || '""');
+    
+    if (columnsA['text_mktrfqe2']) {
+      const value = JSON.parse(columnsA['text_mktrfqe2'] || '""');
+      if (value) boardBData['text9__1'] = value;
+    }
+    
+    if (columnsA['text_mktrrv38']) {
+      const value = JSON.parse(columnsA['text_mktrrv38'] || '""');
+      if (value) boardBData['text6'] = value;
+    }
     
     // Date mappings  
-    if (columnsA['date_mktr2x01']) boardBData['date45'] = JSON.parse(columnsA['date_mktr2x01'] || '{}');
-    if (columnsA['date_mktrwk94']) boardBData['driver_licence_valid_to'] = JSON.parse(columnsA['date_mktrwk94'] || '{}');
-    if (columnsA['date_mktr93jq']) boardBData['date2'] = JSON.parse(columnsA['date_mktr93jq'] || '{}');
+    if (columnsA['date_mktr2x01']) {
+      const dateData = JSON.parse(columnsA['date_mktr2x01'] || '{}');
+      if (dateData.date) boardBData['date45'] = dateData;
+    }
+    
+    if (columnsA['date_mktrwk94']) {
+      const dateData = JSON.parse(columnsA['date_mktrwk94'] || '{}');
+      if (dateData.date) boardBData['driver_licence_valid_to'] = dateData;
+    }
+    
+    if (columnsA['date_mktr93jq']) {
+      const dateData = JSON.parse(columnsA['date_mktr93jq'] || '{}');
+      if (dateData.date) boardBData['date2'] = dateData;
+    }
     
     // Long text mappings
-    if (columnsA['long_text_mktr2jhb']) boardBData['long_text6'] = JSON.parse(columnsA['long_text_mktr2jhb'] || '""');
-    if (columnsA['long_text_mktrs5a0']) boardBData['long_text8'] = JSON.parse(columnsA['long_text_mktrs5a0'] || '""');
+    if (columnsA['long_text_mktr2jhb']) {
+      const value = JSON.parse(columnsA['long_text_mktr2jhb'] || '""');
+      if (value) boardBData['long_text6'] = value;
+    }
+    
+    if (columnsA['long_text_mktrs5a0']) {
+      const value = JSON.parse(columnsA['long_text_mktrs5a0'] || '""');
+      if (value) boardBData['long_text8'] = value;
+    }
 
     // Set signature date as current date
     boardBData['date4'] = { date: new Date().toISOString().split('T')[0] };
+
+    // File handling - copy signature file if exists
+    if (columnsA['file_mktrfanc']) {
+      const fileData = JSON.parse(columnsA['file_mktrfanc'] || '{}');
+      if (fileData.files && fileData.files.length > 0) {
+        console.log('📁 Found signature file to copy');
+        // Note: File copying requires special handling - we'll handle this in full integration
+      }
+    }
+
+    console.log('📋 Mapping', Object.keys(boardBData).length, 'fields to Board B');
 
     // Create item in Board B
     const boardBId = '841453886';
@@ -410,7 +589,7 @@ async function testABCopy(itemAId) {
       mutation {
         create_item(
           board_id: ${boardBId},
-          item_name: "${itemA.name} (COPIED)"
+          item_name: "${itemA.name} → COPIED FROM DATABASE"
         ) {
           id
         }
@@ -425,7 +604,7 @@ async function testABCopy(itemAId) {
 
     const itemBId = createResponse.data.create_item.id;
 
-    // Update Board B item with mapped data
+    // Update Board B item with ALL mapped data
     const updateMutation = `
       mutation {
         change_multiple_column_values(
@@ -440,6 +619,8 @@ async function testABCopy(itemAId) {
 
     await mondayApiCall(updateMutation);
 
+    console.log('✅ Board B item created and populated');
+
     return { 
       success: true, 
       itemId: itemBId,
@@ -447,12 +628,13 @@ async function testABCopy(itemAId) {
       details: {
         sourceItem: itemAId,
         targetItem: itemBId,
+        sourceColumns: Object.keys(columnsA).length,
         mappedData: boardBData
       }
     };
 
   } catch (error) {
-    console.error('A→B copy test error:', error);
+    console.error('Comprehensive A→B copy test error:', error);
     return { success: false, error: error.message };
   }
 }
