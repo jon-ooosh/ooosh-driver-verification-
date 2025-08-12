@@ -411,6 +411,17 @@ async function saveIdenfyResults(params) {
       columnValues[COLUMNS.homeAddress] = idenfyData.address;
     }
     
+    // ADD MISSING FIELDS
+    if (idenfyData.nationality) {
+      columnValues[COLUMNS.nationality] = idenfyData.nationality;
+    }
+    if (idenfyData.datePassedTest) {
+      columnValues[COLUMNS.datePassedTest] = { date: idenfyData.datePassedTest };
+    }
+    if (idenfyData.licenseIssuedBy) {
+      columnValues[COLUMNS.licenseIssuedBy] = idenfyData.licenseIssuedBy;
+    }
+    
     columnValues[COLUMNS.status] = { 
       label: idenfyData.approved ? STATUS_VALUES.underReview : STATUS_VALUES.rejected 
     };
