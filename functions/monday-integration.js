@@ -1,773 +1,235 @@
 // File: functions/monday-integration.js
-// OOOSH Driver Verification - Monday.com API Integration
-// ENHANCED VERSION - File uploads + New System identification + Insurance tracking
+// OOOSH Driver Verification - Complete Two-Board Monday.com Integration
+// SESSION 25 VERSION - Board A (Database) + Board B (Assignments) Architecture
 
 const fetch = require('node-fetch');
+const FormData = require('form-data');
 
+// Board Configuration
+const BOARD_A_ID = '9798399405'; // Driver Database - Complete verification records
+const BOARD_B_ID = '841453886';  // Driver Assignments - Essential hire fields only
+
+// Monday.com API Configuration
 const MONDAY_API_URL = 'https://api.monday.com/v2';
-const BOARD_ID = 841453886;
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Content-Type': 'application/json'
-}
-
-// Update Monday.com item name
-async function updateItemName(itemId, newName) {
-  try {
-    const nameQuery = `
-      mutation {
-        change_simple_column_value(
-          board_id: ${BOARD_ID},
-          item_id: ${itemId},
-          column_id: "name",
-          value: "${newName}"
-        ) {
-          id
-        }
-      }
-    `;
-
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: nameQuery })
-    });
-
-    const result = await response.json();
-    
-    if (result.errors) {
-      console.error('Monday.com name update errors:', result.errors);
-      throw new Error(result.errors[0].message);
-    }
-
-    console.log('Item name updated successfully');
-
-  } catch (error) {
-    console.error('Update item name error:', error);
-    throw error;
-  };
+const MONDAY_FILE_URL = 'https://api.monday.com/v2/file';
 
 exports.handler = async (event, context) => {
-  console.log('Monday.com integration called');
+  console.log('Two-Board Monday.com Integration called with method:', event.httpMethod);
   
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: corsHeaders, body: '' };
-  }
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
   }
 
   try {
-    const requestData = JSON.parse(event.body);
-    const action = requestData.action;
-
-    console.log('Monday.com action:', action);
-
-    if (action === 'get-driver-status') {
-      return getDriverStatus(requestData.email);
-    } else if (action === 'create-driver') {
-      return createDriver(requestData.email, requestData.jobId, requestData.name);
-    } else if (action === 'save-insurance-data') {
-      return saveInsuranceData(requestData.email, requestData.jobId, requestData.insuranceData);
-    } else if (action === 'save-idenfy-results') {
-      return saveIdenfyResults(requestData.email, requestData.jobId, requestData.mondayData);
-    } else if (action === 'save-dvla-results') {
-      return saveDvlaResults(requestData.email, requestData.jobId, requestData.dvlaData);
-    } else if (action === 'upload-signature') {
-      return uploadSignature(requestData.email, requestData.signatureData);
-    } else if (action === 'test-connection') {
-      return testMondayConnection();
-    }
+    let action, params;
     
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Invalid action' })
-    };
+    if (event.httpMethod === 'GET') {
+      action = event.queryStringParameters?.action;
+      params = event.queryStringParameters || {};
+    } else if (event.httpMethod === 'POST') {
+      const body = JSON.parse(event.body || '{}');
+      action = body.action;
+      params = body;
+    }
+
+    console.log('Action:', action, 'Params:', Object.keys(params));
+
+    switch (action) {
+      // Board A Functions (Driver Database)
+      case 'create-driver-board-a':
+        return await createDriverInBoardA(params);
+      case 'update-driver-board-a':
+        return await updateDriverInBoardA(params);
+      case 'find-driver-board-a':
+        return await findDriverInBoardA(params.email);
+      case 'upload-file-board-a':
+        return await uploadFileToDriverBoardA(params);
+      
+      // Board B Functions (Driver Assignments)
+      case 'copy-a-to-b':
+        return await copyBoardAtoB(params);
+      case 'find-driver-board-b':
+        return await findDriverInBoardB(params.email);
+      
+      // Testing & Utilities
+      case 'test-connection':
+        return await testMondayConnection();
+      case 'test-two-board-system':
+        return await testTwoBoardSystem(params.testEmail);
+      case 'test-file-upload':
+        return await testFileUpload(params);
+      
+      default:
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Invalid action' })
+        };
+    }
 
   } catch (error) {
     console.error('Monday.com integration error:', error);
     return {
       statusCode: 500,
-      headers: corsHeaders,
+      headers,
       body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
+        error: 'Monday.com integration failed',
+        details: error.message 
       })
     };
   }
 };
 
-// Get driver status from Monday.com
-async function getDriverStatus(email) {
+// ========================================
+// BOARD A FUNCTIONS (Driver Database)
+// ========================================
+
+async function createDriverInBoardA(driverData) {
+  console.log('Creating driver in Board A (Database):', driverData.email);
+  
   try {
-    console.log('Getting driver status for:', email);
-
-    const driver = await findDriverByEmail(email);
-    
-    if (!driver) {
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          success: true,
-          driver: null,
-          message: 'Driver not found in new system'
-        })
-      };
-    }
-
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        success: true,
-        driver: driver
-      })
-    };
-
-  } catch (error) {
-    console.error('Get driver status error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// Create new driver in Monday.com
-async function createDriver(email, jobId, name = null) {
-  try {
-    console.log('Creating driver in Monday.com:', email);
-
-    // Check if driver already exists (from new system)
-    const existingDriver = await findDriverByEmail(email);
-    if (existingDriver) {
-      console.log('Driver already exists, returning existing record');
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          success: true,
-          itemId: existingDriver.id,
-          message: 'Driver already exists',
-          isExisting: true
-        })
-      };
-    }
-
-    // Basic driver information  
-    const driverName = name || `Driver Verification - ${email}`;
-    const currentDate = new Date().toISOString().split('T')[0];
-    
-    const columnValues = {
-      text8: driverName,           // Driver name
-      email: { email: email, text: email }, // Email address  
-      text86: jobId,               // Job number (5-digit HireHop)
-      color_mktqc2dt: { label: 'Working on it' }, // Status
-      color_mktrywv1: { label: 'New System' } // NEW: Verification Source
-    };
-
-    const columnValuesJson = JSON.stringify(columnValues).replace(/"/g, '\\"');
-
-    const createQuery = `
-      mutation {
-        create_item(
-          board_id: ${BOARD_ID},
-          item_name: "${driverName}",
-          column_values: "${columnValuesJson}"
-        ) {
-          id
-        }
-      }
-    `;
-
-    console.log('Creating Monday.com item with New System tag');
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: createQuery })
-    });
-
-    const result = await response.json();
-    
-    if (result.errors) {
-      console.error('Monday.com create errors:', result.errors);
-      throw new Error(result.errors[0].message);
-    }
-
-    const itemId = result.data.create_item.id;
-    console.log('Driver created successfully with ID:', itemId);
-
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        success: true,
-        itemId: itemId,
-        message: 'Driver created successfully'
-      })
-    };
-
-  } catch (error) {
-    console.error('Create driver error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// Save insurance questionnaire data
-async function saveInsuranceData(email, jobId, insuranceData) {
-  try {
-    console.log('Saving insurance data for:', email);
-
-    const driver = await findDriverByEmail(email);
-    if (!driver) {
-      throw new Error('Driver not found - create driver first');
-    }
-
-    const updates = [];
-
-    // Map insurance questions to Monday.com status columns
-    if (insuranceData.hasDisability) {
-      const label = insuranceData.hasDisability === 'yes' ? 'Yes' : 'No';
-      updates.push(`"color_mktq8vhz": {"label": "${label}"}`);
-    }
-    if (insuranceData.hasConvictions) {
-      const label = insuranceData.hasConvictions === 'yes' ? 'Yes' : 'No';
-      updates.push(`"color_mktqzyze": {"label": "${label}"}`);
-    }
-    if (insuranceData.hasProsecution) {
-      const label = insuranceData.hasProsecution === 'yes' ? 'Yes' : 'No';
-      updates.push(`"color_mktqw319": {"label": "${label}"}`);
-    }
-    if (insuranceData.hasAccidents) {
-      const label = insuranceData.hasAccidents === 'yes' ? 'Yes' : 'No';
-      updates.push(`"color_mktqwhpd": {"label": "${label}"}`);
-    }
-    if (insuranceData.hasInsuranceIssues) {
-      const label = insuranceData.hasInsuranceIssues === 'yes' ? 'Yes' : 'No';
-      updates.push(`"color_mktqfymz": {"label": "${label}"}`);
-    }
-    if (insuranceData.hasDrivingBan) {
-      const label = insuranceData.hasDrivingBan === 'yes' ? 'Yes' : 'No';
-      updates.push(`"color_mktqxzqs": {"label": "${label}"}`);
-    }
-
-    // Additional details
-    if (insuranceData.additionalDetails) {
-      const escapedDetails = insuranceData.additionalDetails.replace(/"/g, '\\"');
-      updates.push(`"long_text_mktqfsnx": "${escapedDetails}"`);
-    }
-
-    if (updates.length === 0) {
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ 
-          success: true, 
-          message: 'No insurance updates needed',
-          itemId: driver.id
-        })
-      };
-    }
-
-    const updateQuery = `
-      mutation {
-        change_multiple_column_values(
-          board_id: ${BOARD_ID},
-          item_id: ${driver.id},
-          column_values: "{${updates.join(', ')}}"
-        ) {
-          id
-        }
-      }
-    `;
-
-    console.log('Updating Monday.com with insurance data');
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: updateQuery })
-    });
-
-    const result = await response.json();
-    
-    if (result.errors) {
-      console.error('Monday.com insurance update errors:', result.errors);
-      throw new Error(result.errors[0].message);
-    }
-
-    console.log('Insurance data saved successfully');
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: true, 
-        message: 'Insurance data saved successfully',
-        itemId: driver.id
-      })
-    };
-
-  } catch (error) {
-    console.error('Save insurance data error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// NEW: Save Idenfy verification results to Monday.com
-async function saveIdenfyResults(email, jobId, mondayData) {
-  try {
-    console.log('Saving Idenfy results to Monday.com for:', email);
-
-    // Find existing driver item
-    const driver = await findDriverByEmail(email);
-    if (!driver) {
-      console.log('Driver not found, creating new driver first');
-      const createResult = await createDriver(email, jobId);
-      if (!createResult.success) {
-        throw new Error('Failed to create driver record');
-      }
-      // Get the newly created driver
-      const newDriver = await findDriverByEmail(email);
-      if (!newDriver) {
-        throw new Error('Failed to retrieve newly created driver');
-      }
-      return await updateDriverWithIdenfyData(newDriver.id, mondayData);
-    }
-
-    // Update existing driver with Idenfy data
-    return await updateDriverWithIdenfyData(driver.id, mondayData);
-
-  } catch (error) {
-    console.error('Save Idenfy results error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// Update driver item with Idenfy verification data
-async function updateDriverWithIdenfyData(itemId, mondayData) {
-  try {
-    console.log('Updating Monday.com item with Idenfy data:', itemId);
-
-    const updates = [];
-
-    // Name (update the item name itself)
-    if (mondayData.name) {
-      updates.push(`"text8": "${mondayData.name}"`);
-      
-      // Also update the item name
-      try {
-        await updateItemName(itemId, mondayData.name);
-        console.log('Item name updated to:', mondayData.name);
-      } catch (nameError) {
-        console.warn('Failed to update item name:', nameError.message);
-      }
-    }
-
-    // License information
-    if (mondayData.licenseNumber) {
-      updates.push(`"text6": "${mondayData.licenseNumber}"`);
-    }
-    if (mondayData.licenseExpiryDate) {
-      updates.push(`"driver_licence_valid_to": "${mondayData.licenseExpiryDate}"`);
-    }
-    if (mondayData.licenseAddress) {
-      const escapedAddress = mondayData.licenseAddress.replace(/"/g, '\\"');
-      updates.push(`"long_text8": "${escapedAddress}"`);
-    }
-
-    // Date of birth
-    if (mondayData.dateOfBirth) {
-      updates.push(`"date45": "${mondayData.dateOfBirth}"`);
-    }
-
-    // Status
-    if (mondayData.status) {
-      updates.push(`"color_mktqc2dt": {"label": "${mondayData.status}"}`);
-    }
-
-    if (updates.length === 0) {
-      console.log('No Idenfy updates to make');
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ 
-          success: true, 
-          message: 'No updates needed',
-          itemId: itemId
-        })
-      };
-    }
-
-    // Build update mutation
-    const updateQuery = `
-      mutation {
-        change_multiple_column_values(
-          board_id: ${BOARD_ID},
-          item_id: ${itemId},
-          column_values: "{${updates.join(', ')}}"
-        ) {
-          id
-        }
-      }
-    `;
-
-    console.log('Sending Idenfy update to Monday.com');
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: updateQuery })
-    });
-
-    const result = await response.json();
-    
-    if (result.errors) {
-      console.error('Monday.com update errors:', result.errors);
-      throw new Error(result.errors[0].message);
-    }
-
-    console.log('Idenfy data updated successfully in Monday.com');
-    
-    // Upload document files if available
-    if (mondayData.documentImages) {
-      await uploadDocumentFiles(itemId, mondayData.documentImages);
-    }
-
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: true, 
-        message: 'Idenfy results saved successfully',
-        itemId: itemId
-      })
-    };
-
-  } catch (error) {
-    console.error('Update driver with Idenfy data error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// NEW: Upload document files from Idenfy to Monday.com
-async function uploadDocumentFiles(itemId, documentImages) {
-  try {
-    console.log('Uploading document files to Monday.com for item:', itemId);
-
-    const fileUploads = [];
-
-    // Map document types to Monday.com file columns
-    if (documentImages.licenseFront) {
-      fileUploads.push({ url: documentImages.licenseFront, columnId: 'file_mktrwq0c', name: 'License Front' });
-    }
-    if (documentImages.licenseBack) {
-      fileUploads.push({ url: documentImages.licenseBack, columnId: 'file_mktrfp1c', name: 'License Back' });
-    }
-    if (documentImages.passport) {
-      fileUploads.push({ url: documentImages.passport, columnId: 'file_mktr2am4', name: 'Passport' });
-    }
-    if (documentImages.poa1) {
-      fileUploads.push({ url: documentImages.poa1, columnId: 'file_mktrftkh', name: 'POA Document 1' });
-    }
-    if (documentImages.poa2) {
-      fileUploads.push({ url: documentImages.poa2, columnId: 'file_mktrvagt', name: 'POA Document 2' });
-    }
-
-    console.log(`Uploading ${fileUploads.length} document files`);
-
-    for (const fileUpload of fileUploads) {
-      try {
-        await uploadFileToColumn(itemId, fileUpload.columnId, fileUpload.url, fileUpload.name);
-        console.log(`✅ Uploaded ${fileUpload.name}`);
-      } catch (uploadError) {
-        console.error(`❌ Failed to upload ${fileUpload.name}:`, uploadError.message);
-        // Continue with other uploads even if one fails
-      }
-    }
-
-    console.log('Document file uploads completed');
-
-  } catch (error) {
-    console.error('Error uploading document files:', error);
-    // Don't fail the whole process if file uploads fail
-  }
-}
-
-// Upload file to specific Monday.com column
-async function uploadFileToColumn(itemId, columnId, fileUrl, fileName) {
-  try {
-    // For now, we'll store the file URL as a text reference
-    // Monday.com file uploads require multipart/form-data which is complex in this context
-    // This could be enhanced to actually download and upload files
-    
-    console.log(`File reference for ${fileName}: ${fileUrl}`);
-    // Implementation would depend on Monday.com file upload API requirements
-    
-  } catch (error) {
-    console.error('Upload file to column error:', error);
-    throw error;
-  }
-}
-
-// NEW: Save DVLA check results to Monday.com
-async function saveDvlaResults(email, jobId, dvlaData) {
-  try {
-    console.log('Saving DVLA results to Monday.com for:', email);
-
-    // Find existing driver item
-    const driver = await findDriverByEmail(email);
-    if (!driver) {
-      throw new Error('Driver not found - must verify documents first');
-    }
-
-    // Update driver with DVLA data
-    const updates = [];
-
-    // Insurance decision status
-    if (dvlaData.insuranceDecision) {
-      const decision = dvlaData.insuranceDecision;
-      if (decision.approved) {
-        updates.push(`"color_mktqc2dt": {"label": "Done"}`);
-      } else if (decision.manualReview) {
-        updates.push(`"color_mktqc2dt": {"label": "Working on it"}`);
-      } else {
-        updates.push(`"color_mktqc2dt": {"label": "Stuck"}`);
-      }
-    }
-
-    // DVLA check date (for tracking freshness)
-    if (dvlaData.dateGenerated) {
-      // We could add a custom column for DVLA check date if needed
-      console.log('DVLA check date:', dvlaData.dateGenerated);
-    }
-
-    // License validation (cross-check with Idenfy)
-    if (dvlaData.licenseNumber && dvlaData.licenseEnding) {
-      console.log('License validation data available for anti-fraud check');
-      // Could add validation status to Monday.com
-    }
-
-    if (updates.length === 0) {
-      console.log('No DVLA updates to make');
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ 
-          success: true, 
-          message: 'DVLA data processed, no updates needed',
-          itemId: driver.id
-        })
-      };
-    }
-
-    // Build update mutation
-    const updateQuery = `
-      mutation {
-        change_multiple_column_values(
-          board_id: ${BOARD_ID},
-          item_id: ${driver.id},
-          column_values: "{${updates.join(', ')}}"
-        ) {
-          id
-        }
-      }
-    `;
-
-    console.log('Sending DVLA update to Monday.com');
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: updateQuery })
-    });
-
-    const result = await response.json();
-    
-    if (result.errors) {
-      console.error('Monday.com DVLA update errors:', result.errors);
-      throw new Error(result.errors[0].message);
-    }
-
-    console.log('DVLA results updated successfully in Monday.com');
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: true, 
-        message: 'DVLA results saved successfully',
-        itemId: driver.id,
-        insuranceDecision: dvlaData.insuranceDecision
-      })
-    };
-
-  } catch (error) {
-    console.error('Save DVLA results error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// Upload signature file to Monday.com
-async function uploadSignature(email, signatureData) {
-  try {
-    console.log('Uploading signature for:', email);
-
-    const driver = await findDriverByEmail(email);
-    if (!driver) {
-      throw new Error('Driver not found');
-    }
-
-    // Create a small test file for signature upload
-    const testSignature = signatureData || 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-    
-    // For now, just update status to indicate signature received
-    const updateQuery = `
-      mutation {
-        change_column_value(
-          board_id: ${BOARD_ID},
-          item_id: ${driver.id},
-          column_id: "color_mktqc2dt",
-          value: "{\\"label\\": \\"Done\\"}"
-        ) {
-          id
-        }
-      }
-    `;
-
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query: updateQuery })
-    });
-
-    const result = await response.json();
-    
-    if (result.errors) {
-      console.error('Monday.com signature update errors:', result.errors);
-      throw new Error(result.errors[0].message);
-    }
-
-    console.log('Signature upload completed successfully');
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: true, 
-        message: 'Signature uploaded successfully',
-        itemId: driver.id
-      })
-    };
-
-  } catch (error) {
-    console.error('Upload signature error:', error);
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      })
-    };
-  }
-}
-
-// Find driver by email (only from new verification system)
-async function findDriverByEmail(email) {
-  try {
-    console.log('Searching for driver by email in new system:', email);
-    
     const query = `
-      query {
-        items_page_by_column_values(
-          board_id: ${BOARD_ID},
-          columns: [
-            {column_id: "email", column_values: ["${email}"]},
-            {column_id: "color_mktrywv1", column_values: ["New System"]}
-          ],
-          limit: 1
-        ) {
-          items {
-            id
-            name
-            column_values {
-              column {
+      mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+        create_item (board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
+          id
+          name
+        }
+      }
+    `;
+
+    // Build column values for Board A (24 columns)
+    const columnValues = buildBoardAColumnValues(driverData);
+    
+    const variables = {
+      boardId: BOARD_A_ID,
+      itemName: `Driver Verification - ${driverData.email}`,
+      columnValues: JSON.stringify(columnValues)
+    };
+
+    const response = await callMondayAPI(query, variables);
+    
+    if (response.errors) {
+      throw new Error(`Monday.com API error: ${JSON.stringify(response.errors)}`);
+    }
+
+    const driverId = response.data.create_item.id;
+    console.log('Driver created in Board A:', driverId);
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        driverId: driverId,
+        boardA: true,
+        message: 'Driver created in Board A (Database)'
+      })
+    };
+
+  } catch (error) {
+    console.error('Create driver Board A error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to create driver in Board A',
+        details: error.message 
+      })
+    };
+  }
+}
+
+async function updateDriverInBoardA(updateData) {
+  console.log('Updating driver in Board A:', updateData.email || updateData.driverId);
+  
+  try {
+    let driverId = updateData.driverId;
+    
+    // If no driverId provided, find by email
+    if (!driverId && updateData.email) {
+      const findResult = await findDriverInBoardA(updateData.email);
+      if (findResult.statusCode !== 200) {
+        throw new Error('Driver not found in Board A');
+      }
+      const findData = JSON.parse(findResult.body);
+      driverId = findData.driverId;
+    }
+
+    if (!driverId) {
+      throw new Error('Driver ID required for update');
+    }
+
+    const query = `
+      mutation ($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
+        change_multiple_column_values (board_id: $boardId, item_id: $itemId, column_values: $columnValues) {
+          id
+          name
+        }
+      }
+    `;
+
+    // Build column values for update
+    const columnValues = buildBoardAColumnValues(updateData);
+    
+    const variables = {
+      boardId: BOARD_A_ID,
+      itemId: driverId,
+      columnValues: JSON.stringify(columnValues)
+    };
+
+    const response = await callMondayAPI(query, variables);
+    
+    if (response.errors) {
+      throw new Error(`Monday.com API error: ${JSON.stringify(response.errors)}`);
+    }
+
+    console.log('Driver updated in Board A:', driverId);
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        driverId: driverId,
+        message: 'Driver updated in Board A'
+      })
+    };
+
+  } catch (error) {
+    console.error('Update driver Board A error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to update driver in Board A',
+        details: error.message 
+      })
+    };
+  }
+}
+
+async function findDriverInBoardA(email) {
+  console.log('Finding driver in Board A:', email);
+  
+  try {
+    const query = `
+      query ($boardIds: [ID!]!) {
+        boards (ids: $boardIds) {
+          items_page (limit: 50) {
+            items {
+              id
+              name
+              column_values {
                 id
-              }
-              ... on StatusValue {
                 text
-              }
-              ... on TextValue {
-                text
-              }
-              ... on EmailValue {
-                email
-                text
-              }
-              ... on DateValue {
-                date
+                value
               }
             }
           }
@@ -775,141 +237,775 @@ async function findDriverByEmail(email) {
       }
     `;
 
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query })
-    });
+    const variables = {
+      boardIds: [BOARD_A_ID]
+    };
 
-    const result = await response.json();
+    const response = await callMondayAPI(query, variables);
     
-    if (result.errors) {
-      console.error('Monday.com search errors:', result.errors);
-      return null;
+    if (response.errors) {
+      throw new Error(`Monday.com API error: ${JSON.stringify(response.errors)}`);
     }
 
-    const items = result.data?.items_page_by_column_values?.items || [];
+    const items = response.data.boards[0].items_page.items;
     
-    if (items.length === 0) {
-      console.log('No driver found with new system verification');
-      return null;
+    // Find driver by email
+    for (const item of items) {
+      const emailColumn = item.column_values.find(col => col.id === 'email_mktrgzj');
+      if (emailColumn && emailColumn.text === email) {
+        // Parse all driver data
+        const driverData = parseBoardADriverData(item);
+        
+        console.log('Driver found in Board A:', item.id);
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            found: true,
+            driverId: item.id,
+            boardA: true,
+            driverData: driverData
+          })
+        };
+      }
     }
 
-    const driver = parseDriverData(items[0]);
-    console.log('Found driver from new system:', driver.email);
-    return driver;
+    // Driver not found
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        found: false,
+        message: 'Driver not found in Board A'
+      })
+    };
 
   } catch (error) {
-    console.error('Find driver by email error:', error);
-    return null;
+    console.error('Find driver Board A error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to find driver in Board A',
+        details: error.message 
+      })
+    };
   }
 }
 
-// Parse driver data from Monday.com response
-function parseDriverData(item) {
-  const driver = {
-    id: item.id,
-    name: item.name,
-    email: null,
-    jobNumber: null,
-    status: null,
-    licenseNumber: null,
-    licenseExpiryDate: null,
-    poa1ValidDate: null,
-    poa2ValidDate: null,
-    updatedAt: new Date().toISOString()
-  };
+// ========================================
+// BOARD B FUNCTIONS (Driver Assignments)
+// ========================================
 
-  // Parse column values
-  item.column_values.forEach(col => {
-    const columnId = col.column.id;
-    
-    switch (columnId) {
-      case 'email':
-        driver.email = col.email || col.text;
-        break;
-      case 'text86':
-        driver.jobNumber = col.text;
-        break;
-      case 'color_mktqc2dt':
-        driver.status = col.text;
-        break;
-      case 'text6':
-        driver.licenseNumber = col.text;
-        break;
-      case 'driver_licence_valid_to':
-        driver.licenseExpiryDate = col.date;
-        break;
-      case 'date8':
-        driver.poa1ValidDate = col.date;
-        break;
-      case 'date32':
-        driver.poa2ValidDate = col.date;
-        break;
-    }
-  });
-
-  return driver;
-}
-
-// Test Monday.com connection
-async function testMondayConnection() {
+async function copyBoardAtoB(copyData) {
+  console.log('Copying Board A to Board B:', copyData.email || copyData.driverIdA);
+  
   try {
-    console.log('Testing Monday.com connection');
+    let boardAData;
+    
+    // Get Board A data (either by ID or email)
+    if (copyData.driverIdA) {
+      // Get by Board A ID directly
+      const query = `
+        query ($itemIds: [ID!]!) {
+          items (ids: $itemIds) {
+            id
+            name
+            column_values {
+              id
+              text
+              value
+            }
+          }
+        }
+      `;
+      
+      const response = await callMondayAPI(query, { itemIds: [copyData.driverIdA] });
+      if (response.errors || !response.data.items[0]) {
+        throw new Error('Board A driver not found');
+      }
+      boardAData = parseBoardADriverData(response.data.items[0]);
+    } else if (copyData.email) {
+      // Find by email first
+      const findResult = await findDriverInBoardA(copyData.email);
+      if (findResult.statusCode !== 200) {
+        throw new Error('Driver not found in Board A');
+      }
+      const findData = JSON.parse(findResult.body);
+      boardAData = findData.driverData;
+    } else {
+      throw new Error('Either driverIdA or email required for copy');
+    }
 
-    const query = `
-      query {
-        boards(ids: [${BOARD_ID}]) {
+    // Create item in Board B with mapped data
+    const createQuery = `
+      mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+        create_item (board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
           id
           name
-          items_count
         }
       }
     `;
 
-    const response = await fetch(MONDAY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': process.env.MONDAY_API_TOKEN
-      },
-      body: JSON.stringify({ query })
-    });
-
-    const result = await response.json();
+    // Map Board A → Board B (14 essential fields)
+    const boardBColumnValues = mapBoardAtoBoardB(boardAData, copyData);
     
-    if (result.errors) {
-      throw new Error(result.errors[0].message);
+    const createVariables = {
+      boardId: BOARD_B_ID,
+      itemName: boardAData.driverName || `Driver - ${boardAData.email}`,
+      columnValues: JSON.stringify(boardBColumnValues)
+    };
+
+    const createResponse = await callMondayAPI(createQuery, createVariables);
+    
+    if (createResponse.errors) {
+      throw new Error(`Monday.com API error: ${JSON.stringify(createResponse.errors)}`);
     }
 
-    const board = result.data.boards[0];
-    
+    const driverIdB = createResponse.data.create_item.id;
+    console.log('Driver copied to Board B:', driverIdB);
+
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        message: 'Monday.com connection successful',
-        board: {
-          id: board.id,
-          name: board.name,
-          itemCount: board.items_count
-        }
+        driverIdA: boardAData.driverId,
+        driverIdB: driverIdB,
+        message: 'Driver copied from Board A to Board B',
+        boardBId: driverIdB
       })
     };
 
   } catch (error) {
-    console.error('Monday.com connection test error:', error);
+    console.error('Copy A to B error:', error);
     return {
       statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({
-        success: false,
-        error: error.message
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to copy driver from Board A to Board B',
+        details: error.message 
       })
     };
   }
+}
+
+async function findDriverInBoardB(email) {
+  console.log('Finding driver in Board B:', email);
+  
+  try {
+    const query = `
+      query ($boardIds: [ID!]!) {
+        boards (ids: $boardIds) {
+          items_page (limit: 50) {
+            items {
+              id
+              name
+              column_values {
+                id
+                text
+                value
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      boardIds: [BOARD_B_ID]
+    };
+
+    const response = await callMondayAPI(query, variables);
+    
+    if (response.errors) {
+      throw new Error(`Monday.com API error: ${JSON.stringify(response.errors)}`);
+    }
+
+    const items = response.data.boards[0].items_page.items;
+    
+    // Find driver by email
+    for (const item of items) {
+      const emailColumn = item.column_values.find(col => col.id === 'email');
+      if (emailColumn && emailColumn.text === email) {
+        
+        console.log('Driver found in Board B:', item.id);
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            found: true,
+            driverId: item.id,
+            boardB: true,
+            driverData: { email: email, name: item.name }
+          })
+        };
+      }
+    }
+
+    // Driver not found
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        found: false,
+        message: 'Driver not found in Board B'
+      })
+    };
+
+  } catch (error) {
+    console.error('Find driver Board B error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to find driver in Board B',
+        details: error.message 
+      })
+    };
+  }
+}
+
+// ========================================
+// FILE UPLOAD FUNCTIONS
+// ========================================
+
+async function uploadFileToDriverBoardA(uploadData) {
+  console.log('Uploading file to Board A:', uploadData.columnId, uploadData.fileName);
+  
+  try {
+    const { driverId, columnId, fileData, fileName, contentType } = uploadData;
+    
+    if (!driverId || !columnId || !fileData) {
+      throw new Error('driverId, columnId, and fileData required');
+    }
+
+    // Convert base64 to buffer
+    const fileBuffer = Buffer.from(fileData, 'base64');
+    
+    // Prepare GraphQL mutation
+    const mutation = `
+      mutation ($file: File!, $itemId: ID!, $columnId: String!) {
+        add_file_to_column (file: $file, item_id: $itemId, column_id: $columnId) {
+          id
+        }
+      }
+    `;
+
+    // Create FormData with FIXED mapping (Session 24 breakthrough!)
+    const formData = new FormData();
+    formData.append('query', mutation);
+    formData.append('variables', JSON.stringify({ 
+      file: null, 
+      itemId: driverId, 
+      columnId: columnId 
+    }));
+    formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // ← CRITICAL FIX
+    formData.append('0', fileBuffer, { 
+      filename: fileName || 'file.png',
+      contentType: contentType || 'image/png'
+    });
+
+    // Upload to Monday.com
+    const response = await fetch(MONDAY_FILE_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
+        ...formData.getHeaders()
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`File upload failed: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+
+    const fileId = result.data.add_file_to_column.id;
+    console.log('File uploaded successfully to Board A:', fileId);
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        fileId: fileId,
+        driverId: driverId,
+        columnId: columnId,
+        message: 'File uploaded to Board A'
+      })
+    };
+
+  } catch (error) {
+    console.error('File upload Board A error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to upload file to Board A',
+        details: error.message 
+      })
+    };
+  }
+}
+
+// ========================================
+// DATA MAPPING FUNCTIONS
+// ========================================
+
+function buildBoardAColumnValues(driverData) {
+  const columns = {};
+  
+  // Identity & Contact
+  if (driverData.email) {
+    columns['email_mktrgzj'] = { email: driverData.email, text: driverData.email };
+  }
+  if (driverData.phone) {
+    columns['text_mktrfqe2'] = driverData.phone;
+  }
+  if (driverData.dateOfBirth) {
+    columns['date_mktr2x01'] = { date: driverData.dateOfBirth };
+  }
+  if (driverData.nationality) {
+    columns['text_mktrdh72'] = driverData.nationality;
+  }
+
+  // License Information
+  if (driverData.licenseNumber) {
+    columns['text_mktrrv38'] = driverData.licenseNumber;
+  }
+  if (driverData.licenseIssuedBy) {
+    columns['text_mktrz69'] = driverData.licenseIssuedBy;
+  }
+  if (driverData.datePassedTest) {
+    columns['date_mktr93jq'] = { date: driverData.datePassedTest };
+  }
+  if (driverData.licenseValidFrom) {
+    columns['date_mktrmdx5'] = { date: driverData.licenseValidFrom };
+  }
+  if (driverData.licenseValidTo) {
+    columns['date_mktrwk94'] = { date: driverData.licenseValidTo };
+  }
+  if (driverData.licenseEnding) {
+    columns['text_mktr8kvs'] = driverData.licenseEnding;
+  }
+
+  // Addresses
+  if (driverData.homeAddress) {
+    columns['long_text_mktr2jhb'] = driverData.homeAddress;
+  }
+  if (driverData.licenseAddress) {
+    columns['long_text_mktrs5a0'] = driverData.licenseAddress;
+  }
+
+  // Document Validity Dates
+  if (driverData.poa1ValidUntil) {
+    columns['date_mktr1keg'] = { date: driverData.poa1ValidUntil };
+  }
+  if (driverData.poa2ValidUntil) {
+    columns['date_mktra1a6'] = { date: driverData.poa2ValidUntil };
+  }
+  if (driverData.dvlaCheckDate) {
+    columns['date_mktrmjfr'] = { date: driverData.dvlaCheckDate };
+  }
+
+  // Insurance Questions (Status columns with Yes/No)
+  if (driverData.hasDisability !== undefined) {
+    columns['status'] = { label: driverData.hasDisability === true ? 'Yes' : 'No' };
+  }
+  if (driverData.hasConvictions !== undefined) {
+    columns['color_mktr4w0'] = { label: driverData.hasConvictions === true ? 'Yes' : 'No' };
+  }
+  if (driverData.hasProsecution !== undefined) {
+    columns['color_mktrbt3x'] = { label: driverData.hasProsecution === true ? 'Yes' : 'No' };
+  }
+  if (driverData.hasAccidents !== undefined) {
+    columns['color_mktraeas'] = { label: driverData.hasAccidents === true ? 'Yes' : 'No' };
+  }
+  if (driverData.hasInsuranceIssues !== undefined) {
+    columns['color_mktrpe6q'] = { label: driverData.hasInsuranceIssues === true ? 'Yes' : 'No' };
+  }
+  if (driverData.hasDrivingBan !== undefined) {
+    columns['color_mktr2t8a'] = { label: driverData.hasDrivingBan === true ? 'Yes' : 'No' };
+  }
+  if (driverData.additionalDetails) {
+    columns['long_text_mktr1a66'] = driverData.additionalDetails;
+  }
+
+  // Overall Status
+  if (driverData.overallStatus) {
+    columns['color_mktrwatg'] = { label: driverData.overallStatus };
+  }
+
+  // Update last modified date
+  columns['date_mktrk8kv'] = { date: new Date().toISOString().split('T')[0] };
+
+  return columns;
+}
+
+function mapBoardAtoBoardB(boardAData, copyData) {
+  const columns = {};
+  
+  // Map Board A → Board B (14 essential fields)
+  // text_mktry2je → text8 (Driver Name)
+  if (boardAData.driverName) {
+    columns['text8'] = boardAData.driverName;
+  }
+  
+  // email_mktrgzj → email (Email Address)
+  if (boardAData.email) {
+    columns['email'] = { email: boardAData.email, text: boardAData.email };
+  }
+  
+  // text_mktrfqe2 → text9__1 (Phone Number)
+  if (boardAData.phone) {
+    columns['text9__1'] = boardAData.phone;
+  }
+  
+  // date_mktr2x01 → date45 (Date of Birth)
+  if (boardAData.dateOfBirth) {
+    columns['date45'] = { date: boardAData.dateOfBirth };
+  }
+  
+  // text_mktrdh72 → text_mktqjbpm (Nationality)
+  if (boardAData.nationality) {
+    columns['text_mktqjbpm'] = boardAData.nationality;
+  }
+  
+  // text_mktrrv38 → text6 (License Number)
+  if (boardAData.licenseNumber) {
+    columns['text6'] = boardAData.licenseNumber;
+  }
+  
+  // text_mktrz69 → text_mktqwkqn (License Issued By)
+  if (boardAData.licenseIssuedBy) {
+    columns['text_mktqwkqn'] = boardAData.licenseIssuedBy;
+  }
+  
+  // date_mktrmdx5 → date_mktqphhq (License Valid From)
+  if (boardAData.licenseValidFrom) {
+    columns['date_mktqphhq'] = { date: boardAData.licenseValidFrom };
+  }
+  
+  // date_mktrwk94 → driver_licence_valid_to (License Valid To)
+  if (boardAData.licenseValidTo) {
+    columns['driver_licence_valid_to'] = { date: boardAData.licenseValidTo };
+  }
+  
+  // date_mktr93jq → date2 (Date Passed Test)
+  if (boardAData.datePassedTest) {
+    columns['date2'] = { date: boardAData.datePassedTest };
+  }
+  
+  // long_text_mktr2jhb → long_text6 (Home Address)
+  if (boardAData.homeAddress) {
+    columns['long_text6'] = boardAData.homeAddress;
+  }
+  
+  // long_text_mktrs5a0 → long_text8 (License Address)
+  if (boardAData.licenseAddress) {
+    columns['long_text8'] = boardAData.licenseAddress;
+  }
+  
+  // Signature File - Use mirror column lookup_mktr22y3
+  // Note: Mirror column will automatically show signature from Board A
+  
+  // date4 → current date (Created/Signature Date)
+  columns['date4'] = { date: new Date().toISOString().split('T')[0] };
+  
+  // Add job linking data if provided
+  if (copyData.jobId) {
+    columns['text86'] = copyData.jobId; // Job number (5-digit HireHop)
+  }
+
+  return columns;
+}
+
+function parseBoardADriverData(mondayItem) {
+  const data = {
+    driverId: mondayItem.id,
+    driverName: mondayItem.name
+  };
+  
+  // Parse all column values
+  mondayItem.column_values.forEach(col => {
+    switch (col.id) {
+      case 'email_mktrgzj':
+        data.email = col.text;
+        break;
+      case 'text_mktrfqe2':
+        data.phone = col.text;
+        break;
+      case 'date_mktr2x01':
+        data.dateOfBirth = col.text;
+        break;
+      case 'text_mktrdh72':
+        data.nationality = col.text;
+        break;
+      case 'text_mktrrv38':
+        data.licenseNumber = col.text;
+        break;
+      case 'text_mktrz69':
+        data.licenseIssuedBy = col.text;
+        break;
+      case 'date_mktr93jq':
+        data.datePassedTest = col.text;
+        break;
+      case 'date_mktrmdx5':
+        data.licenseValidFrom = col.text;
+        break;
+      case 'date_mktrwk94':
+        data.licenseValidTo = col.text;
+        break;
+      case 'text_mktr8kvs':
+        data.licenseEnding = col.text;
+        break;
+      case 'long_text_mktr2jhb':
+        data.homeAddress = col.text;
+        break;
+      case 'long_text_mktrs5a0':
+        data.licenseAddress = col.text;
+        break;
+      case 'date_mktr1keg':
+        data.poa1ValidUntil = col.text;
+        break;
+      case 'date_mktra1a6':
+        data.poa2ValidUntil = col.text;
+        break;
+      case 'date_mktrmjfr':
+        data.dvlaCheckDate = col.text;
+        break;
+      case 'color_mktrwatg':
+        data.overallStatus = col.text;
+        break;
+      // Insurance questions
+      case 'status':
+        data.hasDisability = col.text === 'Yes';
+        break;
+      case 'color_mktr4w0':
+        data.hasConvictions = col.text === 'Yes';
+        break;
+      case 'color_mktrbt3x':
+        data.hasProsecution = col.text === 'Yes';
+        break;
+      case 'color_mktraeas':
+        data.hasAccidents = col.text === 'Yes';
+        break;
+      case 'color_mktrpe6q':
+        data.hasInsuranceIssues = col.text === 'Yes';
+        break;
+      case 'color_mktr2t8a':
+        data.hasDrivingBan = col.text === 'Yes';
+        break;
+      case 'long_text_mktr1a66':
+        data.additionalDetails = col.text;
+        break;
+    }
+  });
+  
+  return data;
+}
+
+// ========================================
+// TESTING FUNCTIONS
+// ========================================
+
+async function testMondayConnection() {
+  console.log('Testing Monday.com connection...');
+  
+  try {
+    const query = `
+      query {
+        me {
+          name
+          email
+        }
+      }
+    `;
+
+    const response = await callMondayAPI(query, {});
+    
+    if (response.errors) {
+      throw new Error(`Monday.com API error: ${JSON.stringify(response.errors)}`);
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        connection: 'Working',
+        user: response.data.me,
+        message: 'Monday.com API connection successful'
+      })
+    };
+
+  } catch (error) {
+    console.error('Monday.com connection test failed:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Monday.com connection failed',
+        details: error.message 
+      })
+    };
+  }
+}
+
+async function testTwoBoardSystem(testEmail = 'test-session25@example.com') {
+  console.log('Testing two-board system with email:', testEmail);
+  
+  try {
+    const results = {
+      step1_createBoardA: null,
+      step2_findBoardA: null,
+      step3_copyAtoB: null,
+      step4_findBoardB: null,
+      step5_fileUpload: null
+    };
+
+    // Step 1: Create driver in Board A
+    console.log('Step 1: Creating driver in Board A...');
+    const createResult = await createDriverInBoardA({
+      email: testEmail,
+      phone: '+44 7123 456789',
+      nationality: 'British',
+      licenseNumber: 'TEST123456789AB',
+      overallStatus: 'Working on it'
+    });
+    results.step1_createBoardA = JSON.parse(createResult.body);
+    
+    if (!results.step1_createBoardA.success) {
+      throw new Error('Failed to create driver in Board A');
+    }
+    
+    const driverIdA = results.step1_createBoardA.driverId;
+
+    // Step 2: Find driver in Board A
+    console.log('Step 2: Finding driver in Board A...');
+    const findAResult = await findDriverInBoardA(testEmail);
+    results.step2_findBoardA = JSON.parse(findAResult.body);
+
+    // Step 3: Copy Board A to Board B
+    console.log('Step 3: Copying Board A to Board B...');
+    const copyResult = await copyBoardAtoB({
+      driverIdA: driverIdA,
+      jobId: '12345'
+    });
+    results.step3_copyAtoB = JSON.parse(copyResult.body);
+    
+    if (!results.step3_copyAtoB.success) {
+      throw new Error('Failed to copy Board A to Board B');
+    }
+
+    // Step 4: Find driver in Board B
+    console.log('Step 4: Finding driver in Board B...');
+    const findBResult = await findDriverInBoardB(testEmail);
+    results.step4_findBoardB = JSON.parse(findBResult.body);
+
+    // Step 5: Test file upload to Board A
+    console.log('Step 5: Testing file upload to Board A...');
+    const testFileData = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==', 'base64').toString('base64');
+    
+    const fileUploadResult = await uploadFileToDriverBoardA({
+      driverId: driverIdA,
+      columnId: 'file_mktrfanc', // Signature file column
+      fileData: testFileData,
+      fileName: 'test-signature.png',
+      contentType: 'image/png'
+    });
+    results.step5_fileUpload = JSON.parse(fileUploadResult.body);
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        testEmail: testEmail,
+        results: results,
+        summary: {
+          boardA_created: !!results.step1_createBoardA.success,
+          boardA_found: !!results.step2_findBoardA.found,
+          copy_successful: !!results.step3_copyAtoB.success,
+          boardB_found: !!results.step4_findBoardB.found,
+          file_uploaded: !!results.step5_fileUpload.success
+        },
+        message: 'Two-board system test completed'
+      })
+    };
+
+  } catch (error) {
+    console.error('Two-board system test failed:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Two-board system test failed',
+        details: error.message 
+      })
+    };
+  }
+}
+
+async function testFileUpload(testData) {
+  console.log('Testing file upload specifically...');
+  
+  try {
+    // Create a small test PNG (1x1 pixel)
+    const testFileData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+    
+    const uploadResult = await uploadFileToDriverBoardA({
+      driverId: testData.driverId || '1234567890', // Use provided or placeholder
+      columnId: testData.columnId || 'file_mktrfanc',
+      fileData: testFileData,
+      fileName: 'test-file.png',
+      contentType: 'image/png'
+    });
+
+    return uploadResult;
+
+  } catch (error) {
+    console.error('File upload test failed:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'File upload test failed',
+        details: error.message 
+      })
+    };
+  }
+}
+
+// ========================================
+// UTILITY FUNCTIONS
+// ========================================
+
+async function callMondayAPI(query, variables) {
+  const response = await fetch(MONDAY_API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Monday.com API request failed: ${response.status} - ${errorText}`);
+  }
+
+  return await response.json();
 }
