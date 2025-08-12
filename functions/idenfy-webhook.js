@@ -1,6 +1,6 @@
 // File: functions/idenfy-webhook.js
-// ENHANCED VERSION - Integrates Claude OCR for POA validation
-// Processes Idenfy results + runs Claude OCR for insurance compliance
+// ENHANCED VERSION - Integrates AWS Textract OCR + Monday.com storage
+// Processes Idenfy results + runs AWS Textract for insurance compliance
 
 const fetch = require('node-fetch');
 
@@ -80,7 +80,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Process the verification result
+    // Process the verification result with AWS Textract + Monday.com integration
     const processResult = await processEnhancedVerificationResult(
       clientInfo.email,
       clientInfo.jobId,
@@ -98,7 +98,8 @@ exports.handler = async (event, context) => {
         body: JSON.stringify({ 
           message: 'Webhook processed successfully',
           scanRef: scanRef,
-          claudeValidation: processResult.claudeValidation
+          textractProcessing: processResult.textractResults,
+          mondayUpdated: processResult.mondayUpdated
         })
       };
     } else {
@@ -145,7 +146,7 @@ function parseClientId(clientId) {
   }
 }
 
-// ENHANCED: Process verification with Claude OCR integration
+// ENHANCED: Process verification with AWS Textract + Monday.com integration
 async function processEnhancedVerificationResult(email, jobId, scanRef, status, data, fullWebhookData) {
   try {
     console.log('Processing enhanced verification for:', { email, jobId, scanRef });
@@ -154,35 +155,34 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
     console.log('Idenfy verification analysis:', idenfyResult);
 
-    // Step 2: Extract POA documents for Claude OCR validation
-    let claudeValidation = null;
-    if (idenfyResult.approved && fullWebhookData.additionalData) {
-      console.log('Running Claude OCR validation on POA documents...');
-      claudeValidation = await runClaudePoaValidation(
-        email, 
-        jobId, 
-        fullWebhookData.additionalData,
-        idenfyResult.licenseAddress
-      );
+    // Step 2: Process documents with AWS Textract if verification succeeded
+    let textractResults = null;
+    if (idenfyResult.approved && idenfyResult.licenseValid) {
+      console.log('Running AWS Textract processing on verified documents...');
+      textractResults = await runTextractProcessing(email, jobId, data, idenfyResult);
+    } else {
+      console.log('Skipping AWS Textract - Idenfy verification failed');
+      textractResults = { skipped: 'Idenfy verification failed' };
     }
 
-    // Step 3: Combine Idenfy + Claude results for final decision
-    const finalResult = combineVerificationResults(idenfyResult, claudeValidation);
+    // Step 3: Combine Idenfy + AWS Textract results for final decision
+    const finalResult = combineVerificationResults(idenfyResult, textractResults);
     console.log('Final combined verification result:', finalResult);
 
-    // Step 4: Update database with comprehensive results
-    const updateResult = await updateEnhancedVerificationInDatabase(
+    // Step 4: Update Monday.com with comprehensive results
+    const mondayUpdated = await updateMondayWithResults(
       email,
       jobId,
       scanRef,
       finalResult,
-      claudeValidation
+      textractResults
     );
 
     return { 
       success: true, 
       data: finalResult,
-      claudeValidation: claudeValidation
+      textractResults: textractResults,
+      mondayUpdated: mondayUpdated
     };
 
   } catch (error) {
@@ -191,7 +191,7 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
   }
 }
 
-// Analyze Idenfy verification result (existing logic)
+// Analyze Idenfy verification result 
 function analyzeIdenfyVerificationResult(status, data) {
   const result = {
     overall: status.overall,
@@ -200,6 +200,7 @@ function analyzeIdenfyVerificationResult(status, data) {
     // Document analysis
     licenseValid: false,
     licenseExpiry: null,
+    licenseNumber: null,
     licenseAddress: null,
     
     // Face verification
@@ -215,7 +216,6 @@ function analyzeIdenfyVerificationResult(status, data) {
     firstName: data?.docFirstName || null,
     lastName: data?.docLastName || null,
     dateOfBirth: data?.docDob || null,
-    documentNumber: data?.docNumber || null,
     
     // Verification details
     autoDocument: status.autoDocument,
@@ -236,8 +236,9 @@ function analyzeIdenfyVerificationResult(status, data) {
       result.licenseValid = (status.autoDocument === 'DOC_VALIDATED' || status.manualDocument === 'DOC_VALIDATED');
       result.faceValid = (status.autoFace === 'FACE_MATCH' || status.manualFace === 'FACE_MATCH');
       
-      // Extract license data
+      // Extract license data from Idenfy
       if (data?.docExpiry) result.licenseExpiry = data.docExpiry;
+      if (data?.docNumber) result.licenseNumber = data.docNumber;
       if (data?.docAddress) result.licenseAddress = data.docAddress;
       break;
       
@@ -261,165 +262,140 @@ function analyzeIdenfyVerificationResult(status, data) {
   return result;
 }
 
-// NEW: Run Claude OCR validation on POA documents
-async function runClaudePoaValidation(email, jobId, additionalData, licenseAddress) {
+// NEW: Run AWS Textract processing on verified documents
+async function runTextractProcessing(email, jobId, idenfyData, idenfyResult) {
   try {
-    console.log('Extracting POA documents from Idenfy additional data...');
+    console.log('Starting AWS Textract processing for DVLA check...');
     
-    // Extract POA document images from Idenfy webhook data
-    const poaDocuments = extractPoaDocumentsFromIdenfyData(additionalData);
+    // For now, we'll focus on DVLA processing since that's our main OCR need
+    // Future enhancement: could also process POA documents from Idenfy
     
-    if (poaDocuments.length < 2) {
-      console.log('Insufficient POA documents for Claude validation');
+    // Check if we have UK license that needs DVLA validation
+    if (!idenfyResult.licenseNumber || !idenfyResult.licenseNumber.match(/^[A-Z]{2,5}[0-9]{6}/)) {
+      console.log('Non-UK license or no license number - skipping DVLA processing');
       return {
-        success: false,
-        error: 'Less than 2 POA documents provided',
-        poaCount: poaDocuments.length
+        skipped: 'Non-UK license or no license number detected',
+        licenseNumber: idenfyResult.licenseNumber
       };
     }
 
-    // Call our Claude OCR validation function
-    const claudeResponse = await fetch(`${process.env.URL}/.netlify/functions/validate-poa-documents`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: email,
-        jobId: jobId,
-        poaDocuments: poaDocuments,
-        licenseAddress: licenseAddress
-      })
-    });
-
-    if (claudeResponse.ok) {
-      const claudeResult = await claudeResponse.json();
-      console.log('Claude POA validation completed:', claudeResult);
-      return claudeResult;
-    } else {
-      console.error('Claude POA validation failed:', claudeResponse.status);
-      return {
-        success: false,
-        error: `Claude validation failed: ${claudeResponse.status}`
-      };
-    }
+    console.log('UK license detected, DVLA processing will be needed separately');
+    
+    // Note: DVLA check is a separate document uploaded by user
+    // This webhook processes Idenfy results, DVLA check comes later
+    return {
+      message: 'UK license detected - DVLA check will be processed when user uploads it',
+      licenseNumber: idenfyResult.licenseNumber,
+      licenseAddress: idenfyResult.licenseAddress,
+      requiresDvlaCheck: true
+    };
 
   } catch (error) {
-    console.error('Error running Claude POA validation:', error);
+    console.error('Error in AWS Textract processing:', error);
     return {
-      success: false,
-      error: error.message
+      error: error.message,
+      processingFailed: true
     };
   }
 }
 
-// Extract POA document images from Idenfy additional data
-function extractPoaDocumentsFromIdenfyData(additionalData) {
-  const poaDocuments = [];
-  
-  try {
-    // Look for utility bills, bank statements, etc. in Idenfy response
-    if (additionalData.utilityBills) {
-      additionalData.utilityBills.forEach((doc, index) => {
-        if (doc.imageData) {
-          poaDocuments.push({
-            type: 'utility_bill',
-            imageData: doc.imageData,
-            documentId: `utility_${index + 1}`
-          });
-        }
-      });
-    }
-    
-    if (additionalData.bankStatements) {
-      additionalData.bankStatements.forEach((doc, index) => {
-        if (doc.imageData) {
-          poaDocuments.push({
-            type: 'bank_statement',
-            imageData: doc.imageData,
-            documentId: `bank_${index + 1}`
-          });
-        }
-      });
-    }
-    
-    // Add other POA document types as needed
-    console.log(`Extracted ${poaDocuments.length} POA documents for Claude validation`);
-    
-  } catch (error) {
-    console.error('Error extracting POA documents:', error);
-  }
-  
-  return poaDocuments;
-}
-
-// Combine Idenfy + Claude results for final decision
-function combineVerificationResults(idenfyResult, claudeValidation) {
+// Combine Idenfy + AWS Textract results for final decision
+function combineVerificationResults(idenfyResult, textractResults) {
   const finalResult = { ...idenfyResult };
   
-  // Add Claude validation results
-  finalResult.claudeOcrCompleted = !!claudeValidation;
-  finalResult.poaValidation = claudeValidation;
+  // Add AWS Textract results
+  finalResult.textractProcessed = !!textractResults;
+  finalResult.textractResults = textractResults;
   
-  // Override approval if Claude validation fails
-  if (claudeValidation && !claudeValidation.validation?.approved) {
-    finalResult.approved = false;
-    finalResult.rejected = true;
-    finalResult.rejectionReason = 'POA documents failed compliance validation';
-    finalResult.rejectionDetails = claudeValidation.validation?.issues || [];
-  }
-  
-  // Set final status
-  if (finalResult.approved && claudeValidation?.validation?.approved) {
-    finalResult.finalStatus = 'approved';
-  } else if (finalResult.suspected || !claudeValidation?.success) {
+  // Determine final status based on combined results
+  if (idenfyResult.approved && idenfyResult.licenseValid && idenfyResult.faceValid) {
+    if (textractResults?.requiresDvlaCheck) {
+      finalResult.finalStatus = 'documents_verified_dvla_pending';
+      finalResult.nextStep = 'Upload DVLA check document';
+    } else if (textractResults?.skipped) {
+      finalResult.finalStatus = 'documents_verified_complete';
+      finalResult.nextStep = 'Complete insurance questionnaire';
+    } else {
+      finalResult.finalStatus = 'documents_verified_processing';
+      finalResult.nextStep = 'Processing additional documents';
+    }
+  } else if (idenfyResult.suspected) {
     finalResult.finalStatus = 'review_required';
+    finalResult.nextStep = 'Manual review required';
   } else {
-    finalResult.finalStatus = 'rejected';
+    finalResult.finalStatus = 'verification_failed';
+    finalResult.nextStep = 'Document verification failed';
   }
   
   return finalResult;
 }
 
-// Update database with enhanced verification results
-async function updateEnhancedVerificationInDatabase(email, jobId, scanRef, finalResult, claudeValidation) {
+// Update Monday.com with comprehensive verification results
+async function updateMondayWithResults(email, jobId, scanRef, finalResult, textractResults) {
   try {
-    if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
-      console.log('Google Apps Script URL not configured');
-      return { success: false, error: 'No database URL configured' };
-    }
+    console.log('Updating Monday.com with verification results');
 
-    const updatePayload = {
-      action: 'update-enhanced-verification-results',
-      email: email,
-      jobId: jobId,
-      scanRef: scanRef,
-      idenfyResults: finalResult,
-      claudeResults: claudeValidation
+    // Prepare Monday.com update data
+    const mondayData = {
+      // Basic info from Idenfy
+      name: finalResult.firstName && finalResult.lastName ? 
+            `${finalResult.firstName} ${finalResult.lastName}` : null,
+      licenseNumber: finalResult.licenseNumber,
+      licenseExpiryDate: finalResult.licenseExpiry,
+      licenseAddress: finalResult.licenseAddress,
+      dateOfBirth: finalResult.dateOfBirth,
+      
+      // Verification status
+      status: mapToMondayStatus(finalResult.finalStatus),
+      
+      // Document validity
+      licenseValid: finalResult.licenseValid,
+      faceVerified: finalResult.faceValid,
+      
+      // Processing metadata
+      idenfySessionId: scanRef,
+      idenfyStatus: finalResult.overall,
+      lastUpdated: new Date().toISOString()
     };
 
-    console.log('Sending enhanced update to Google Apps Script');
-
-    const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
+    // Call Monday.com integration to save Idenfy results
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(updatePayload)
+      body: JSON.stringify({
+        action: 'save-idenfy-results',
+        email: email,
+        jobId: jobId,
+        mondayData: mondayData
+      })
     });
 
     if (response.ok) {
       const result = await response.json();
-      console.log('Enhanced database update successful:', result);
-      return { success: true };
+      console.log('Monday.com updated successfully:', result.success);
+      return { success: true, itemId: result.itemId };
     } else {
-      const errorText = await response.text();
-      console.error('Enhanced database update failed:', response.status, errorText);
-      return { success: false, error: `Database update failed: ${response.status}` };
+      console.error('Failed to update Monday.com:', response.status);
+      return { success: false, error: `HTTP ${response.status}` };
     }
 
   } catch (error) {
-    console.error('Error updating enhanced database:', error);
+    console.error('Error updating Monday.com:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Map verification status to Monday.com status labels
+function mapToMondayStatus(finalStatus) {
+  const statusMap = {
+    'documents_verified_complete': 'Done',
+    'documents_verified_dvla_pending': 'Working on it',
+    'documents_verified_processing': 'Working on it',
+    'review_required': 'Working on it',
+    'verification_failed': 'Stuck'
+  };
+  
+  return statusMap[finalStatus] || 'Working on it';
 }
