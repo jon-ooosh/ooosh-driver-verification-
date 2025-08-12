@@ -423,16 +423,15 @@ async function testAllFileUploads(itemId, boardId) {
   return fileResults;
 }
 
-// Upload a test file to a specific column - FIXED WITH WORKING SESSION 22 METHOD
+// Upload a test file to a specific column - FIXED FormData mapping
 async function uploadTestFile(itemId, boardId, columnId, fileName) {
   try {
-    // Use the EXACT same approach that worked in Session 22
-    console.log(`📁 Uploading to ${fileName} using proven Session 22 method...`);
+    console.log(`📁 Uploading to ${fileName} with CORRECTED FormData mapping...`);
     
-    // Same 1x1 pixel PNG that worked before
+    // Same 1x1 pixel PNG
     const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
     
-    // EXACT mutation structure from Session 22
+    // Correct GraphQL mutation
     const mutation = `
       mutation($file: File!) {
         add_file_to_column(
@@ -445,22 +444,26 @@ async function uploadTestFile(itemId, boardId, columnId, fileName) {
       }
     `;
     
-    // Use the WORKING FormData approach from Session 22
     const FormData = require('form-data');
     const formData = new FormData();
     
-    // EXACT structure that worked before
+    // FIXED: The key issue is in how we map the file variable
     formData.append('query', mutation);
-    formData.append('variables', JSON.stringify({ file: null }));
     
-    // Convert base64 to buffer (Session 22 working method)
+    // CRITICAL FIX: Instead of { file: null }, we need to reference the uploaded file
+    const variables = { file: null };
+    const map = { "0": ["variables.file"] }; // This maps file "0" to variables.file
+    
+    formData.append('variables', JSON.stringify(variables));
+    formData.append('map', JSON.stringify(map)); // MISSING: This was the key piece!
+    
+    // Convert base64 to buffer
     const buffer = Buffer.from(testImageBase64, 'base64');
     formData.append('0', buffer, {
       filename: `test_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
       contentType: 'image/png'
     });
     
-    // EXACT API call that worked in Session 22
     const response = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
       headers: {
@@ -471,8 +474,9 @@ async function uploadTestFile(itemId, boardId, columnId, fileName) {
     });
 
     if (response.ok) {
-      console.log(`✅ Successfully uploaded test file to ${fileName} (Session 22 method)`);
-      return { success: true, message: `File uploaded to ${fileName}` };
+      const result = await response.json();
+      console.log(`✅ File upload successful to ${fileName}:`, result);
+      return { success: true, message: `File uploaded to ${fileName}`, result };
     } else {
       const errorText = await response.text();
       console.error(`❌ File upload failed for ${fileName}:`, errorText);
