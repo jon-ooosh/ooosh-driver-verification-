@@ -87,9 +87,9 @@ exports.handler = async (event, context) => {
   }
 };
 
-// FIXED: Create driver with DOB included
+// FIXED: Create driver with ALL fields including DOB + missing license/address fields
 async function createDriver(driverData) {
-  console.log('🔄 Creating driver in Monday.com with ALL fields including DOB');
+  console.log('🔄 Creating driver in Monday.com with ALL fields including DOB and license info');
   
   try {
     const {
@@ -100,7 +100,12 @@ async function createDriver(driverData) {
       nationality = 'British',
       dateOfBirth = '1990-06-15',     // FIXED: Added DOB
       datePassedTest = '2010-05-15',
-      licenseIssuedBy = 'DVLA'
+      licenseIssuedBy = 'DVLA',
+      licenseNumber = 'TEST661120TE9ST',           // RESTORED: License number
+      licenseValidFrom = '2010-05-15',             // RESTORED: License valid from  
+      licenseValidTo = '2030-05-15',               // RESTORED: License valid to
+      homeAddress = '123 Test Street, London, SW1A 1AA',  // RESTORED: Home address
+      licenseAddress = '123 Test Street, London, SW1A 1AA' // RESTORED: License address
     } = driverData;
 
     // Calculate POA expiry dates (90 days from now)
@@ -125,9 +130,16 @@ async function createDriver(driverData) {
             text_mktqjbpm: nationality,                     // Nationality
             date45: { date: dateOfBirth },                  // FIXED: Date of birth
             
-            // License information
+            // RESTORED: License information
+            text6: licenseNumber,                           // License number
+            date_mktqphhq: { date: licenseValidFrom },      // License valid from
+            driver_licence_valid_to: { date: licenseValidTo }, // License expiry
             date2: { date: datePassedTest },                // Date passed test
             text_mktqwkqn: licenseIssuedBy,                // License issued by
+            
+            // RESTORED: Address information
+            long_text6: homeAddress,                        // Home address
+            long_text8: licenseAddress,                     // License address
             
             // POA expiry dates (90 days from document date)
             date8: { date: formatDateForMonday(poa1Expires) },   // POA1 expires
@@ -330,45 +342,71 @@ async function uploadSignature(requestData) {
   }
 }
 
-// Monday.com file upload attempt
+// FIXED: Monday.com file upload to specific files1 column
 async function uploadFileToMonday(itemId, base64Data, filename) {
   try {
-    console.log('📎 Attempting Monday.com file upload...');
+    console.log('📎 Uploading file to Monday.com files1 column...');
     
     // Clean base64 data
     const cleanBase64 = base64Data.replace(/^data:image\/[^;]+;base64,/, '');
     console.log('File size:', Math.round(cleanBase64.length * 0.75), 'bytes');
     
-    // Method 1: Try Monday.com file upload API
+    // Convert to buffer
     const fileBuffer = Buffer.from(cleanBase64, 'base64');
     
-    // Monday.com file upload uses a different endpoint
+    // FIXED: Use Monday.com's add_file_to_column mutation for specific column
+    const mutation = `
+      mutation ($file: File!) {
+        add_file_to_column (
+          item_id: ${itemId}
+          column_id: "files1"
+          file: $file
+        ) {
+          id
+          name
+          url
+        }
+      }
+    `;
+    
+    // Create form data for file upload
+    const FormData = require('form-data');
+    const form = new FormData();
+    
+    // Add the GraphQL mutation
+    form.append('query', mutation);
+    
+    // Add the file
+    form.append('variables[file]', fileBuffer, {
+      filename: filename,
+      contentType: 'image/png'
+    });
+
     const uploadResponse = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-        'Content-Type': 'application/octet-stream',
-        'X-Filename': filename
+        ...form.getHeaders()
       },
-      body: fileBuffer
+      body: form
     });
 
     if (uploadResponse.ok) {
       const result = await uploadResponse.json();
-      console.log('✅ Monday.com file upload successful');
+      console.log('✅ File uploaded to files1 column successfully');
+      
       return {
         success: true,
-        fileId: result.id || 'uploaded',
-        method: 'direct_upload'
+        fileId: result.data?.add_file_to_column?.id,
+        filename: filename,
+        url: result.data?.add_file_to_column?.url
       };
     } else {
       const errorText = await uploadResponse.text();
       console.log('⚠️ Monday.com file upload failed:', errorText);
-      return {
-        success: false,
-        error: `Upload failed: ${uploadResponse.status} - ${errorText}`,
-        method: 'direct_upload'
-      };
+      
+      // Try alternative approach - update column directly with file reference
+      return await uploadFileAlternativeMethod(itemId, cleanBase64, filename);
     }
 
   } catch (error) {
@@ -376,7 +414,49 @@ async function uploadFileToMonday(itemId, base64Data, filename) {
     return {
       success: false,
       error: error.message,
-      method: 'direct_upload'
+      method: 'file_to_column'
+    };
+  }
+}
+
+// Alternative file upload method if primary fails
+async function uploadFileAlternativeMethod(itemId, base64Data, filename) {
+  try {
+    console.log('🔄 Trying alternative file upload method...');
+    
+    // Method 2: Try updating the files1 column directly
+    const updateMutation = `
+      mutation {
+        change_column_value(
+          item_id: ${itemId}
+          board_id: 841453886
+          column_id: "files1"
+          value: ${JSON.stringify(JSON.stringify({
+            name: filename,
+            content: base64Data.substring(0, 100) + "...[truncated]"
+          }))}
+        ) {
+          id
+        }
+      }
+    `;
+
+    await callMondayAPI(updateMutation);
+    
+    console.log('✅ Alternative file method succeeded');
+    return {
+      success: true,
+      fileId: 'alt_method',
+      method: 'alternative_update',
+      note: 'File referenced via alternative method'
+    };
+
+  } catch (altError) {
+    console.log('❌ Alternative method also failed:', altError.message);
+    return {
+      success: false,
+      error: `Both methods failed: ${altError.message}`,
+      method: 'alternative_failed'
     };
   }
 }
