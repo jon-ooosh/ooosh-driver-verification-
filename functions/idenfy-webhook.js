@@ -155,7 +155,14 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
     console.log('Idenfy verification analysis:', idenfyResult);
 
-    // Step 2: Process documents with AWS Textract if verification succeeded
+    // Step 2: Extract document images for Monday.com storage
+    let documentImages = null;
+    if (idenfyResult.approved && fullWebhookData.fileUrls) {
+      console.log('Extracting document images from Idenfy webhook...');
+      documentImages = extractDocumentImages(fullWebhookData.fileUrls);
+    }
+
+    // Step 3: Process documents with AWS Textract if verification succeeded
     let textractResults = null;
     if (idenfyResult.approved && idenfyResult.licenseValid) {
       console.log('Running AWS Textract processing on verified documents...');
@@ -165,24 +172,26 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
       textractResults = { skipped: 'Idenfy verification failed' };
     }
 
-    // Step 3: Combine Idenfy + AWS Textract results for final decision
+    // Step 4: Combine Idenfy + AWS Textract results for final decision
     const finalResult = combineVerificationResults(idenfyResult, textractResults);
     console.log('Final combined verification result:', finalResult);
 
-    // Step 4: Update Monday.com with comprehensive results
+    // Step 5: Update Monday.com with comprehensive results
     const mondayUpdated = await updateMondayWithResults(
       email,
       jobId,
       scanRef,
       finalResult,
-      textractResults
+      textractResults,
+      documentImages
     );
 
     return { 
       success: true, 
       data: finalResult,
       textractResults: textractResults,
-      mondayUpdated: mondayUpdated
+      mondayUpdated: mondayUpdated,
+      documentImages: documentImages
     };
 
   } catch (error) {
@@ -262,13 +271,43 @@ function analyzeIdenfyVerificationResult(status, data) {
   return result;
 }
 
-// NEW: Run AWS Textract processing on verified documents
+// Extract document images from Idenfy webhook
+function extractDocumentImages(fileUrls) {
+  try {
+    console.log('Extracting document images from Idenfy fileUrls');
+    
+    const images = {
+      licenseFront: null,
+      licenseBack: null,
+      passport: null,
+      poa1: null,
+      poa2: null,
+      selfie: null
+    };
+
+    // Map Idenfy file types to our structure
+    if (fileUrls.FRONT) images.licenseFront = fileUrls.FRONT;
+    if (fileUrls.BACK) images.licenseBack = fileUrls.BACK;
+    if (fileUrls.FACE) images.selfie = fileUrls.FACE;
+    if (fileUrls.PASSPORT) images.passport = fileUrls.PASSPORT;
+    
+    // POA documents (if included in Idenfy flow)
+    if (fileUrls.UTILITY) images.poa1 = fileUrls.UTILITY;
+    if (fileUrls.BANK_STATEMENT) images.poa2 = fileUrls.BANK_STATEMENT;
+
+    console.log('Extracted document images:', Object.keys(images).filter(key => images[key]));
+    return images;
+
+  } catch (error) {
+    console.error('Error extracting document images:', error);
+    return null;
+  }
+}
+
+// Run AWS Textract processing on verified documents
 async function runTextractProcessing(email, jobId, idenfyData, idenfyResult) {
   try {
     console.log('Starting AWS Textract processing for DVLA check...');
-    
-    // For now, we'll focus on DVLA processing since that's our main OCR need
-    // Future enhancement: could also process POA documents from Idenfy
     
     // Check if we have UK license that needs DVLA validation
     if (!idenfyResult.licenseNumber || !idenfyResult.licenseNumber.match(/^[A-Z]{2,5}[0-9]{6}/)) {
@@ -331,7 +370,7 @@ function combineVerificationResults(idenfyResult, textractResults) {
 }
 
 // Update Monday.com with comprehensive verification results
-async function updateMondayWithResults(email, jobId, scanRef, finalResult, textractResults) {
+async function updateMondayWithResults(email, jobId, scanRef, finalResult, textractResults, documentImages) {
   try {
     console.log('Updating Monday.com with verification results');
 
@@ -355,7 +394,10 @@ async function updateMondayWithResults(email, jobId, scanRef, finalResult, textr
       // Processing metadata
       idenfySessionId: scanRef,
       idenfyStatus: finalResult.overall,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      
+      // Document images
+      documentImages: documentImages
     };
 
     // Call Monday.com integration to save Idenfy results
