@@ -12,7 +12,46 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Content-Type': 'application/json'
-};
+}
+
+// Update Monday.com item name
+async function updateItemName(itemId, newName) {
+  try {
+    const nameQuery = `
+      mutation {
+        change_simple_column_value(
+          board_id: ${BOARD_ID},
+          item_id: ${itemId},
+          column_id: "name",
+          value: "${newName}"
+        ) {
+          id
+        }
+      }
+    `;
+
+    const response = await fetch(MONDAY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': process.env.MONDAY_API_TOKEN
+      },
+      body: JSON.stringify({ query: nameQuery })
+    });
+
+    const result = await response.json();
+    
+    if (result.errors) {
+      console.error('Monday.com name update errors:', result.errors);
+      throw new Error(result.errors[0].message);
+    }
+
+    console.log('Item name updated successfully');
+
+  } catch (error) {
+    console.error('Update item name error:', error);
+    throw error;
+  };
 
 exports.handler = async (event, context) => {
   console.log('Monday.com integration called');
@@ -132,8 +171,8 @@ async function createDriver(email, jobId, name = null) {
       };
     }
 
-    // Basic driver information
-    const driverName = name || 'Driver Name Pending';
+    // Basic driver information  
+    const driverName = name || `Driver Verification - ${email}`;
     const currentDate = new Date().toISOString().split('T')[0];
     
     const columnValues = {
@@ -354,9 +393,17 @@ async function updateDriverWithIdenfyData(itemId, mondayData) {
 
     const updates = [];
 
-    // Name
+    // Name (update the item name itself)
     if (mondayData.name) {
       updates.push(`"text8": "${mondayData.name}"`);
+      
+      // Also update the item name
+      try {
+        await updateItemName(itemId, mondayData.name);
+        console.log('Item name updated to:', mondayData.name);
+      } catch (nameError) {
+        console.warn('Failed to update item name:', nameError.message);
+      }
     }
 
     // License information
