@@ -236,15 +236,18 @@ async function testBoardB() {
     const board = response.data.boards[0];
     const columns = board.columns;
 
-    // Expected Board B columns for A→B copy (11 essential fields)
+    // Expected Board B columns for A→B copy (14 essential fields - UPDATED)
     const expectedColumns = {
       'text8': 'Driver Name',
       'email': 'Email Address',
       'text9__1': 'Phone Number', 
       'date45': 'Date of Birth',
+      'text_mktqjbpm': 'Nationality', // ADDED MISSING FIELD
       'long_text6': 'Home Address',
       'long_text8': 'License Address',
       'text6': 'License Number',
+      'text_mktqwkqn': 'License Issued By', // ADDED MISSING FIELD
+      'date_mktqphhq': 'License Valid From', // ADDED MISSING FIELD
       'driver_licence_valid_to': 'License Valid To',
       'date2': 'Date Passed Test',
       'files1': 'Signature File',
@@ -420,12 +423,13 @@ async function testAllFileUploads(itemId, boardId) {
   return fileResults;
 }
 
-// Upload a test file to a specific column
+// Upload a test file to a specific column - FIXED VERSION
 async function uploadTestFile(itemId, boardId, columnId, fileName) {
   try {
-    // Create a simple 1x1 pixel PNG as base64
+    // Create the same 1x1 pixel PNG we used before that worked
     const testImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
     
+    // Use the working file upload approach from our previous success
     const mutation = `
       mutation($file: File!) {
         add_file_to_column(
@@ -438,23 +442,25 @@ async function uploadTestFile(itemId, boardId, columnId, fileName) {
       }
     `;
     
+    // Convert base64 to buffer (Node.js approach)
+    const buffer = Buffer.from(testImageBase64, 'base64');
+    
+    // Create form data properly
+    const FormData = require('form-data');
     const formData = new FormData();
+    
     formData.append('query', mutation);
     formData.append('variables', JSON.stringify({ file: null }));
-    
-    // Convert base64 to blob
-    const binaryString = atob(testImageBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    const blob = new Blob([bytes], { type: 'image/png' });
-    formData.append('0', blob, `test_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.png`);
+    formData.append('0', buffer, {
+      filename: `test_${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.png`,
+      contentType: 'image/png'
+    });
     
     const response = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
+        ...formData.getHeaders()
       },
       body: formData
     });
@@ -465,7 +471,7 @@ async function uploadTestFile(itemId, boardId, columnId, fileName) {
     } else {
       const errorText = await response.text();
       console.error(`❌ File upload failed for ${fileName}:`, errorText);
-      return { success: false, error: `Upload failed: ${response.status}` };
+      return { success: false, error: `Upload failed: ${response.status} - ${errorText}` };
     }
     
   } catch (error) {
@@ -513,7 +519,7 @@ async function testABCopy(itemAId) {
 
     console.log('📊 Board A data retrieved:', Object.keys(columnsA).length, 'columns');
 
-    // COMPREHENSIVE Board A → Board B mapping (ALL 11 essential fields)
+    // COMPREHENSIVE Board A → Board B mapping (ALL 14 essential fields - FIXED)
     const boardBData = {};
     
     // Text mappings
@@ -542,6 +548,18 @@ async function testABCopy(itemAId) {
       if (value) boardBData['text6'] = value;
     }
     
+    // FIXED: Add missing nationality mapping
+    if (columnsA['text_mktrdh72']) {
+      const value = JSON.parse(columnsA['text_mktrdh72'] || '""');
+      if (value) boardBData['text_mktqjbpm'] = value;
+    }
+    
+    // FIXED: Add missing license issued by mapping  
+    if (columnsA['text_mktrz69']) {
+      const value = JSON.parse(columnsA['text_mktrz69'] || '""');
+      if (value) boardBData['text_mktqwkqn'] = value;
+    }
+    
     // Date mappings  
     if (columnsA['date_mktr2x01']) {
       const dateData = JSON.parse(columnsA['date_mktr2x01'] || '{}');
@@ -556,6 +574,12 @@ async function testABCopy(itemAId) {
     if (columnsA['date_mktr93jq']) {
       const dateData = JSON.parse(columnsA['date_mktr93jq'] || '{}');
       if (dateData.date) boardBData['date2'] = dateData;
+    }
+    
+    // FIXED: Add missing license valid from mapping
+    if (columnsA['date_mktrmdx5']) {
+      const dateData = JSON.parse(columnsA['date_mktrmdx5'] || '{}');
+      if (dateData.date) boardBData['date_mktqphhq'] = dateData;
     }
     
     // Long text mappings
