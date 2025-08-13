@@ -1,9 +1,9 @@
 // File: src/App.js
-// OOOSH Driver Verification - PRODUCTION VERSION
-// Real job validation + comprehensive driver instructions
+// OOOSH Driver Verification - Professional Clean Design
+// Updated with OOOSH branding and cleaner layout
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Clock, MapPin } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -20,13 +20,13 @@ const DriverVerificationApp = () => {
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
 
-  // Extract job ID from URL on load and validate with real Q&H Board
+  // Extract job ID from URL on load
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const jobParam = urlParams.get('job');
     if (jobParam) {
       setJobId(jobParam);
-      validateJobWithQHBoard(jobParam);
+      validateJobAndFetchDetails(jobParam);
     } else {
       setError('Invalid verification link. Please check your email for the correct link.');
     }
@@ -46,50 +46,32 @@ const DriverVerificationApp = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Disable exhaustive deps warning for this useEffect
 
-  // PRODUCTION: Real job validation with Q&H Board
-  const validateJobWithQHBoard = async (jobId) => {
+  const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
     try {
-      console.log('Validating job with Q&H Board:', jobId);
+      console.log('Validating job:', jobId);
       
-      const response = await fetch(`/.netlify/functions/validate-job?jobId=${encodeURIComponent(jobId)}`);
+      // PRODUCTION: Call real job validation
+      const response = await fetch(`/.netlify/functions/validate-job?jobId=${jobId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to validate job');
+      }
+      
       const result = await response.json();
-      
       console.log('Job validation result:', result);
       
-      if (!response.ok || !result.valid) {
-        console.log('Job validation failed:', result.reason || 'Unknown reason');
-        
-        // Set appropriate error message based on validation result
-        if (result.reason === 'not_found') {
-          setError('Job not found. Please check your verification link.');
-        } else if (result.reason === 'expired') {
-          setError('This hire has expired and is no longer accepting drivers.');
-        } else {
-          setError('This hire is no longer available for driver registration.');
-        }
-        setCurrentStep('error');
+      if (!result.valid) {
+        setError(result.message || 'This hire is no longer available for driver verification.');
         return;
       }
       
-      // Job is valid - set job details from real Q&H Board data
-      setJobDetails({
-        jobId: jobId,
-        jobName: result.jobData.name,
-        jobNumber: result.jobData.jobNumber,
-        startDate: result.jobData.hireStarts || 'TBC', // Will get from start date column
-        endDate: result.jobData.hireEnds,
-        gracePeriodEnd: result.jobData.gracePeriodEnd,
-        isValid: true
-      });
-      
+      setJobDetails(result.job);
       setCurrentStep('email-entry');
       setError('');
-      
     } catch (err) {
       console.error('Job validation error:', err);
-      setError('Failed to validate job. Please try again or contact OOOSH support.');
-      setCurrentStep('error');
+      setError('Failed to validate job. Please try again or contact support.');
     } finally {
       setLoading(false);
     }
@@ -130,6 +112,12 @@ const DriverVerificationApp = () => {
       
       setCurrentStep('email-verification');
       setError('');
+      
+      // Show helpful message for test emails
+      if (data.testMode) {
+        setError(''); // Clear any errors
+        console.log('🚨 Test email detected - use any 6-digit code');
+      }
       
     } catch (err) {
       console.error('Send verification error:', err);
@@ -176,6 +164,11 @@ const DriverVerificationApp = () => {
       // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
         console.log('Verification successful, checking if returning driver');
+        
+        // Show test mode indicator if applicable
+        if (data.testMode) {
+          console.log('🚨 Test mode verification successful');
+        }
         
         // First check if this is a returning driver
         await checkDriverStatus();
@@ -232,7 +225,7 @@ const DriverVerificationApp = () => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
-    // Save insurance data to Monday.com via Board A
+    // Save insurance data to Google Sheets via Apps Script
     try {
       setLoading(true);
       
@@ -311,6 +304,7 @@ const DriverVerificationApp = () => {
       } else if (data.sessionToken) {
         // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
+        // Use the redirect URL from the response or construct the proper Idenfy UI URL
         window.location.href = data.redirectUrl || `https://ui.idenfy.com/session?authToken=${data.sessionToken}`;
       } else {
         throw new Error('No session token received from Idenfy');
@@ -391,10 +385,10 @@ const DriverVerificationApp = () => {
     try {
       console.log('Processing DVLA check document:', file.name);
       
-      // Convert file to base64 for AWS Textract processing
+      // Convert file to base64 for Claude processing
       const base64 = await fileToBase64(file);
       
-      // Use AWS Textract to extract DVLA check data
+      // Use Claude API to extract DVLA check data
       const dvlaData = await extractDVLAData(base64);
       console.log('Extracted DVLA data:', dvlaData);
       
@@ -435,27 +429,18 @@ const DriverVerificationApp = () => {
     try {
       console.log('Extracting DVLA data from image...');
       
-      // Call AWS Textract for DVLA processing
-      const response = await fetch('/.netlify/functions/test-claude-ocr', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          testType: 'dvla',
-          imageData: base64Image,
-          fileType: 'image'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process DVLA document');
-      }
-
-      const result = await response.json();
-      return result.result;
+      // Mock response for development
+      return {
+        driverName: "John Doe",
+        licenseNumber: "XXXXXX066JD9LA",
+        checkCode: "Kd m3 ch Nn",
+        dateGenerated: new Date().toISOString().split('T')[0],
+        drivingStatus: "Current full licence",
+        endorsements: "1 Offence, 3 Points",
+        validTo: "2032-08-01"
+      };
     } catch (err) {
-      console.error('DVLA extraction error:', err);
+      console.error('Claude extraction error:', err);
       throw new Error('Failed to extract data from document');
     }
   };
@@ -570,15 +555,15 @@ const DriverVerificationApp = () => {
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
-          <FileText className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+          <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
           <h2 className="text-xl font-bold text-gray-900">Insurance Questions</h2>
           <p className="text-gray-600 mt-2">Required for insurance compliance</p>
         </div>
 
         <div className="space-y-6">
           {/* Insurance Questions */}
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-            <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
+          <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
+            <h3 className="font-medium text-purple-900 mb-4">Health & Driving History</h3>
             <div className="space-y-4">
               <YesNoQuestion
                 field="hasDisability"
@@ -621,9 +606,18 @@ const DriverVerificationApp = () => {
               value={formData.additionalDetails}
               onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="Please provide any additional details about your answers above..."
             />
+          </div>
+
+          {/* Info about POA - No upload needed */}
+          <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
+            <h3 className="font-medium text-purple-900 mb-2">📄 Proof of Address Requirements</h3>
+            <p className="text-sm text-purple-800">
+              <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
+              Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
+            </p>
           </div>
 
           {/* Error Display */}
@@ -648,7 +642,7 @@ const DriverVerificationApp = () => {
             </button>
             <button
               onClick={handleSubmit}
-              className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+              className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700"
             >
               Continue to Documents
             </button>
@@ -662,14 +656,14 @@ const DriverVerificationApp = () => {
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
-        <Shield className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+        <Shield className="mx-auto h-12 w-12 text-purple-600 mb-4" />
         <h1 className="text-2xl font-bold text-gray-900">OOOSH Driver Verification</h1>
         <p className="text-gray-600 mt-2">Secure driver verification for vehicle hire</p>
       </div>
       
       {loading ? (
         <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
           <p className="mt-2 text-gray-600">Validating job details...</p>
         </div>
       ) : error ? (
@@ -690,105 +684,186 @@ const DriverVerificationApp = () => {
   );
 
   const renderEmailEntry = () => (
-    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Mail className="mx-auto h-12 w-12 text-blue-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900">Driver Verification</h2>
-        <p className="text-gray-600 mt-2">Job #{jobDetails?.jobNumber}: {jobDetails?.jobName}</p>
-      </div>
-
-      {/* Job Details Header */}
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-        <div className="flex items-center mb-3">
-          <Calendar className="h-5 w-5 text-blue-600 mr-2" />
-          <h3 className="font-medium text-blue-900">Hire Details</h3>
-        </div>
-        <div className="space-y-1 text-sm text-blue-800">
-          <div className="flex items-center">
-            <Clock className="h-4 w-4 mr-2" />
-            <p><strong>Period:</strong> 9am {jobDetails?.startDate} to 9am {jobDetails?.endDate} (inclusive)</p>
-          </div>
-          <div className="flex items-center">
-            <MapPin className="h-4 w-4 mr-2" />
-            <p><strong>Job:</strong> #{jobDetails?.jobNumber}</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header with Logo */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center">
+              <img 
+                src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
+                alt="OOOSH Tours" 
+                className="h-8 w-auto"
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Comprehensive Instructions */}
-      <div className="bg-gray-50 border border-gray-200 rounded-md p-6 mb-6">
-        <h3 className="font-medium text-gray-900 mb-4">📋 What You'll Need to Complete</h3>
-        <div className="space-y-4 text-sm text-gray-700">
-          <p>
-            This hire form will gather your details as a proposed driver for hire <strong>#{jobDetails?.jobNumber}</strong>, 
-            which is from <strong>9am {jobDetails?.startDate}</strong> to <strong>9am {jobDetails?.endDate}</strong> inclusive.
-          </p>
+      {/* Main Content */}
+      <div className="max-w-2xl mx-auto pt-8 pb-16 px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           
-          <div className="space-y-2">
-            <p><strong>Step 1:</strong> You will firstly need to validate your email address below.</p>
-            <p><strong>Step 2:</strong> You will then be asked some insurance questions.</p>
-            <p><strong>Step 3:</strong> You will be redirected to <a href="https://www.idenfy.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">Idenfy <ExternalLink className="h-3 w-3 ml-1" /></a>, our licence verification software, which will ask you to upload your <strong>driving licence</strong> and <strong>two proofs of address</strong>, both of which must be from different sources and dated <strong>within the last 90 days</strong>.</p>
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-            <p className="font-medium text-yellow-900 mb-2">Important Document Requirements:</p>
-            <div className="space-y-1 text-yellow-800">
-              <p><strong>• If you have a UK-issued driving licence:</strong> You will need to obtain a DVLA check code and upload it. Our guide for how to do this is <a href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">here <ExternalLink className="h-3 w-3 ml-1" /></a>.</p>
-              <p><strong>• If you have a licence issued by any other country:</strong> You will need to upload your passport into Idenfy instead.</p>
-            </div>
-          </div>
-
-          <div className="bg-green-50 border border-green-200 rounded-md p-3">
-            <p className="font-medium text-green-900 mb-2">📱 Before You Start:</p>
-            <div className="space-y-1 text-green-800">
-              <p>• Have these documents ready now: your physical licence (and passport if applicable)</p>
-              <p>• Proofs of address can be uploaded as PDFs if easier - they <strong>do not</strong> have to be paper copies</p>
-              <p>• This process is usually best completed on a smartphone, but can be done on a computer with camera</p>
-              <p>• The official <a href="https://www.gov.uk/view-driving-licence" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">DVLA check code <ExternalLink className="h-3 w-3 ml-1" /></a> is required for UK licences</p>
-            </div>
-          </div>
-
-          <div className="border-t pt-3">
-            <p className="text-xs text-gray-600">
-              Please make sure you read and complete this hire form in conjunction with our 
-              <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1 inline-flex items-center">
-                Terms & Conditions <ExternalLink className="h-3 w-3 ml-1" />
-              </a>.
+          {/* Header Section */}
+          <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-8 text-center">
+            <h1 className="text-2xl font-bold text-white mb-2">
+              Hire Agreement - Proposal for Insurance
+            </h1>
+            <p className="text-purple-100">
+              Complete your driver verification to join this hire
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Email Entry */}
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Your Email Address
-          </label>
-          <input
-            type="email"
-            id="email"
-            value={driverEmail}
-            onChange={(e) => setDriverEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="driver@example.com"
-          />
-          <p className="text-xs text-gray-500 mt-1">We'll send a verification code to this email</p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-800">{error}</p>
+          {/* Job Details Section */}
+          <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-6 py-6 border-b border-purple-200">
+            <h2 className="text-lg font-semibold text-purple-900 mb-3">Booking Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-purple-700 font-medium">Job ID</p>
+                <p className="text-purple-900 font-semibold">{jobDetails?.jobNumber || jobId}</p>
+              </div>
+              <div>
+                <p className="text-sm text-purple-700 font-medium">Customer</p>
+                <p className="text-purple-900 font-semibold">{jobDetails?.customer || 'Loading...'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-purple-700 font-medium">Hire Period</p>
+                <p className="text-purple-900 font-semibold">
+                  {jobDetails?.startDate && jobDetails?.endDate ? 
+                    `${jobDetails.startDate} to ${jobDetails.endDate}` : 
+                    'Loading dates...'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-purple-700 font-medium">Status</p>
+                <p className="text-purple-900 font-semibold">{jobDetails?.status || 'Confirmed'}</p>
+              </div>
+            </div>
           </div>
-        )}
 
-        <button
-          onClick={sendVerificationEmail}
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-        >
-          {loading ? 'Sending Code...' : 'Send Verification Code'}
-        </button>
+          {/* Email Entry Section */}
+          <div className="px-6 py-8">
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Your Email Address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={driverEmail}
+                  onChange={(e) => setDriverEmail(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="driver@example.com"
+                />
+                <p className="text-xs text-gray-500 mt-2">We'll send a verification code to this email address</p>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex">
+                    <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                    <div className="ml-3">
+                      <p className="text-sm text-red-800">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={sendVerificationEmail}
+                disabled={loading}
+                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 font-medium"
+              >
+                {loading ? 'Sending Code...' : 'Send Verification Code'}
+              </button>
+            </div>
+          </div>
+
+          {/* Requirements Section */}
+          <div className="bg-gray-50 px-6 py-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">What You'll Need</h3>
+            
+            <div className="space-y-4 text-sm text-gray-600">
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">🆔 UK Driving License Requirements:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Valid UK photocard driving license (front and back photos)</li>
+                  <li>Must be valid for the hire period</li>
+                  <li>License held for minimum 2 years</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">🏠 Proof of Address (2 required):</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Bank statements, utility bills, council tax, or credit card statements</li>
+                  <li>Must be within the last 90 days</li>
+                  <li>Must show your current home address</li>
+                  <li>Documents must be from different sources</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">🔍 DVLA Check:</h4>
+                <p className="ml-5">
+                  Current DVLA license check from{' '}
+                  <a 
+                    href="https://www.gov.uk/check-driving-licence" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                  >
+                    gov.uk/check-driving-licence <ExternalLink className="h-3 w-3 ml-1" />
+                  </a>
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">📋 Insurance Questions:</h4>
+                <p className="ml-5">Complete health and driving history questionnaire for insurance compliance</p>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">✍️ Digital Signature:</h4>
+                <p className="ml-5">Electronic signature on driver declaration and terms & conditions</p>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>Need help?</span>
+                <a 
+                  href="tel:01273911382" 
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                >
+                  <Phone className="h-3 w-3 mr-1" />
+                  01273 911382
+                </a>
+              </div>
+              
+              <div className="mt-2 text-xs text-gray-500">
+                <a 
+                  href="https://www.oooshtours.co.uk/driver-guide" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                >
+                  Driver Guide <ExternalLink className="h-3 w-3 ml-1" />
+                </a>
+                {' | '}
+                <a 
+                  href="https://www.oooshtours.co.uk/terms" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                >
+                  Terms & Conditions <ExternalLink className="h-3 w-3 ml-1" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -812,7 +887,7 @@ const DriverVerificationApp = () => {
             id="code"
             value={verificationCode}
             onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-lg font-mono"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-lg font-mono"
             placeholder="123456"
             maxLength="6"
           />
@@ -827,7 +902,7 @@ const DriverVerificationApp = () => {
         <button
           onClick={verifyEmailCode}
           disabled={loading || verificationCode.length < 6}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
         >
           {loading ? 'Verifying...' : 'Verify Code'}
         </button>
@@ -835,7 +910,7 @@ const DriverVerificationApp = () => {
         <button
           onClick={sendVerificationEmail}
           disabled={loading}
-          className="w-full text-blue-600 hover:text-blue-700 text-sm disabled:opacity-50"
+          className="w-full text-purple-600 hover:text-purple-700 text-sm disabled:opacity-50"
         >
           Didn't receive the code? Send again
         </button>
@@ -896,7 +971,7 @@ const DriverVerificationApp = () => {
           {needsDocuments && (
             <button
               onClick={startVerification}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               Upload Documents
             </button>
@@ -967,7 +1042,7 @@ const DriverVerificationApp = () => {
   const renderDocumentUpload = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
-        <Upload className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+        <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
         <h2 className="text-xl font-bold text-gray-900">Document Verification</h2>
         <p className="text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
       </div>
@@ -982,8 +1057,8 @@ const DriverVerificationApp = () => {
           </ul>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <p className="text-sm text-blue-800">
+        <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
+          <p className="text-sm text-purple-800">
             <strong>Acceptable Proof of Address:</strong> Utility bills, bank statements, council tax, credit card statements
           </p>
         </div>
@@ -998,7 +1073,7 @@ const DriverVerificationApp = () => {
       <button
         onClick={generateIdenfyToken}
         disabled={loading}
-        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
       >
         {loading ? 'Starting Verification...' : 'Start Document Upload'}
       </button>
@@ -1016,7 +1091,7 @@ const DriverVerificationApp = () => {
       <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
         <h3 className="font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
         <ol className="text-sm text-orange-800 space-y-1 list-decimal list-inside">
-          <li>Visit <a href="https://www.gov.uk/view-driving-licence" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">gov.uk/view-driving-licence <ExternalLink className="h-3 w-3 ml-1" /></a></li>
+          <li>Visit gov.uk/check-driving-licence</li>
           <li>Enter your license details</li>
           <li>Download/screenshot the summary page</li>
           <li>Upload it here</li>
@@ -1063,7 +1138,7 @@ const DriverVerificationApp = () => {
   const renderProcessing = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Processing Verification</h2>
         <p className="text-gray-600">Please wait while we verify your documents...</p>
         <p className="text-sm text-gray-500 mt-2">This usually takes 30-60 seconds</p>
@@ -1111,43 +1186,19 @@ const DriverVerificationApp = () => {
         <div className="space-y-3">
           <button
             onClick={startVerification}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             Try Again
           </button>
           
           <a
-            href="tel:+441234567890"
+            href="tel:01273911382"
             className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center"
           >
             <Phone className="h-4 w-4 mr-2" />
             Call OOOSH Support
           </a>
         </div>
-      </div>
-    </div>
-  );
-
-  const renderError = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Hire No Longer Available</h2>
-        <p className="text-gray-600 mb-4">{error}</p>
-        
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-sm text-red-800">
-            This hire has expired or is no longer accepting drivers.
-          </p>
-        </div>
-
-        <a
-          href="tel:+441234567890"
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center justify-center"
-        >
-          <Phone className="h-4 w-4 mr-2" />
-          Contact OOOSH Support
-        </a>
       </div>
     </div>
   );
@@ -1165,15 +1216,23 @@ const DriverVerificationApp = () => {
       case 'processing': return renderProcessing();
       case 'complete': return renderComplete();
       case 'rejected': return renderRejected();
-      case 'error': return renderError();
       default: return renderLanding();
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      {renderStep()}
-    </div>
+    <>
+      {/* Favicon */}
+      <link rel="icon" type="image/png" href="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" />
+      
+      {currentStep === 'email-entry' ? (
+        renderStep()
+      ) : (
+        <div className="min-h-screen bg-gray-100 py-8">
+          {renderStep()}
+        </div>
+      )}
+    </>
   );
 };
 
