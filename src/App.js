@@ -1,6 +1,6 @@
 // File: src/App.js
 // OOOSH Driver Verification - Complete UI improvements with all requested changes
-// ENHANCED: Added spam notice, loading spinner, and start again option - NO OTHER CHANGES
+// ENHANCED: Updated insurance questionnaire with conditional requirements
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone } from 'lucide-react';
@@ -510,7 +510,7 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // Insurance Questionnaire Component
+  // UPDATED Insurance Questionnaire Component
   const InsuranceQuestionnaire = () => {
     const [formData, setFormData] = useState({
       hasDisability: null,
@@ -536,6 +536,12 @@ const DriverVerificationApp = () => {
       }
     };
 
+    // Check if any question is answered "Yes"
+    const hasYesAnswers = () => {
+      return ['hasDisability', 'hasConvictions', 'hasProsecution', 'hasAccidents', 'hasInsuranceIssues', 'hasDrivingBan']
+        .some(field => formData[field] === 'yes');
+    };
+
     const validateQuestions = () => {
       const newErrors = {};
       
@@ -550,6 +556,11 @@ const DriverVerificationApp = () => {
           newErrors[field] = 'Please select an option';
         }
       });
+
+      // NEW: If any question is "Yes", additional details become required
+      if (hasYesAnswers() && !formData.additionalDetails.trim()) {
+        newErrors.additionalDetails = 'Please provide additional details for your "Yes" answers';
+      }
 
       setErrors(newErrors);
       return Object.keys(newErrors).length === 0;
@@ -615,7 +626,7 @@ const DriverVerificationApp = () => {
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
           <h2 className="text-2xl font-bold text-gray-900">Insurance questions</h2>
-          <p className="text-lg text-gray-600 mt-2">Required for insurance compliance</p>
+          {/* REMOVED: "Required for insurance compliance" */}
         </div>
 
         <div className="space-y-6">
@@ -655,26 +666,29 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
-          {/* Additional Details */}
+          {/* Additional Details - NOW REQUIRED if any "Yes" answers */}
           <div>
             <label className="block text-base font-medium text-gray-700 mb-2">
-              Additional information (optional)
+              Additional information {hasYesAnswers() && <span className="text-red-500">*</span>}
+              {hasYesAnswers() && <span className="text-sm text-gray-500 ml-1">(required due to "Yes" answers above)</span>}
             </label>
             <textarea
               value={formData.additionalDetails}
               onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
-              placeholder="Please provide any additional details about your answers above..."
+              placeholder={hasYesAnswers() ? "Please provide details about your answers above..." : "Please provide any additional details about your answers above..."}
             />
+            {errors.additionalDetails && (
+              <p className="text-base text-red-600 mt-1">{errors.additionalDetails}</p>
+            )}
           </div>
 
-          {/* Info about POA - No upload needed */}
+          {/* UPDATED: Idenfy Information instead of POA requirements */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h3 className="text-lg font-medium text-purple-900 mb-2">📄 Proof of address requirements</h3>
+            <h3 className="text-lg font-medium text-purple-900 mb-2">🚀 Next step</h3>
             <p className="text-base text-purple-800">
-              <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
-              Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
+              Press Continue to proceed to Idenfy, our AI-powered document verification system.
             </p>
           </div>
 
