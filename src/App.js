@@ -52,10 +52,17 @@ const DriverVerificationApp = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status');
     const job = urlParams.get('job');
+    const email = urlParams.get('email');
     const session = urlParams.get('session');
     
     if (status && job && ['success', 'error', 'unverified', 'mock'].includes(status)) {
-      console.log('Verification complete callback:', { status, job, session });
+      console.log('Verification complete callback:', { status, job, email, session });
+      
+      // Set the email if we got it from the callback
+      if (email) {
+        setDriverEmail(decodeURIComponent(email));
+      }
+      
       handleVerificationComplete(status, job, session);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
