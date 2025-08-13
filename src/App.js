@@ -691,12 +691,10 @@ const DriverVerificationApp = () => {
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <div className="text-center mb-4">
             <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-            <h2 className="text-xl font-bold text-red-900 mb-2">Unable to access this verification</h2>
+            <h2 className="text-xl font-bold text-red-900 mb-2">Job number not found</h2>
           </div>
           
           <div className="space-y-4">
-            <p className="text-base text-red-800 text-center">{error}</p>
-            
             <div className="bg-white rounded-md p-4 border border-red-200">
               <h3 className="font-medium text-red-900 mb-3">This may be because:</h3>
               <ul className="text-sm text-red-800 space-y-2">
@@ -712,10 +710,6 @@ const DriverVerificationApp = () => {
                   <span className="text-red-500 mr-2">•</span>
                   <span>The job reference number is incorrect</span>
                 </li>
-                <li className="flex items-start">
-                  <span className="text-red-500 mr-2">•</span>
-                  <span>You may have already completed verification for this hire</span>
-                </li>
               </ul>
             </div>
             
@@ -723,7 +717,7 @@ const DriverVerificationApp = () => {
               <h3 className="font-medium text-blue-900 mb-2">What to do next:</h3>
               <div className="space-y-3 text-sm text-blue-800">
                 <p>📞 <strong>Call us:</strong> <a href="tel:01273911382" className="text-purple-600 hover:text-purple-800 font-medium">01273 911382</a></p>
-                <p>📧 <strong>Email:</strong> <a href="mailto:bookings@oooshtours.co.uk" className="text-purple-600 hover:text-purple-800 font-medium">bookings@oooshtours.co.uk</a></p>
+                <p>📧 <strong>Email:</strong> <a href="mailto:info@oooshtours.co.uk" className="text-purple-600 hover:text-purple-800 font-medium">info@oooshtours.co.uk</a></p>
                 <p>💬 <strong>Include:</strong> Your job reference number and this error message</p>
               </div>
             </div>
@@ -827,14 +821,9 @@ const DriverVerificationApp = () => {
           {/* Email Entry Section - Enhanced CTA */}
           <div className="px-6 py-8 bg-white border-b-4 border-purple-200">
             <div className="max-w-md mx-auto">
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Get started</h2>
-                <p className="text-lg text-gray-600">Enter your email address to begin verification</p>
-              </div>
-              
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="email" className="block text-lg font-medium text-gray-700 mb-3">
+                  <label htmlFor="email" className="block text-2xl font-bold text-gray-900 mb-3 text-center">
                     Enter your email address to get started
                   </label>
                   <input
@@ -845,7 +834,7 @@ const DriverVerificationApp = () => {
                     className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
                     placeholder="driver@example.com"
                   />
-                  <p className="text-base text-gray-500 mt-2">We'll send a verification code to this email address</p>
+                  <p className="text-base text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
                 </div>
 
                 {error && (
