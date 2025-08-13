@@ -391,9 +391,14 @@ async function updateBoardAWithTextractResults(email, textractData) {
   try {
     console.log('💾 Updating Board A with AWS Textract results...');
 
+    // Calculate expiry dates using consistent approach
+    const today = new Date();
+    const dvlaValidUntil = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    const licenseNextCheckDue = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days from now
+
     const updateData = {
-      dvlaCheckDate: new Date().toISOString().split('T')[0],
-      // Add other Textract results here
+      dvlaValidUntil: dvlaValidUntil.toISOString().split('T')[0], // EXPIRY DATE (check date + 30 days)
+      licenseNextCheckDue: licenseNextCheckDue.toISOString().split('T')[0], // LICENSE CHECK DUE (check date + 90 days)
       lastUpdated: new Date().toISOString().split('T')[0]
     };
 
