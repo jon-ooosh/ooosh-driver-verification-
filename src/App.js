@@ -943,7 +943,7 @@ const DriverVerificationApp = () => {
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">📋 insurance questions:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">📋 Insurance questions:</h4>
                 <p className="ml-5">Answer health and driving history questions</p>
               </div>
             </div>
