@@ -474,6 +474,33 @@ const DriverVerificationApp = () => {
     return qrUrl;
   };
 
+  // Format date for hire period display (9am 4th September format)
+  const formatHireDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      
+      const day = date.getDate();
+      const month = date.toLocaleDateString('en-GB', { month: 'long' });
+      
+      // Add ordinal suffix (st, nd, rd, th)
+      const getOrdinalSuffix = (day) => {
+        if (day > 3 && day < 21) return 'th';
+        switch (day % 10) {
+          case 1: return 'st';
+          case 2: return 'nd';
+          case 3: return 'rd';
+          default: return 'th';
+        }
+      };
+      
+      return `9am ${day}${getOrdinalSuffix(day)} ${month}`;
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return dateString;
+    }
+  };
+
   // Insurance Questionnaire Component
   const InsuranceQuestionnaire = () => {
     const [formData, setFormData] = useState({
@@ -759,30 +786,15 @@ const DriverVerificationApp = () => {
             </h1>
           </div>
 
-          {/* Job Details Section */}
-          <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-6 py-6 border-b border-purple-200">
-            <h2 className="text-xl font-semibold text-purple-900 mb-3">Booking details</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-base text-purple-700 font-medium">Job ID</p>
-                <p className="text-lg text-purple-900 font-semibold">{jobDetails?.jobNumber || jobId}</p>
-              </div>
-              <div>
-                <p className="text-base text-purple-700 font-medium">Hire period</p>
-                <p className="text-lg text-purple-900 font-semibold">
-                  {jobDetails?.startDate && jobDetails?.endDate ? 
-                    `${jobDetails.startDate} to ${jobDetails.endDate}` : 
-                    'Loading dates...'}
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Introduction Section */}
           <div className="px-6 py-6 bg-blue-50 border-b border-blue-200">
             <p className="text-base text-blue-800 leading-relaxed">
-              This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>, 
-              or if you have recently completed a form for a different hire, it will re-validate your documents. 
+              This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>{' '}
+              {jobDetails?.startDate && jobDetails?.endDate ? (
+                <>which is from <strong>{formatHireDate(jobDetails.startDate)} to {formatHireDate(jobDetails.endDate)}</strong>. Or</>
+              ) : (
+                <>. Or</>
+              )}, if you have recently completed a form for a different hire, it will re-validate your documents. 
               {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
               Please make sure you review our{' '}
               <a 
@@ -861,7 +873,7 @@ const DriverVerificationApp = () => {
 
           {/* Requirements Section */}
           <div className="bg-gray-50 px-6 py-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">What you'll need</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">What you'll need</h3>
             
             <div className="space-y-4 text-base text-gray-600">
               <div>
