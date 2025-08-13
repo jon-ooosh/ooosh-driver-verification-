@@ -1,9 +1,9 @@
 // File: src/App.js
-// OOOSH Driver Verification - Updated with UI improvements
-// FIXED: Bigger logo, lowercase insurance, removed customer/status, bigger text, fixed links
+// OOOSH Driver Verification - Final Polish with Device Detection
+// FIXED: British spelling (licence), intro paragraph, device detection, corrected links
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, Monitor } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -16,9 +16,20 @@ const DriverVerificationApp = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
+
+  // Detect device type
+  useEffect(() => {
+    const checkIsMobile = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const mobileKeywords = ['mobile', 'android', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone'];
+      return mobileKeywords.some(keyword => userAgent.includes(keyword)) || window.innerWidth <= 768;
+    };
+    setIsMobile(checkIsMobile());
+  }, []);
 
   // Extract job ID from URL on load
   useEffect(() => {
@@ -75,6 +86,10 @@ const DriverVerificationApp = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateQRCode = (url) => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
   };
 
   const sendVerificationEmail = async () => {
@@ -732,6 +747,46 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
+          {/* Device-specific Notice */}
+          {!isMobile && (
+            <div className="bg-blue-50 border border-blue-200 px-6 py-4">
+              <div className="flex items-start space-x-3">
+                <Smartphone className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-base font-medium text-blue-900 mb-2">📱 Better on mobile</h3>
+                  <p className="text-sm text-blue-800 mb-3">
+                    This form works best on a smartphone for document capture. Scan this QR code to open on your phone:
+                  </p>
+                  <div className="text-center">
+                    <img 
+                      src={generateQRCode(window.location.href)} 
+                      alt="QR Code"
+                      className="mx-auto rounded border"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Introduction Paragraph */}
+          <div className="px-6 py-6 bg-gray-50 border-b border-gray-200">
+            <p className="text-base text-gray-700 leading-relaxed">
+              This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>, 
+              or if you have recently completed a form for a different hire, it will re-validate your documents. 
+              It's best completed on a smartphone though it can be done on a computer with camera. 
+              Please make sure you review our{' '}
+              <a 
+                href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+              >
+                T&Cs here <ExternalLink className="h-3 w-3 ml-1" />
+              </a>
+            </p>
+          </div>
+
           {/* Email Entry Section */}
           <div className="px-6 py-8">
             <div className="space-y-6">
@@ -777,19 +832,18 @@ const DriverVerificationApp = () => {
             
             <div className="space-y-4 text-base text-gray-600">
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🆔 UK driving license requirements:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🆔 UK driving licence requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
-                  <li>Valid UK photocard driving license (front and back photos)</li>
+                  <li>Valid photocard driving licence (photos of front and back)</li>
                   <li>Must be valid for the hire period</li>
-                  <li>License held for minimum 2 years</li>
+                  <li>Licence held for minimum 2 years</li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK license holders:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence holders additional requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
-                  <li>Valid passport for identity verification</li>
-                  <li>International driving permit or valid foreign license</li>
+                  <li>Valid passport</li>
                   <li>No DVLA check required</li>
                 </ul>
               </div>
@@ -798,35 +852,31 @@ const DriverVerificationApp = () => {
                 <h4 className="font-medium text-gray-800 mb-2">🏠 Proof of address (2 required):</h4>
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Bank statements, utility bills, council tax, or credit card statements</li>
-                  <li>Must be within the last 90 days</li>
+                  <li>Both must be dated within the last 90 days</li>
                   <li>Must show your current home address</li>
                   <li>Documents must be from different sources</li>
+                  <li>They do <strong>not</strong> have to be physical copies - downloaded PDFs or screenshots are fine</li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🔍 DVLA check (UK licenses only):</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🔍 DVLA check (UK licences only):</h4>
                 <p className="ml-5">
-                  Current DVLA license check from{' '}
+                  Current DVLA licence check from{' '}
                   <a 
-                    href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
+                    href="https://www.gov.uk/view-driving-licence" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
                   >
-                    How to get a DVLA check code <ExternalLink className="h-4 w-4 ml-1" />
+                    gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
                   </a>
                 </p>
               </div>
 
               <div>
                 <h4 className="font-medium text-gray-800 mb-2">📋 insurance questions:</h4>
-                <p className="ml-5">Complete health and driving history questionnaire for insurance compliance</p>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">✍️ Digital signature:</h4>
-                <p className="ml-5">Electronic signature on driver declaration and terms & conditions</p>
+                <p className="ml-5">Answer health and driving history questions</p>
               </div>
             </div>
 
@@ -948,7 +998,7 @@ const DriverVerificationApp = () => {
         {driverStatus?.documents && (
           <div className="space-y-3 mb-6">
             <DocumentStatus 
-              title="Driving license" 
+              title="Driving licence" 
               status={driverStatus.documents.license} 
             />
             <DocumentStatus 
@@ -1051,7 +1101,7 @@ const DriverVerificationApp = () => {
         <div className="border border-gray-200 rounded-md p-4">
           <h3 className="text-lg font-medium text-gray-900 mb-2">Required documents:</h3>
           <ul className="text-base text-gray-600 space-y-1">
-            <li>• UK driving license (front and back)</li>
+            <li>• UK driving licence (front and back)</li>
             <li>• Two proof of address documents (within 90 days)</li>
             <li>• Selfie for identity verification</li>
           </ul>
@@ -1084,15 +1134,15 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900">DVLA license check</h2>
+        <h2 className="text-2xl font-bold text-gray-900">DVLA licence check</h2>
         <p className="text-lg text-gray-600 mt-2">Upload your DVLA check document</p>
       </div>
 
       <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
         <h3 className="text-lg font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
         <ol className="text-base text-orange-800 space-y-1 list-decimal list-inside">
-          <li>Visit gov.uk/check-driving-licence</li>
-          <li>Enter your license details</li>
+          <li>Visit gov.uk/view-driving-licence</li>
+          <li>Enter your licence details</li>
           <li>Download/screenshot the summary page</li>
           <li>Upload it here</li>
         </ol>
