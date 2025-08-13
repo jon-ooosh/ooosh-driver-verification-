@@ -1,16 +1,16 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete React Application with Job Validation
-// SESSION 27: Integrated job validation for end-to-end testing
+// OOOSH Driver Verification - PRODUCTION VERSION
+// Real job validation + comprehensive driver instructions
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Clock, MapPin } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
-  // Steps: landing, job-expired, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
+  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -20,13 +20,13 @@ const DriverVerificationApp = () => {
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
 
-  // Extract job ID from URL on load
+  // Extract job ID from URL on load and validate with real Q&H Board
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const jobParam = urlParams.get('job');
     if (jobParam) {
       setJobId(jobParam);
-      validateJobAndFetchDetails(jobParam);
+      validateJobWithQHBoard(jobParam);
     } else {
       setError('Invalid verification link. Please check your email for the correct link.');
     }
@@ -46,53 +46,50 @@ const DriverVerificationApp = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Disable exhaustive deps warning for this useEffect
 
-  // UPDATED: Now includes job validation against Q&H Board
-  const validateJobAndFetchDetails = async (jobId) => {
+  // PRODUCTION: Real job validation with Q&H Board
+  const validateJobWithQHBoard = async (jobId) => {
     setLoading(true);
     try {
-      console.log('Validating job:', jobId);
+      console.log('Validating job with Q&H Board:', jobId);
       
-      // Step 1: Validate job against Monday.com Q&H Board
-      const jobValidationResponse = await fetch(`/.netlify/functions/validate-job?jobId=${encodeURIComponent(jobId)}`);
+      const response = await fetch(`/.netlify/functions/validate-job?jobId=${encodeURIComponent(jobId)}`);
+      const result = await response.json();
       
-      if (!jobValidationResponse.ok) {
-        throw new Error('Failed to validate job');
-      }
+      console.log('Job validation result:', result);
       
-      const jobValidation = await jobValidationResponse.json();
-      console.log('Job validation result:', jobValidation);
-      
-      // Check if job is valid and not expired
-      if (!jobValidation.success || !jobValidation.isValid) {
-        console.log('Job validation failed:', jobValidation.reason);
-        setError(jobValidation.reason || 'Job is no longer valid');
-        setCurrentStep('job-expired');
+      if (!response.ok || !result.valid) {
+        console.log('Job validation failed:', result.reason || 'Unknown reason');
+        
+        // Set appropriate error message based on validation result
+        if (result.reason === 'not_found') {
+          setError('Job not found. Please check your verification link.');
+        } else if (result.reason === 'expired') {
+          setError('This hire has expired and is no longer accepting drivers.');
+        } else {
+          setError('This hire is no longer available for driver registration.');
+        }
+        setCurrentStep('error');
         return;
       }
       
-      // Step 2: Use validated job details
-      const validatedJobDetails = {
+      // Job is valid - set job details from real Q&H Board data
+      setJobDetails({
         jobId: jobId,
-        jobName: jobValidation.job.jobName || jobValidation.job.summary || 'Driver Verification',
-        startDate: jobValidation.job.hireStarts,
-        endDate: jobValidation.job.hireEnds,
-        clientName: jobValidation.job.contact || 'OOOSH Client',
-        isValid: true,
-        validationInfo: {
-          isActive: jobValidation.isActive,
-          isWithinGracePeriod: jobValidation.isWithinGracePeriod,
-          gracePeriodEnd: jobValidation.gracePeriodEnd
-        }
-      };
+        jobName: result.jobData.name,
+        jobNumber: result.jobData.jobNumber,
+        startDate: result.jobData.hireStarts || 'TBC', // Will get from start date column
+        endDate: result.jobData.hireEnds,
+        gracePeriodEnd: result.jobData.gracePeriodEnd,
+        isValid: true
+      });
       
-      setJobDetails(validatedJobDetails);
       setCurrentStep('email-entry');
       setError('');
       
     } catch (err) {
       console.error('Job validation error:', err);
-      setError('Failed to validate job. Please try again or contact support.');
-      setCurrentStep('job-expired');
+      setError('Failed to validate job. Please try again or contact OOOSH support.');
+      setCurrentStep('error');
     } finally {
       setLoading(false);
     }
@@ -170,14 +167,20 @@ const DriverVerificationApp = () => {
       const data = await response.json();
       console.log('Verify response:', data);
 
+      // Check response status first, then handle data
       if (!response.ok) {
+        // This handles 400 status responses (invalid codes)
         throw new Error(data.error || 'Verification failed');
       }
 
+      // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
         console.log('Verification successful, checking if returning driver');
+        
+        // First check if this is a returning driver
         await checkDriverStatus();
       } else {
+        // This handles edge cases where status is 200 but verification failed
         throw new Error(data.error || 'Invalid verification code');
       }
       
@@ -193,7 +196,6 @@ const DriverVerificationApp = () => {
     try {
       console.log('Checking driver status for:', driverEmail);
       
-      // UPDATED: Now uses Board A Monday.com integration
       const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
       
       if (response.ok) {
@@ -202,11 +204,11 @@ const DriverVerificationApp = () => {
         setDriverStatus(driverData);
         
         // Smart routing based on driver status
-        if (driverData.status === 'verified' && driverData.allDocumentsValid) {
-          // Returning driver with all valid documents
+        if (driverData.status === 'verified') {
+          // Returning driver with valid documents
           setCurrentStep('driver-status');
-        } else if (driverData.status === 'existing') {
-          // Returning driver but some documents need updating
+        } else if (driverData.status === 'partial') {
+          // Returning driver but some documents expired
           setCurrentStep('driver-status');
         } else {
           // New driver - start with insurance questionnaire
@@ -230,7 +232,7 @@ const DriverVerificationApp = () => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
-    // Save insurance data to Monday.com Board A
+    // Save insurance data to Monday.com via Board A
     try {
       setLoading(true);
       
@@ -331,7 +333,7 @@ const DriverVerificationApp = () => {
     setError('');
     
     try {
-      // Wait a bit for webhook to process
+      // Wait a bit for webhook to process (Idenfy webhooks can be delayed)
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       // Check final driver status
@@ -340,11 +342,13 @@ const DriverVerificationApp = () => {
       // Determine final step based on status
       switch (status) {
         case 'success':
+          // Verification completed successfully
           if (driverStatus?.status === 'verified') {
             setCurrentStep('complete');
           } else if (driverStatus?.status === 'review_required') {
-            setCurrentStep('processing');
+            setCurrentStep('processing'); // Still under review
           } else {
+            // Check if we need DVLA check
             const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
             if (needsDVLA) {
               setCurrentStep('dvla-check');
@@ -361,6 +365,7 @@ const DriverVerificationApp = () => {
           break;
           
         case 'mock':
+          // Mock mode - simulate success
           setCurrentStep('complete');
           break;
           
@@ -386,7 +391,7 @@ const DriverVerificationApp = () => {
     try {
       console.log('Processing DVLA check document:', file.name);
       
-      // Convert file to base64 for OCR processing
+      // Convert file to base64 for AWS Textract processing
       const base64 = await fileToBase64(file);
       
       // Use AWS Textract to extract DVLA check data
@@ -430,16 +435,25 @@ const DriverVerificationApp = () => {
     try {
       console.log('Extracting DVLA data from image...');
       
-      // Mock response for development - in production this uses AWS Textract
-      return {
-        driverName: "John Doe",
-        licenseNumber: "XXXXXX066JD9LA",
-        checkCode: "Kd m3 ch Nn",
-        dateGenerated: new Date().toISOString().split('T')[0],
-        drivingStatus: "Current full licence",
-        endorsements: "1 Offence, 3 Points",
-        validTo: "2032-08-01"
-      };
+      // Call AWS Textract for DVLA processing
+      const response = await fetch('/.netlify/functions/test-claude-ocr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          testType: 'dvla',
+          imageData: base64Image,
+          fileType: 'image'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process DVLA document');
+      }
+
+      const result = await response.json();
+      return result.result;
     } catch (err) {
       console.error('DVLA extraction error:', err);
       throw new Error('Failed to extract data from document');
@@ -453,7 +467,7 @@ const DriverVerificationApp = () => {
     return true;
   };
 
-  // Insurance Questionnaire Component (unchanged from previous version)
+  // Insurance Questionnaire Component
   const InsuranceQuestionnaire = () => {
     const [formData, setFormData] = useState({
       hasDisability: null,
@@ -473,6 +487,7 @@ const DriverVerificationApp = () => {
         [field]: value
       }));
       
+      // Clear error when user makes selection
       if (errors[field]) {
         setErrors(prev => ({ ...prev, [field]: null }));
       }
@@ -481,6 +496,7 @@ const DriverVerificationApp = () => {
     const validateQuestions = () => {
       const newErrors = {};
       
+      // Check all yes/no questions are answered
       const requiredFields = [
         'hasDisability', 'hasConvictions', 'hasProsecution', 
         'hasAccidents', 'hasInsuranceIssues', 'hasDrivingBan'
@@ -507,6 +523,7 @@ const DriverVerificationApp = () => {
           submittedAt: new Date().toISOString()
         };
 
+        // Call completion handler
         await handleInsuranceComplete(submissionData);
         
       } catch (error) {
@@ -559,6 +576,7 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Insurance Questions */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <h3 className="font-medium text-blue-900 mb-4">Health & Driving History</h3>
             <div className="space-y-4">
@@ -594,6 +612,7 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
+          {/* Additional Details */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Additional Information (Optional)
@@ -607,6 +626,7 @@ const DriverVerificationApp = () => {
             />
           </div>
 
+          {/* Error Display */}
           {errors.submit && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
@@ -618,6 +638,7 @@ const DriverVerificationApp = () => {
             </div>
           )}
 
+          {/* Navigation */}
           <div className="flex space-x-3">
             <button
               onClick={() => setCurrentStep('email-verification')}
@@ -668,62 +689,77 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-  // NEW: Job expired screen
-  const renderJobExpired = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Hire No Longer Available</h2>
-        <p className="text-gray-600 mb-4">This hire has expired or is no longer accepting drivers.</p>
-        
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-sm text-red-800">
-            {error || 'The verification link you used is no longer valid.'}
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <a
-            href="tel:+441234567890"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center justify-center"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Contact OOOSH Support
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderEmailEntry = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Mail className="mx-auto h-12 w-12 text-blue-600 mb-4" />
         <h2 className="text-xl font-bold text-gray-900">Driver Verification</h2>
-        <p className="text-gray-600 mt-2">Job: {jobDetails?.jobName}</p>
+        <p className="text-gray-600 mt-2">Job #{jobDetails?.jobNumber}: {jobDetails?.jobName}</p>
       </div>
 
+      {/* Job Details Header */}
       <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-        <div className="flex">
-          <Calendar className="h-5 w-5 text-blue-400 mt-0.5" />
-          <div className="ml-3">
-            <p className="text-sm text-blue-800">
-              <strong>Hire Period:</strong> {jobDetails?.startDate} to {jobDetails?.endDate}
-            </p>
-            {jobDetails?.clientName && (
-              <p className="text-sm text-blue-800">
-                <strong>Client:</strong> {jobDetails.clientName}
-              </p>
-            )}
-            {jobDetails?.validationInfo?.isWithinGracePeriod && (
-              <p className="text-sm text-orange-800">
-                <strong>Note:</strong> Hire recently ended - accepting drivers until {jobDetails.validationInfo.gracePeriodEnd}
-              </p>
-            )}
+        <div className="flex items-center mb-3">
+          <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+          <h3 className="font-medium text-blue-900">Hire Details</h3>
+        </div>
+        <div className="space-y-1 text-sm text-blue-800">
+          <div className="flex items-center">
+            <Clock className="h-4 w-4 mr-2" />
+            <p><strong>Period:</strong> 9am {jobDetails?.startDate} to 9am {jobDetails?.endDate} (inclusive)</p>
+          </div>
+          <div className="flex items-center">
+            <MapPin className="h-4 w-4 mr-2" />
+            <p><strong>Job:</strong> #{jobDetails?.jobNumber}</p>
           </div>
         </div>
       </div>
 
+      {/* Comprehensive Instructions */}
+      <div className="bg-gray-50 border border-gray-200 rounded-md p-6 mb-6">
+        <h3 className="font-medium text-gray-900 mb-4">📋 What You'll Need to Complete</h3>
+        <div className="space-y-4 text-sm text-gray-700">
+          <p>
+            This hire form will gather your details as a proposed driver for hire <strong>#{jobDetails?.jobNumber}</strong>, 
+            which is from <strong>9am {jobDetails?.startDate}</strong> to <strong>9am {jobDetails?.endDate}</strong> inclusive.
+          </p>
+          
+          <div className="space-y-2">
+            <p><strong>Step 1:</strong> You will firstly need to validate your email address below.</p>
+            <p><strong>Step 2:</strong> You will then be asked some insurance questions.</p>
+            <p><strong>Step 3:</strong> You will be redirected to <a href="https://www.idenfy.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">Idenfy <ExternalLink className="h-3 w-3 ml-1" /></a>, our licence verification software, which will ask you to upload your <strong>driving licence</strong> and <strong>two proofs of address</strong>, both of which must be from different sources and dated <strong>within the last 90 days</strong>.</p>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+            <p className="font-medium text-yellow-900 mb-2">Important Document Requirements:</p>
+            <div className="space-y-1 text-yellow-800">
+              <p><strong>• If you have a UK-issued driving licence:</strong> You will need to obtain a DVLA check code and upload it. Our guide for how to do this is <a href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">here <ExternalLink className="h-3 w-3 ml-1" /></a>.</p>
+              <p><strong>• If you have a licence issued by any other country:</strong> You will need to upload your passport into Idenfy instead.</p>
+            </div>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-md p-3">
+            <p className="font-medium text-green-900 mb-2">📱 Before You Start:</p>
+            <div className="space-y-1 text-green-800">
+              <p>• Have these documents ready now: your physical licence (and passport if applicable)</p>
+              <p>• Proofs of address can be uploaded as PDFs if easier - they <strong>do not</strong> have to be paper copies</p>
+              <p>• This process is usually best completed on a smartphone, but can be done on a computer with camera</p>
+              <p>• The official <a href="https://www.gov.uk/view-driving-licence" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">DVLA check code <ExternalLink className="h-3 w-3 ml-1" /></a> is required for UK licences</p>
+            </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="text-xs text-gray-600">
+              Please make sure you read and complete this hire form in conjunction with our 
+              <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1 inline-flex items-center">
+                Terms & Conditions <ExternalLink className="h-3 w-3 ml-1" />
+              </a>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Email Entry */}
       <div className="space-y-4">
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -877,7 +913,7 @@ const DriverVerificationApp = () => {
           
           {!needsDocuments && !needsDVLA && (
             <button
-              onClick={() => alert('Added to hire! (Monday.com integration complete)')}
+              onClick={() => alert('Added to hire! (Monday.com integration pending)')}
               className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               Join This Hire
@@ -980,7 +1016,7 @@ const DriverVerificationApp = () => {
       <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
         <h3 className="font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
         <ol className="text-sm text-orange-800 space-y-1 list-decimal list-inside">
-          <li>Visit gov.uk/check-driving-licence</li>
+          <li>Visit <a href="https://www.gov.uk/view-driving-licence" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center">gov.uk/view-driving-licence <ExternalLink className="h-3 w-3 ml-1" /></a></li>
           <li>Enter your license details</li>
           <li>Download/screenshot the summary page</li>
           <li>Upload it here</li>
@@ -1092,11 +1128,34 @@ const DriverVerificationApp = () => {
     </div>
   );
 
+  const renderError = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center py-8">
+        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Hire No Longer Available</h2>
+        <p className="text-gray-600 mb-4">{error}</p>
+        
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-red-800">
+            This hire has expired or is no longer accepting drivers.
+          </p>
+        </div>
+
+        <a
+          href="tel:+441234567890"
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center justify-center"
+        >
+          <Phone className="h-4 w-4 mr-2" />
+          Contact OOOSH Support
+        </a>
+      </div>
+    </div>
+  );
+
   // Main render logic
   const renderStep = () => {
     switch(currentStep) {
       case 'landing': return renderLanding();
-      case 'job-expired': return renderJobExpired();
       case 'email-entry': return renderEmailEntry();
       case 'email-verification': return renderEmailVerification();
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
@@ -1106,6 +1165,7 @@ const DriverVerificationApp = () => {
       case 'processing': return renderProcessing();
       case 'complete': return renderComplete();
       case 'rejected': return renderRejected();
+      case 'error': return renderError();
       default: return renderLanding();
     }
   };
