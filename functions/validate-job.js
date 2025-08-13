@@ -1,7 +1,12 @@
 // File: functions/validate-job.js
-// REVERTED TO ORIGINAL WORKING VERSION - Just fixed response structure for frontend
+// OOOSH Driver Verification - Job Validation Function
+// NEW: Validates job against Monday Q&H Board with +1 day grace period
 
 const fetch = require('node-fetch');
+
+// Monday Q&H Board ID
+const QH_BOARD_ID = '2431480012';
+const MONDAY_API_URL = 'https://api.monday.com/v2';
 
 exports.handler = async (event, context) => {
   console.log('Job validation function called with method:', event.httpMethod);
@@ -27,104 +32,25 @@ exports.handler = async (event, context) => {
 
   try {
     const jobId = event.queryStringParameters?.jobId;
-    
+    console.log('Validating job:', jobId);
+
     if (!jobId) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ 
-          error: 'jobId parameter is required',
-          usage: 'GET: ?jobId=99999'
-        })
+        body: JSON.stringify({ error: 'jobId parameter is required' })
       };
     }
 
-    console.log('Validating job:', jobId);
-
-    // Step 1: Look up job in Monday.com Q&H Board (ORIGINAL WORKING VERSION)
-    const jobLookup = await lookupJobInQHBoard(jobId);
+    // Validate job against Monday Q&H Board
+    const jobValidation = await validateJobInQHBoard(jobId);
     
-    if (!jobLookup.found) {
-      console.log('❌ Job not found in Q&H Board');
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          isValid: false,
-          reason: 'job_not_found',
-          message: 'Job not found in system',
-          jobId: jobId
-        })
-      };
-    }
-
-    console.log('✅ Job found in Q&H Board:', jobLookup.job.id);
-    console.log('📋 Parsed job data:', jobLookup.job);
-
-    // Step 2: Validate job timing (ORIGINAL WORKING VERSION)
-    const today = new Date().toISOString().split('T')[0];
-    const hireEnds = jobLookup.job.hireEnds;
-    const gracePeriodDate = new Date(hireEnds + 'T00:00:00');
-    gracePeriodDate.setDate(gracePeriodDate.getDate() + 1);
-    const gracePeriodEnd = gracePeriodDate.toISOString().split('T')[0];
-    
-    const isActive = today <= hireEnds;
-    const isWithinGracePeriod = today <= gracePeriodEnd;
-    const isValid = isWithinGracePeriod;
-
-    console.log('⏰ Validating job timing...');
-    console.log('📅 Job timing check:', {
-      today,
-      hireEnds,
-      gracePeriodEnd,
-      isValid
-    });
-
-    if (!isValid) {
-      console.log('❌ Job has expired');
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          isValid: false,
-          reason: 'Job has expired and is no longer accepting drivers',
-          message: `This hire ended on ${hireEnds} and is no longer accepting drivers`,
-          jobId: jobId
-        })
-      };
-    }
-
-    console.log('✅ Job is valid (within grace period)');
-
-    // Step 3: Return success with FIXED response structure for frontend
-    const response = {
-      success: true,
-      isValid: true,
-      isActive: isActive,
-      isWithinGracePeriod: isWithinGracePeriod,
-      gracePeriodEnd: gracePeriodEnd,
-      reason: isActive ? 'active' : 'grace_period',
-      message: isActive ? 'Job is active and accepting drivers' : 'Job recently ended but still accepting drivers',
-      jobId: jobId,
-      // FIXED: Frontend expects 'job' object with these fields
-      job: {
-        jobName: 'Driver Verification',
-        summary: 'Driver Verification', 
-        contact: 'OOOSH Client',
-        hireStarts: jobLookup.job.hireStarts || hireEnds, // Fallback if start date missing
-        hireEnds: jobLookup.job.hireEnds,
-        jobNumber: jobLookup.job.jobNumber
-      }
-    };
-
-    console.log('Job validation result:', response);
+    console.log('Job validation result:', jobValidation);
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(response)
+      body: JSON.stringify(jobValidation)
     };
 
   } catch (error) {
@@ -133,36 +59,30 @@ exports.handler = async (event, context) => {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-        error: 'Job validation failed',
+        error: 'Internal server error',
         details: error.message 
       })
     };
   }
 };
 
-// ORIGINAL WORKING VERSION - Don't change this!
-async function lookupJobInQHBoard(jobNumber) {
+// Validate job in Monday Q&H Board
+async function validateJobInQHBoard(jobId) {
+  console.log('🔍 Looking up job in Q&H Board:', jobId);
+  
   try {
-    console.log('🔍 Looking up job in Q&H Board:', jobNumber);
-    
-    if (!process.env.MONDAY_API_TOKEN) {
-      console.log('⚠️ Monday.com API token not configured');
-      return { found: false, error: 'Monday.com API not configured' };
-    }
-
-    // Original working GraphQL query
+    // Search for job by job number in text7 column
     const query = `
       query {
-        items_page(
-          board_ids: [2431480012]
-          limit: 50
-          query_params: {
-            rules: [{
-              column_id: "text7"
-              compare_value: ["${jobNumber}"]
-              operator: any_of
-            }]
-          }
+        items_page_by_column_values (
+          board_id: ${QH_BOARD_ID},
+          columns: [
+            {
+              column_id: "text7",
+              column_values: ["${jobId}"]
+            }
+          ],
+          limit: 1
         ) {
           items {
             id
@@ -177,74 +97,152 @@ async function lookupJobInQHBoard(jobNumber) {
       }
     `;
 
-    const response = await fetch('https://api.monday.com/v2', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ query })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Monday.com API error: ${response.status}`);
+    const response = await callMondayAPI(query);
+    
+    if (!response.data?.items_page_by_column_values?.items?.length) {
+      console.log('❌ Job not found in Q&H Board');
+      return {
+        valid: false,
+        reason: 'job_not_found',
+        message: 'Job not found in system',
+        jobId: jobId
+      };
     }
 
-    const result = await response.json();
+    const jobItem = response.data.items_page_by_column_values.items[0];
+    console.log('✅ Job found in Q&H Board:', jobItem.id);
+
+    // Parse job data
+    const jobData = parseQHJobData(jobItem);
     
-    if (result.errors) {
-      throw new Error(`Monday.com GraphQL error: ${JSON.stringify(result.errors)}`);
-    }
-
-    const items = result.data?.items_page?.items || [];
+    // Validate job timing with +1 day grace period
+    const validationResult = validateJobTiming(jobData, jobId);
     
-    if (items.length === 0) {
-      return { found: false };
-    }
-
-    // Parse the first matching item (original working logic)
-    const item = items[0];
-    const columnValues = item.column_values || [];
-    
-    const jobData = {
-      id: item.id,
-      name: item.name,
-      jobNumber: jobNumber
-    };
-
-    // Extract column data (original working logic)
-    columnValues.forEach(col => {
-      switch(col.id) {
-        case 'text7':
-          jobData.jobNumber = col.text || jobNumber;
-          break;
-        case 'date': // Hire start date
-          if (col.text) {
-            jobData.hireStarts = col.text;
-          }
-          break;
-        case 'dup__of_hire_starts': // Hire end date  
-          if (col.text) {
-            jobData.hireEnds = col.text;
-          }
-          break;
-        case 'text0': // Contact
-          if (col.text) {
-            jobData.contact = col.text;
-          }
-          break;
-      }
-    });
-
-    console.log('📋 Extracted job data:', jobData);
-
-    return {
-      found: true,
-      job: jobData
-    };
+    return validationResult;
 
   } catch (error) {
-    console.error('Error looking up job in Q&H Board:', error);
-    return { found: false, error: error.message };
+    console.error('Error validating job in Q&H Board:', error);
+    return {
+      valid: false,
+      reason: 'validation_error',
+      message: 'Failed to validate job',
+      jobId: jobId,
+      error: error.message
+    };
   }
+}
+
+// Parse Q&H Board job data
+function parseQHJobData(jobItem) {
+  const jobData = {
+    id: jobItem.id,
+    name: jobItem.name,
+    jobNumber: null,
+    hireEnds: null
+  };
+
+  // Parse column values
+  jobItem.column_values.forEach(col => {
+    const value = col.value ? JSON.parse(col.value) : null;
+    
+    switch (col.id) {
+      case 'text7': // Job number
+        jobData.jobNumber = col.text;
+        break;
+      case 'dup__of_hire_starts': // Hire ends date
+        jobData.hireEnds = value?.date;
+        break;
+    }
+  });
+
+  console.log('📋 Parsed job data:', jobData);
+  return jobData;
+}
+
+// Validate job timing with grace period
+function validateJobTiming(jobData, requestedJobId) {
+  console.log('⏰ Validating job timing...');
+  
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
+  // Check if we have the hire end date
+  if (!jobData.hireEnds) {
+    console.log('⚠️ No hire end date found');
+    return {
+      valid: false,
+      reason: 'missing_end_date',
+      message: 'Job end date not found',
+      jobId: requestedJobId,
+      jobData: jobData
+    };
+  }
+
+  // Calculate grace period (hire end date + 1 day)
+  const hireEndDate = new Date(jobData.hireEnds);
+  const gracePeriodEnd = new Date(hireEndDate.getTime() + 24 * 60 * 60 * 1000); // +1 day
+  const gracePeriodEndStr = gracePeriodEnd.toISOString().split('T')[0];
+  
+  console.log('📅 Job timing check:', {
+    today: todayStr,
+    hireEnds: jobData.hireEnds,
+    gracePeriodEnd: gracePeriodEndStr,
+    isValid: today <= gracePeriodEnd
+  });
+
+  // Check if job is still valid (today <= hire end + 1 day)
+  if (today <= gracePeriodEnd) {
+    console.log('✅ Job is valid (within grace period)');
+    return {
+      valid: true,
+      reason: 'active',
+      message: 'Job is active and accepting drivers',
+      jobId: requestedJobId,
+      jobData: {
+        name: jobData.name,
+        jobNumber: jobData.jobNumber,
+        hireEnds: jobData.hireEnds,
+        gracePeriodEnd: gracePeriodEndStr
+      }
+    };
+  } else {
+    console.log('❌ Job has expired (beyond grace period)');
+    return {
+      valid: false,
+      reason: 'job_expired',
+      message: 'This hire has ended and is no longer accepting drivers',
+      jobId: requestedJobId,
+      jobData: {
+        name: jobData.name,
+        jobNumber: jobData.jobNumber,
+        hireEnds: jobData.hireEnds,
+        gracePeriodEnd: gracePeriodEndStr,
+        daysExpired: Math.ceil((today - gracePeriodEnd) / (24 * 60 * 60 * 1000))
+      }
+    };
+  }
+}
+
+// Call Monday.com API
+async function callMondayAPI(query) {
+  const response = await fetch(MONDAY_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`
+    },
+    body: JSON.stringify({ query })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Monday.com API error: ${response.status} ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  
+  if (result.errors) {
+    throw new Error(`Monday.com GraphQL errors: ${JSON.stringify(result.errors)}`);
+  }
+  
+  return result;
 }
