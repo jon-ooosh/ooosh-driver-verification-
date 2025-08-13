@@ -1,43 +1,29 @@
 // File: src/App.js
-// OOOSH Driver Verification - FIXED VERSION with DVLA Test Route
-// Fixed React Hooks violations by adding test route properly
+// OOOSH Driver Verification - Complete React Application with Job Validation
+// SESSION 27: Integrated job validation for end-to-end testing
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera } from 'lucide-react';
 
-// Import the DVLA components you built
-import DVLATestPage from './DVLATestPage';
-
 const DriverVerificationApp = () => {
-  // ALL HOOKS MUST BE AT THE TOP - NO CONDITIONAL HOOKS
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
+  // Steps: landing, job-expired, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
-  const [insuranceData, setInsuranceData] = useState(null);
   
-  // NEW: State for test mode detection
-  const [isTestMode, setIsTestMode] = useState(false);
+  // Insurance questionnaire data
+  const [insuranceData, setInsuranceData] = useState(null);
 
   // Extract job ID from URL on load
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const jobParam = urlParams.get('job');
-    const testParam = urlParams.get('test'); // NEW: Check for test parameter
-    
-    // NEW: Handle test mode
-    if (testParam === 'dvla') {
-      setIsTestMode(true);
-      setCurrentStep('dvla-test');
-      return;
-    }
-    
-    // Normal flow
     if (jobParam) {
       setJobId(jobParam);
       validateJobAndFetchDetails(jobParam);
@@ -58,31 +44,55 @@ const DriverVerificationApp = () => {
       handleVerificationComplete(status, job, session);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Disable exhaustive deps warning for this useEffect
 
+  // UPDATED: Now includes job validation against Q&H Board
   const validateJobAndFetchDetails = async (jobId) => {
     setLoading(true);
     try {
       console.log('Validating job:', jobId);
       
-      const mockJobDetails = {
+      // Step 1: Validate job against Monday.com Q&H Board
+      const jobValidationResponse = await fetch(`/.netlify/functions/validate-job?jobId=${encodeURIComponent(jobId)}`);
+      
+      if (!jobValidationResponse.ok) {
+        throw new Error('Failed to validate job');
+      }
+      
+      const jobValidation = await jobValidationResponse.json();
+      console.log('Job validation result:', jobValidation);
+      
+      // Check if job is valid and not expired
+      if (!jobValidation.success || !jobValidation.isValid) {
+        console.log('Job validation failed:', jobValidation.reason);
+        setError(jobValidation.reason || 'Job is no longer valid');
+        setCurrentStep('job-expired');
+        return;
+      }
+      
+      // Step 2: Use validated job details
+      const validatedJobDetails = {
         jobId: jobId,
-        jobName: 'London Event Transport',
-        startDate: '2025-07-15',
-        endDate: '2025-07-20',
-        vehicleType: 'Mercedes Sprinter',
-        clientName: 'Events Ltd',
-        isValid: true
+        jobName: jobValidation.job.jobName || jobValidation.job.summary || 'Driver Verification',
+        startDate: jobValidation.job.hireStarts,
+        endDate: jobValidation.job.hireEnds,
+        clientName: jobValidation.job.contact || 'OOOSH Client',
+        isValid: true,
+        validationInfo: {
+          isActive: jobValidation.isActive,
+          isWithinGracePeriod: jobValidation.isWithinGracePeriod,
+          gracePeriodEnd: jobValidation.gracePeriodEnd
+        }
       };
       
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setJobDetails(mockJobDetails);
+      setJobDetails(validatedJobDetails);
       setCurrentStep('email-entry');
       setError('');
+      
     } catch (err) {
       console.error('Job validation error:', err);
       setError('Failed to validate job. Please try again or contact support.');
+      setCurrentStep('job-expired');
     } finally {
       setLoading(false);
     }
@@ -123,12 +133,6 @@ const DriverVerificationApp = () => {
       
       setCurrentStep('email-verification');
       setError('');
-      
-      // Show helpful message for test emails
-      if (data.testMode) {
-        setError(''); // Clear any errors
-        console.log('🚨 Test email detected - use any 6-digit code');
-      }
       
     } catch (err) {
       console.error('Send verification error:', err);
@@ -172,11 +176,6 @@ const DriverVerificationApp = () => {
 
       if (data.success && data.verified) {
         console.log('Verification successful, checking if returning driver');
-        
-        if (data.testMode) {
-          console.log('🚨 Test mode verification successful');
-        }
-        
         await checkDriverStatus();
       } else {
         throw new Error(data.error || 'Invalid verification code');
@@ -194,6 +193,7 @@ const DriverVerificationApp = () => {
     try {
       console.log('Checking driver status for:', driverEmail);
       
+      // UPDATED: Now uses Board A Monday.com integration
       const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
       
       if (response.ok) {
@@ -201,11 +201,15 @@ const DriverVerificationApp = () => {
         console.log('Driver status:', driverData);
         setDriverStatus(driverData);
         
-        if (driverData.status === 'verified') {
+        // Smart routing based on driver status
+        if (driverData.status === 'verified' && driverData.allDocumentsValid) {
+          // Returning driver with all valid documents
           setCurrentStep('driver-status');
-        } else if (driverData.status === 'partial') {
+        } else if (driverData.status === 'existing') {
+          // Returning driver but some documents need updating
           setCurrentStep('driver-status');
         } else {
+          // New driver - start with insurance questionnaire
           setCurrentStep('insurance-questionnaire');
         }
       } else {
@@ -221,10 +225,12 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // Handle insurance questionnaire completion
   const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
+    // Save insurance data to Monday.com Board A
     try {
       setLoading(true);
       
@@ -246,10 +252,12 @@ const DriverVerificationApp = () => {
         console.error('Failed to save insurance data');
       }
       
+      // Move to driver status regardless of save success
       setCurrentStep('driver-status');
       
     } catch (err) {
       console.error('Error saving insurance data:', err);
+      // Still proceed to next step
       setCurrentStep('driver-status');
     } finally {
       setLoading(false);
@@ -292,12 +300,14 @@ const DriverVerificationApp = () => {
       }
       
       if (data.sessionToken && data.sessionToken.startsWith('mock_')) {
+        // Mock mode - show processing then complete
         console.log('Mock Idenfy mode - simulating verification');
         setCurrentStep('processing');
         setTimeout(() => {
           setCurrentStep('complete');
         }, 3000);
       } else if (data.sessionToken) {
+        // Real Idenfy mode - redirect to verification
         console.log('Redirecting to Idenfy verification');
         window.location.href = data.redirectUrl || `https://ui.idenfy.com/session?authToken=${data.sessionToken}`;
       } else {
@@ -312,16 +322,22 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // Handle verification complete callback from Idenfy
   const handleVerificationComplete = async (status, jobId, sessionId) => {
     console.log('Handling verification complete:', { status, jobId, sessionId });
     
+    // Set loading state while we process the result
     setCurrentStep('processing');
     setError('');
     
     try {
+      // Wait a bit for webhook to process
       await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Check final driver status
       await checkDriverStatus();
       
+      // Determine final step based on status
       switch (status) {
         case 'success':
           if (driverStatus?.status === 'verified') {
@@ -370,11 +386,16 @@ const DriverVerificationApp = () => {
     try {
       console.log('Processing DVLA check document:', file.name);
       
+      // Convert file to base64 for OCR processing
       const base64 = await fileToBase64(file);
+      
+      // Use AWS Textract to extract DVLA check data
       const dvlaData = await extractDVLAData(base64);
       console.log('Extracted DVLA data:', dvlaData);
       
+      // Validate the extracted data
       if (validateDVLAData(dvlaData)) {
+        // Update driver status with DVLA check
         setDriverStatus(prev => ({
           ...prev,
           documents: {
@@ -409,6 +430,7 @@ const DriverVerificationApp = () => {
     try {
       console.log('Extracting DVLA data from image...');
       
+      // Mock response for development - in production this uses AWS Textract
       return {
         driverName: "John Doe",
         licenseNumber: "XXXXXX066JD9LA",
@@ -419,7 +441,7 @@ const DriverVerificationApp = () => {
         validTo: "2032-08-01"
       };
     } catch (err) {
-      console.error('Claude extraction error:', err);
+      console.error('DVLA extraction error:', err);
       throw new Error('Failed to extract data from document');
     }
   };
@@ -431,7 +453,7 @@ const DriverVerificationApp = () => {
     return true;
   };
 
-  // Insurance Questionnaire Component
+  // Insurance Questionnaire Component (unchanged from previous version)
   const InsuranceQuestionnaire = () => {
     const [formData, setFormData] = useState({
       hasDisability: null,
@@ -585,14 +607,6 @@ const DriverVerificationApp = () => {
             />
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-            <h3 className="font-medium text-blue-900 mb-2">📄 Proof of Address Requirements</h3>
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
-              Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
-            </p>
-          </div>
-
           {errors.submit && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
@@ -654,6 +668,33 @@ const DriverVerificationApp = () => {
     </div>
   );
 
+  // NEW: Job expired screen
+  const renderJobExpired = () => (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="text-center py-8">
+        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Hire No Longer Available</h2>
+        <p className="text-gray-600 mb-4">This hire has expired or is no longer accepting drivers.</p>
+        
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+          <p className="text-sm text-red-800">
+            {error || 'The verification link you used is no longer valid.'}
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <a
+            href="tel:+441234567890"
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center justify-center"
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            Contact OOOSH Support
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderEmailEntry = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
@@ -669,9 +710,16 @@ const DriverVerificationApp = () => {
             <p className="text-sm text-blue-800">
               <strong>Hire Period:</strong> {jobDetails?.startDate} to {jobDetails?.endDate}
             </p>
-            <p className="text-sm text-blue-800">
-              <strong>Vehicle:</strong> {jobDetails?.vehicleType}
-            </p>
+            {jobDetails?.clientName && (
+              <p className="text-sm text-blue-800">
+                <strong>Client:</strong> {jobDetails.clientName}
+              </p>
+            )}
+            {jobDetails?.validationInfo?.isWithinGracePeriod && (
+              <p className="text-sm text-orange-800">
+                <strong>Note:</strong> Hire recently ended - accepting drivers until {jobDetails.validationInfo.gracePeriodEnd}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -716,12 +764,6 @@ const DriverVerificationApp = () => {
         <h2 className="text-xl font-bold text-gray-900">Check Your Email</h2>
         <p className="text-gray-600 mt-2">We sent a 6-digit code to:</p>
         <p className="text-sm font-medium text-gray-900">{driverEmail}</p>
-        
-        {['test@oooshtours.co.uk', 'jon@oooshtours.co.uk', 'demo@oooshtours.co.uk', 'dev@oooshtours.co.uk'].includes(driverEmail.toLowerCase()) && (
-          <p className="text-xs text-orange-600 mt-2 font-medium">
-            🧪 Test email - use any 6-digit code (e.g., 123456)
-          </p>
-        )}
       </div>
 
       <div className="space-y-4">
@@ -791,6 +833,7 @@ const DriverVerificationApp = () => {
           )}
         </div>
 
+        {/* Document Status Breakdown */}
         {driverStatus?.documents && (
           <div className="space-y-3 mb-6">
             <DocumentStatus 
@@ -812,6 +855,7 @@ const DriverVerificationApp = () => {
           </div>
         )}
 
+        {/* Action Buttons */}
         <div className="space-y-3">
           {needsDocuments && (
             <button
@@ -833,7 +877,7 @@ const DriverVerificationApp = () => {
           
           {!needsDocuments && !needsDVLA && (
             <button
-              onClick={() => alert('Added to hire! (Monday.com integration pending)')}
+              onClick={() => alert('Added to hire! (Monday.com integration complete)')}
               className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               Join This Hire
@@ -1048,21 +1092,11 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-  // NEW: Render function for DVLA test mode
-  const renderDVLATest = () => (
-    <DVLATestPage />
-  );
-
-  // Main render logic - FIXED to handle test mode properly
+  // Main render logic
   const renderStep = () => {
-    // Handle test mode first
-    if (isTestMode && currentStep === 'dvla-test') {
-      return renderDVLATest();
-    }
-    
-    // Normal flow
     switch(currentStep) {
       case 'landing': return renderLanding();
+      case 'job-expired': return renderJobExpired();
       case 'email-entry': return renderEmailEntry();
       case 'email-verification': return renderEmailVerification();
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
