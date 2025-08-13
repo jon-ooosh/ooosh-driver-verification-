@@ -688,11 +688,44 @@ const DriverVerificationApp = () => {
           <p className="mt-2 text-lg text-gray-600">Loading...</p>
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <AlertCircle className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <p className="text-base text-red-800">{error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="text-center mb-4">
+            <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+            <h2 className="text-xl font-bold text-red-900 mb-2">Unable to access this verification</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <p className="text-base text-red-800 text-center">{error}</p>
+            
+            <div className="bg-white rounded-md p-4 border border-red-200">
+              <h3 className="font-medium text-red-900 mb-3">This may be because:</h3>
+              <ul className="text-sm text-red-800 space-y-2">
+                <li className="flex items-start">
+                  <span className="text-red-500 mr-2">•</span>
+                  <span>The hire period has ended or been cancelled</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-red-500 mr-2">•</span>
+                  <span>The verification link has expired</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-red-500 mr-2">•</span>
+                  <span>The job reference number is incorrect</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-red-500 mr-2">•</span>
+                  <span>You may have already completed verification for this hire</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <h3 className="font-medium text-blue-900 mb-2">What to do next:</h3>
+              <div className="space-y-3 text-sm text-blue-800">
+                <p>📞 <strong>Call us:</strong> <a href="tel:01273911382" className="text-purple-600 hover:text-purple-800 font-medium">01273 911382</a></p>
+                <p>📧 <strong>Email:</strong> <a href="mailto:bookings@oooshtours.co.uk" className="text-purple-600 hover:text-purple-800 font-medium">bookings@oooshtours.co.uk</a></p>
+                <p>💬 <strong>Include:</strong> Your job reference number and this error message</p>
+              </div>
             </div>
           </div>
         </div>
