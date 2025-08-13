@@ -143,27 +143,20 @@ async function lookupJobInQHBoard(jobNumber) {
     }
 
     // Query Monday.com Q&H Board (Board ID: 2431480012)
+    // FIXED: Use older 'items' query instead of 'items_page' for compatibility
     const query = `
       query {
-        items_page(
-          board_ids: [2431480012]
-          limit: 50
-          query_params: {
-            rules: [{
-              column_id: "text7"
-              compare_value: ["${jobNumber}"]
-              operator: any_of
-            }]
-          }
+        items_by_column_values(
+          board_id: 2431480012
+          column_id: "text7"
+          column_value: "${jobNumber}"
         ) {
-          items {
+          id
+          name
+          column_values {
             id
-            name
-            column_values {
-              id
-              text
-              value
-            }
+            text
+            value
           }
         }
       }
@@ -188,7 +181,7 @@ async function lookupJobInQHBoard(jobNumber) {
       throw new Error(`Monday.com GraphQL error: ${JSON.stringify(result.errors)}`);
     }
 
-    const items = result.data?.items_page?.items || [];
+    const items = result.data?.items_by_column_values || [];
     
     if (items.length === 0) {
       return { found: false };
