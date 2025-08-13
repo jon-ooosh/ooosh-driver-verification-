@@ -275,7 +275,8 @@ const DriverVerificationApp = () => {
   };
 
   const startVerification = () => {
-    setCurrentStep('document-upload');
+    // Skip the redundant document-upload page and go straight to Idenfy
+    generateIdenfyToken();
   };
 
   const startDVLACheck = () => {
@@ -688,7 +689,7 @@ const DriverVerificationApp = () => {
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
             <h3 className="text-lg font-medium text-purple-900 mb-2">Next step</h3>
             <p className="text-base text-purple-800">
-              Click Continue to proceed to Idenfy, our AI-powered document verification system.
+              Press Continue to proceed to Idenfy, our AI-powered document verification system.
             </p>
           </div>
 
@@ -1147,7 +1148,7 @@ const DriverVerificationApp = () => {
               onClick={startVerification}
               className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
             >
-              Upload documents
+              Start document verification
             </button>
           )}
           
