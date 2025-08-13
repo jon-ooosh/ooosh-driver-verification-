@@ -1,9 +1,9 @@
 // File: src/App.js
-// OOOSH Driver Verification - Final Polish with Device Detection
-// FIXED: British spelling (licence), intro paragraph, device detection, corrected links
+// OOOSH Driver Verification - Complete UI improvements with all requested changes
+// FIXED: All styling, text, links, and mobile QR detection
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, Monitor } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -21,14 +21,18 @@ const DriverVerificationApp = () => {
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
 
-  // Detect device type
+  // Detect if user is on mobile
   useEffect(() => {
-    const checkIsMobile = () => {
-      const userAgent = navigator.userAgent.toLowerCase();
-      const mobileKeywords = ['mobile', 'android', 'iphone', 'ipad', 'ipod', 'blackberry', 'windows phone'];
-      return mobileKeywords.some(keyword => userAgent.includes(keyword)) || window.innerWidth <= 768;
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      const isMobileDevice = /android|iPhone|iPad|iPod|blackberry|iemobile|opera mini/i.test(userAgent);
+      const isSmallScreen = window.innerWidth <= 768;
+      setIsMobile(isMobileDevice || isSmallScreen);
     };
-    setIsMobile(checkIsMobile());
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Extract job ID from URL on load
@@ -86,10 +90,6 @@ const DriverVerificationApp = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateQRCode = (url) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
   };
 
   const sendVerificationEmail = async () => {
@@ -447,7 +447,7 @@ const DriverVerificationApp = () => {
       // Mock response for development
       return {
         driverName: "John Doe",
-        licenseNumber: "XXXXXX066JD9LA",
+        licenceNumber: "XXXXXX066JD9LA",
         checkCode: "Kd m3 ch Nn",
         dateGenerated: new Date().toISOString().split('T')[0],
         drivingStatus: "Current full licence",
@@ -461,10 +461,17 @@ const DriverVerificationApp = () => {
   };
 
   const validateDVLAData = (dvlaData) => {
-    if (!dvlaData.driverName || !dvlaData.licenseNumber || !dvlaData.checkCode) {
+    if (!dvlaData.driverName || !dvlaData.licenceNumber || !dvlaData.checkCode) {
       return false;
     }
     return true;
+  };
+
+  // Generate QR code for mobile access
+  const generateQRCode = () => {
+    const currentUrl = window.location.href;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentUrl)}`;
+    return qrUrl;
   };
 
   // Insurance Questionnaire Component
@@ -747,31 +754,9 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
-          {/* Device-specific Notice */}
-          {!isMobile && (
-            <div className="bg-blue-50 border border-blue-200 px-6 py-4">
-              <div className="flex items-start space-x-3">
-                <Smartphone className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="text-base font-medium text-blue-900 mb-2">📱 Better on mobile</h3>
-                  <p className="text-sm text-blue-800 mb-3">
-                    This form works best on a smartphone for document capture. Scan this QR code to open on your phone:
-                  </p>
-                  <div className="text-center">
-                    <img 
-                      src={generateQRCode(window.location.href)} 
-                      alt="QR Code"
-                      className="mx-auto rounded border"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Introduction Paragraph */}
-          <div className="px-6 py-6 bg-gray-50 border-b border-gray-200">
-            <p className="text-base text-gray-700 leading-relaxed">
+          {/* Introduction Section */}
+          <div className="px-6 py-6 bg-blue-50 border-b border-blue-200">
+            <p className="text-base text-blue-800 leading-relaxed">
               This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>, 
               or if you have recently completed a form for a different hire, it will re-validate your documents. 
               It's best completed on a smartphone though it can be done on a computer with camera. 
@@ -780,11 +765,33 @@ const DriverVerificationApp = () => {
                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                className="text-purple-600 hover:text-purple-800 font-medium inline-flex items-center"
               >
-                T&Cs here <ExternalLink className="h-3 w-3 ml-1" />
+                T&Cs here <ExternalLink className="h-4 w-4 ml-1" />
               </a>
             </p>
+            
+            {/* Mobile recommendation or QR code */}
+            {!isMobile && (
+              <div className="mt-4 p-4 bg-white rounded-lg border border-blue-300">
+                <div className="flex items-start space-x-4">
+                  <Smartphone className="h-6 w-6 text-purple-600 mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-blue-900 mb-2">📱 For best experience, use your smartphone</h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      Scan this QR code with your phone's camera to open this page on your mobile device:
+                    </p>
+                    <div className="text-center">
+                      <img 
+                        src={generateQRCode()} 
+                        alt="QR Code for mobile access" 
+                        className="mx-auto border border-gray-300 rounded"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Email Entry Section */}
@@ -844,7 +851,6 @@ const DriverVerificationApp = () => {
                 <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence holders additional requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Valid passport</li>
-                  <li>No DVLA check required</li>
                 </ul>
               </div>
 
@@ -853,9 +859,9 @@ const DriverVerificationApp = () => {
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Bank statements, utility bills, council tax, or credit card statements</li>
                   <li>Both must be dated within the last 90 days</li>
+                  <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
                   <li>Must show your current home address</li>
                   <li>Documents must be from different sources</li>
-                  <li>They do <strong>not</strong> have to be physical copies - downloaded PDFs or screenshots are fine</li>
                 </ul>
               </div>
 
@@ -971,7 +977,7 @@ const DriverVerificationApp = () => {
   const renderDriverStatus = () => {
     const isVerified = driverStatus?.status === 'verified';
     const needsDocuments = driverStatus?.status === 'new' || 
-                          !driverStatus?.documents?.license?.valid ||
+                          !driverStatus?.documents?.licence?.valid ||
                           !driverStatus?.documents?.poa1?.valid ||
                           !driverStatus?.documents?.poa2?.valid;
     const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
@@ -999,7 +1005,7 @@ const DriverVerificationApp = () => {
           <div className="space-y-3 mb-6">
             <DocumentStatus 
               title="Driving licence" 
-              status={driverStatus.documents.license} 
+              status={driverStatus.documents.licence} 
             />
             <DocumentStatus 
               title="Proof of address #1" 
@@ -1141,7 +1147,7 @@ const DriverVerificationApp = () => {
       <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
         <h3 className="text-lg font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
         <ol className="text-base text-orange-800 space-y-1 list-decimal list-inside">
-          <li>Visit gov.uk/view-driving-licence</li>
+          <li>Visit gov.uk/check-driving-licence</li>
           <li>Enter your licence details</li>
           <li>Download/screenshot the summary page</li>
           <li>Upload it here</li>
