@@ -1,6 +1,6 @@
 // File: functions/driver-status.js
 // OOOSH Driver Verification - Get Driver Status Function
-// PRODUCTION VERSION - Uses Monday.com instead of Google Sheets
+// UPDATED: Now uses Board A (Driver Database - 9798399405) instead of Google Sheets
 
 const fetch = require('node-fetch');
 
@@ -45,60 +45,15 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Validate email format
-    if (!email.includes('@')) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Invalid email format' })
-      };
-    }
-
-    // Get driver status from Monday.com
-    console.log('Fetching driver status from Monday.com');
-    const driverStatus = await getDriverStatusFromMonday(email);
+    // UPDATED: Use Board A lookup instead of Google Sheets
+    const driverStatus = await getDriverStatusFromBoardA(email);
     
-    if (!driverStatus) {
-      // New driver - return default status
-      console.log('Driver not found in Monday.com - new driver');
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          status: 'new',
-          email: email,
-          name: null,
-          documents: {
-            license: { valid: false },
-            poa1: { valid: false },
-            poa2: { valid: false },
-            dvlaCheck: { valid: false }
-          },
-          insuranceStatus: 'pending',
-          lastUpdated: new Date().toISOString()
-        })
-      };
-    }
-
-    // Analyze document status and expiry
-    const documentStatus = analyzeDocumentStatus(driverStatus);
-    const overallStatus = determineOverallStatus(documentStatus, driverStatus);
-
-    console.log('Driver status analysis complete:', overallStatus);
+    console.log('Driver status retrieved:', driverStatus);
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        status: overallStatus,
-        email: email,
-        name: driverStatus.name,
-        jobNumber: driverStatus.jobNumber,
-        documents: documentStatus,
-        insuranceStatus: driverStatus.insuranceStatus || 'pending',
-        lastUpdated: driverStatus.updatedAt || new Date().toISOString(),
-        mondayItemId: driverStatus.itemId
-      })
+      body: JSON.stringify(driverStatus)
     };
 
   } catch (error) {
@@ -107,53 +62,70 @@ exports.handler = async (event, context) => {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-        error: 'Failed to get driver status',
+        error: 'Internal server error',
         details: error.message 
       })
     };
   }
 };
 
-// Get driver status from Monday.com
-async function getDriverStatusFromMonday(email) {
+// NEW: Get driver status from Board A (Driver Database - 9798399405)
+async function getDriverStatusFromBoardA(email) {
+  console.log('🔍 Looking up driver in Board A:', email);
+  
   try {
-    console.log('Calling Monday.com integration for driver status');
-    
+    // Call our monday-integration function to find the driver
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'get-driver-status',
+        action: 'find-driver-board-a',
         email: email
       })
     });
 
     if (!response.ok) {
-      console.error('Monday.com driver status request failed:', response.status);
-      return null;
+      console.log('Driver not found in Board A, treating as new driver');
+      return createNewDriverStatus(email);
     }
 
     const result = await response.json();
-    console.log('Monday.com driver status response:', result.success);
-
-    if (!result.success) {
-      console.log('Driver not found in Monday.com:', result.error);
-      return null;
+    
+    if (!result.success || !result.driver) {
+      console.log('No driver data returned, treating as new driver');
+      return createNewDriverStatus(email);
     }
 
-    return result.driver;
+    console.log('✅ Found existing driver in Board A');
+    
+    // Parse the driver data from Board A
+    const driver = result.driver;
+    
+    // Analyze document status and determine overall driver status
+    const documentStatus = analyzeDocumentStatus(driver);
+    
+    return {
+      status: documentStatus.overallStatus,
+      email: email,
+      name: driver.driverName || null,
+      phone: driver.phoneNumber || null,
+      documents: documentStatus.documents,
+      boardAId: driver.id,
+      lastUpdated: driver.lastUpdated || null
+    };
 
   } catch (error) {
-    console.error('Error fetching driver status from Monday.com:', error);
-    return null;
+    console.error('Error getting driver status from Board A:', error);
+    return createNewDriverStatus(email);
   }
 }
 
-// Analyze document status and expiry dates
-function analyzeDocumentStatus(driverData) {
-  const today = new Date();
+// Analyze document status and expiry from Board A data
+function analyzeDocumentStatus(driver) {
+  console.log('📊 Analyzing document status for driver');
+  
   const documents = {
     license: { valid: false },
     poa1: { valid: false },
@@ -161,117 +133,124 @@ function analyzeDocumentStatus(driverData) {
     dvlaCheck: { valid: false }
   };
 
-  // License status
-  if (driverData.licenseNumber && driverData.licenseExpiryDate) {
-    const licenseExpiry = new Date(driverData.licenseExpiryDate);
-    const daysUntilExpiry = Math.ceil((licenseExpiry - today) / (1000 * 60 * 60 * 24));
-    
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+  // Check License Status
+  if (driver.licenseValidTo) {
+    const licenseExpiry = new Date(driver.licenseValidTo);
     documents.license = {
-      valid: daysUntilExpiry > 0,
-      expiryDate: driverData.licenseExpiryDate,
-      daysUntilExpiry: daysUntilExpiry,
-      expired: daysUntilExpiry <= 0,
-      expiringSoon: daysUntilExpiry <= 30 && daysUntilExpiry > 0
+      valid: licenseExpiry > today,
+      expiryDate: driver.licenseValidTo,
+      type: 'UK Driving License',
+      status: licenseExpiry > today ? 'valid' : 'expired'
     };
   }
 
-  // POA1 status
-  if (driverData.poa1ValidDate) {
-    const poa1Expiry = new Date(driverData.poa1ValidDate);
-    const daysUntilExpiry = Math.ceil((poa1Expiry - today) / (1000 * 60 * 60 * 24));
-    
+  // Check POA1 Status (90-day rule)
+  if (driver.poa1ValidUntil) {
+    const poa1Expiry = new Date(driver.poa1ValidUntil);
     documents.poa1 = {
-      valid: daysUntilExpiry > 0,
-      expiryDate: driverData.poa1ValidDate,
-      daysUntilExpiry: daysUntilExpiry,
-      expired: daysUntilExpiry <= 0,
-      expiringSoon: daysUntilExpiry <= 7 && daysUntilExpiry > 0 // POA expires in 90 days, warn at 7 days
+      valid: poa1Expiry > today,
+      expiryDate: driver.poa1ValidUntil,
+      type: 'Proof of Address #1',
+      status: poa1Expiry > today ? 'valid' : 'expired'
     };
   }
 
-  // POA2 status
-  if (driverData.poa2ValidDate) {
-    const poa2Expiry = new Date(driverData.poa2ValidDate);
-    const daysUntilExpiry = Math.ceil((poa2Expiry - today) / (1000 * 60 * 60 * 24));
-    
+  // Check POA2 Status (90-day rule)
+  if (driver.poa2ValidUntil) {
+    const poa2Expiry = new Date(driver.poa2ValidUntil);
     documents.poa2 = {
-      valid: daysUntilExpiry > 0,
-      expiryDate: driverData.poa2ValidDate,
-      daysUntilExpiry: daysUntilExpiry,
-      expired: daysUntilExpiry <= 0,
-      expiringSoon: daysUntilExpiry <= 7 && daysUntilExpiry > 0
+      valid: poa2Expiry > today,
+      expiryDate: driver.poa2ValidUntil,
+      type: 'Proof of Address #2',
+      status: poa2Expiry > today ? 'valid' : 'expired'
     };
   }
 
-  // DVLA check status (needs to be within 30 days)
-  if (driverData.dvlaCheckDate) {
-    const dvlaDate = new Date(driverData.dvlaCheckDate);
-    const daysSinceCheck = Math.ceil((today - dvlaDate) / (1000 * 60 * 60 * 24));
-    
+  // Check DVLA Check Status (30-day rule)
+  if (driver.dvlaCheckDate) {
+    const dvlaDate = new Date(driver.dvlaCheckDate);
+    const dvlaValid = dvlaDate > thirtyDaysAgo;
     documents.dvlaCheck = {
-      valid: daysSinceCheck <= 30,
-      lastCheck: driverData.dvlaCheckDate,
-      daysSinceCheck: daysSinceCheck,
-      expired: daysSinceCheck > 30,
-      needsUpdate: daysSinceCheck > 30
+      valid: dvlaValid,
+      lastCheck: driver.dvlaCheckDate,
+      status: dvlaValid ? 'valid' : 'expired',
+      ageInDays: Math.floor((today - dvlaDate) / (24 * 60 * 60 * 1000))
     };
   }
 
-  return documents;
+  // Determine overall status
+  const overallStatus = determineOverallStatus(documents, driver);
+
+  console.log('📊 Document analysis complete:', {
+    overallStatus,
+    license: documents.license.valid,
+    poa1: documents.poa1.valid,
+    poa2: documents.poa2.valid,
+    dvlaCheck: documents.dvlaCheck.valid
+  });
+
+  return { overallStatus, documents };
 }
 
-// Determine overall driver status
-function determineOverallStatus(documents, driverData) {
-  // Check Monday.com status column first
-  const mondayStatus = driverData.status?.toLowerCase();
-  
-  // If manually set to approved/rejected in Monday.com, respect that
-  if (mondayStatus === 'done' || mondayStatus === 'approved') {
-    return 'approved';
-  }
-  if (mondayStatus === 'stuck' || mondayStatus === 'rejected') {
-    return 'rejected';
-  }
+// Determine overall driver status based on document analysis
+function determineOverallStatus(documents, driver) {
+  const hasValidLicense = documents.license.valid;
+  const hasValidPoa1 = documents.poa1.valid;
+  const hasValidPoa2 = documents.poa2.valid;
+  const hasValidDvla = documents.dvlaCheck.valid;
 
-  // Count valid/expired documents
-  const validDocs = Object.values(documents).filter(doc => doc.valid).length;
-  const expiredDocs = Object.values(documents).filter(doc => doc.expired).length;
-  const expiringSoonDocs = Object.values(documents).filter(doc => doc.expiringSoon).length;
+  // Check overall status from Board A
+  const boardStatus = driver.overallStatus;
 
-  // Determine status based on document state
-  if (validDocs === 4) {
-    // All documents valid
-    if (expiringSoonDocs > 0) {
-      return 'expiring_soon';
-    }
+  // If Board A says "Done" and all documents valid
+  if (boardStatus === 'Done' && hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidDvla) {
     return 'verified';
-  } else if (expiredDocs > 0) {
-    // Some documents expired
-    return 'documents_expired';
-  } else if (validDocs > 0) {
-    // Partial verification
-    return 'partial';
-  } else {
-    // No valid documents
-    return 'new';
   }
+
+  // If Board A says "Done" but some documents expired
+  if (boardStatus === 'Done' && hasValidLicense) {
+    if (!hasValidPoa1 || !hasValidPoa2) {
+      return 'poa_expired';
+    }
+    if (!hasValidDvla) {
+      return 'dvla_expired';
+    }
+  }
+
+  // If we have some documents but not complete
+  if (hasValidLicense || hasValidPoa1 || hasValidPoa2) {
+    return 'partial';
+  }
+
+  // If Board A exists but no documents
+  if (driver.driverName) {
+    return 'pending';
+  }
+
+  // Completely new driver
+  return 'new';
 }
 
-// Create mock driver status for development/testing
-function createMockDriverStatus(email) {
-  console.log('Creating mock driver status for:', email);
+// Create new driver status for drivers not found in Board A
+function createNewDriverStatus(email) {
+  console.log('👤 Creating new driver status for:', email);
   
   return {
     status: 'new',
     email: email,
     name: null,
+    phone: null,
     documents: {
-      license: { valid: false },
-      poa1: { valid: false },
-      poa2: { valid: false },
-      dvlaCheck: { valid: false }
+      license: { valid: false, status: 'required' },
+      poa1: { valid: false, status: 'required' },
+      poa2: { valid: false, status: 'required' },
+      dvlaCheck: { valid: false, status: 'required' }
     },
-    insuranceStatus: 'pending',
-    lastUpdated: new Date().toISOString()
+    boardAId: null,
+    lastUpdated: null
   };
 }
