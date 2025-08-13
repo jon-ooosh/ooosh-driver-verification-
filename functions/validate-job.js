@@ -99,10 +99,11 @@ exports.handler = async (event, context) => {
         'Job is active and accepting drivers' : 
         'Job recently ended but still accepting drivers',
       jobId: jobId,
-      // FIXED: Frontend expects 'job' not 'jobData'
+      // FIXED: Frontend expects 'job' not 'jobData' 
+      // Removed internal name display per user feedback
       job: {
-        jobName: jobLookup.job.name,
-        summary: jobLookup.job.name,
+        jobName: 'Driver Verification', // Generic name instead of internal reference
+        summary: 'Driver Verification',
         contact: jobLookup.job.contact || 'OOOSH Client',
         hireStarts: jobLookup.job.hireStarts,  // ADDED: Hire start date
         hireEnds: jobLookup.job.hireEnds,
@@ -142,21 +143,20 @@ async function lookupJobInQHBoard(jobNumber) {
       return { found: false, error: 'Monday.com API not configured' };
     }
 
-    // Query Monday.com Q&H Board (Board ID: 2431480012)
-    // FIXED: Use older 'items' query instead of 'items_page' for compatibility
+    // Query Monday.com Q&H Board using the SAME pattern as working monday-integration.js
     const query = `
       query {
-        items_by_column_values(
-          board_id: 2431480012
-          column_id: "text7"
-          column_value: "${jobNumber}"
-        ) {
-          id
-          name
-          column_values {
-            id
-            text
-            value
+        boards(ids: [2431480012]) {
+          items_page(limit: 50) {
+            items {
+              id
+              name
+              column_values {
+                id
+                text
+                value
+              }
+            }
           }
         }
       }
@@ -181,20 +181,25 @@ async function lookupJobInQHBoard(jobNumber) {
       throw new Error(`Monday.com GraphQL error: ${JSON.stringify(result.errors)}`);
     }
 
-    const items = result.data?.items_by_column_values || [];
+    const items = result.data?.boards?.[0]?.items_page?.items || [];
     
-    if (items.length === 0) {
+    // Filter for matching job number in text7 column
+    const matchingItem = items.find(item => {
+      const jobNumberColumn = item.column_values.find(col => col.id === 'text7');
+      return jobNumberColumn && jobNumberColumn.text === jobNumber;
+    });
+    
+    if (!matchingItem) {
       return { found: false };
     }
 
-    // Parse the first matching item
-    const item = items[0];
-    const columnValues = item.column_values || [];
+    // Parse the matching item
+    const columnValues = matchingItem.column_values || [];
     
     // Extract job data from Monday.com columns
     const jobData = {
-      id: item.id,
-      name: item.name,
+      id: matchingItem.id,
+      name: matchingItem.name,
       jobNumber: jobNumber
     };
 
