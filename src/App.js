@@ -686,9 +686,9 @@ const DriverVerificationApp = () => {
 
           {/* UPDATED: Idenfy Information instead of POA requirements */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h3 className="text-lg font-medium text-purple-900 mb-2">🚀 Next step</h3>
+            <h3 className="text-lg font-medium text-purple-900 mb-2">Next step</h3>
             <p className="text-base text-purple-800">
-              Press Continue to proceed to Idenfy, our AI-powered document verification system.
+              Click Continue to proceed to Idenfy, our AI-powered document verification system.
             </p>
           </div>
 
