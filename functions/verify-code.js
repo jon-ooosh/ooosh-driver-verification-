@@ -1,8 +1,16 @@
 // File: functions/verify-code.js
 // OOOSH Driver Verification - Verify Email Code Function
-// PRODUCTION VERSION - Fixed variable scope issue
+// FIXED VERSION - Restoring test email backdoors that were working
 
 const fetch = require('node-fetch');
+
+// 🚨 TESTING BACKDOOR - REMOVE BEFORE PRODUCTION! 🚨
+const TEST_EMAILS = [
+  'test@oooshtours.co.uk',
+  'jon@oooshtours.co.uk', // For easy testing
+  'demo@oooshtours.co.uk',
+  'dev@oooshtours.co.uk'
+];
 
 exports.handler = async (event, context) => {
   console.log('Verify code function called with method:', event.httpMethod);
@@ -44,12 +52,13 @@ exports.handler = async (event, context) => {
 
     const { email, code, jobId } = JSON.parse(event.body);
     
-    // FIXED: Better logging to debug the issue
+    // Enhanced logging for debugging
     console.log('Verify code request:', { 
       email: email, 
       code: code ? `${code.length}-digit code` : 'NO CODE', 
       jobId: jobId,
-      actualCode: code // Log actual code for debugging
+      actualCode: code, // Log actual code for debugging
+      isTestEmail: TEST_EMAILS.includes(email.toLowerCase())
     });
 
     if (!email || !code || !jobId) {
@@ -57,6 +66,26 @@ exports.handler = async (event, context) => {
         statusCode: 400,
         headers,
         body: JSON.stringify({ error: 'Email, code, and jobId are required' })
+      };
+    }
+
+    // 🚨 TESTING BACKDOOR - RESTORED FROM WORKING VERSION! 🚨
+    if (TEST_EMAILS.includes(email.toLowerCase())) {
+      console.log('🚨 TESTING BACKDOOR: Auto-verifying test email:', email);
+      console.log('🚨 ANY CODE ACCEPTED FOR TEST EMAILS - REMOVE IN PRODUCTION!');
+      
+      // Create driver record for test email (call Google Apps Script)
+      await createTestDriverRecord(email, jobId);
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          success: true, 
+          verified: true,
+          message: 'Email verified successfully (TEST MODE)',
+          testMode: true
+        })
       };
     }
 
@@ -154,3 +183,35 @@ exports.handler = async (event, context) => {
     };
   }
 };
+
+// Create test driver record for backdoor emails - RESTORED FROM WORKING VERSION
+async function createTestDriverRecord(email, jobId) {
+  try {
+    if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
+      console.log('No Google Apps Script URL - skipping test driver creation');
+      return;
+    }
+
+    // Call Google Apps Script to create driver record
+    const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'create-test-driver',
+        email: email,
+        jobId: jobId
+      })
+    });
+
+    if (response.ok) {
+      console.log('Test driver record created successfully');
+    } else {
+      console.error('Failed to create test driver record');
+    }
+
+  } catch (error) {
+    console.error('Error creating test driver record:', error);
+  }
+}
