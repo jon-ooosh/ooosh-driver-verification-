@@ -1,6 +1,6 @@
 // File: src/App.js
-// OOOSH Driver Verification - Professional Clean Design
-// FIXED: Removed unused Calendar import to resolve deployment error
+// OOOSH Driver Verification - Updated with UI improvements
+// FIXED: Bigger logo, lowercase insurance, removed customer/status, bigger text, fixed links
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink } from 'lucide-react';
@@ -519,7 +519,7 @@ const DriverVerificationApp = () => {
 
     const YesNoQuestion = ({ field, question, required = true }) => (
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-base font-medium text-gray-700">
           {question} {required && <span className="text-red-500">*</span>}
         </label>
         <div className="flex space-x-4">
@@ -532,7 +532,7 @@ const DriverVerificationApp = () => {
               onChange={(e) => handleQuestionChange(field, 'yes')}
               className="mr-2"
             />
-            Yes
+            <span className="text-base">Yes</span>
           </label>
           <label className="flex items-center">
             <input
@@ -543,11 +543,11 @@ const DriverVerificationApp = () => {
               onChange={(e) => handleQuestionChange(field, 'no')}
               className="mr-2"
             />
-            No
+            <span className="text-base">No</span>
           </label>
         </div>
         {errors[field] && (
-          <p className="text-sm text-red-600">{errors[field]}</p>
+          <p className="text-base text-red-600">{errors[field]}</p>
         )}
       </div>
     );
@@ -556,14 +556,14 @@ const DriverVerificationApp = () => {
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-xl font-bold text-gray-900">Insurance Questions</h2>
-          <p className="text-gray-600 mt-2">Required for insurance compliance</p>
+          <h2 className="text-2xl font-bold text-gray-900">insurance questions</h2>
+          <p className="text-lg text-gray-600 mt-2">Required for insurance compliance</p>
         </div>
 
         <div className="space-y-6">
           {/* Insurance Questions */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h3 className="font-medium text-purple-900 mb-4">Health & Driving History</h3>
+            <h3 className="text-lg font-medium text-purple-900 mb-4">Health & driving history</h3>
             <div className="space-y-4">
               <YesNoQuestion
                 field="hasDisability"
@@ -599,22 +599,22 @@ const DriverVerificationApp = () => {
 
           {/* Additional Details */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Additional Information (Optional)
+            <label className="block text-base font-medium text-gray-700 mb-2">
+              Additional information (optional)
             </label>
             <textarea
               value={formData.additionalDetails}
               onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
               placeholder="Please provide any additional details about your answers above..."
             />
           </div>
 
           {/* Info about POA - No upload needed */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h3 className="font-medium text-purple-900 mb-2">📄 Proof of Address Requirements</h3>
-            <p className="text-sm text-purple-800">
+            <h3 className="text-lg font-medium text-purple-900 mb-2">📄 Proof of address requirements</h3>
+            <p className="text-base text-purple-800">
               <strong>Note:</strong> You'll be asked to upload proof of address documents during the next step (document verification). 
               Please have ready: utility bills, bank statements, council tax, or credit card statements from the last 90 days.
             </p>
@@ -626,7 +626,7 @@ const DriverVerificationApp = () => {
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <p className="text-sm text-red-800">{errors.submit}</p>
+                  <p className="text-base text-red-800">{errors.submit}</p>
                 </div>
               </div>
             </div>
@@ -636,15 +636,15 @@ const DriverVerificationApp = () => {
           <div className="flex space-x-3">
             <button
               onClick={() => setCurrentStep('email-verification')}
-              className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300"
+              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-base"
             >
               Back
             </button>
             <button
               onClick={handleSubmit}
-              className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700"
+              className="flex-1 bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 text-base"
             >
-              Continue to Documents
+              Continue to documents
             </button>
           </div>
         </div>
@@ -657,27 +657,26 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Shield className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900">OOOSH Driver Verification</h1>
-        <p className="text-gray-600 mt-2">Secure driver verification for vehicle hire</p>
+        <h1 className="text-2xl font-bold text-gray-900">Hire agreement - proposal for insurance</h1>
       </div>
       
       {loading ? (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Validating job details...</p>
+          <p className="mt-2 text-lg text-gray-600">Loading...</p>
         </div>
       ) : error ? (
         <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <div className="flex">
             <AlertCircle className="h-5 w-5 text-red-400" />
             <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-base text-red-800">{error}</p>
             </div>
           </div>
         </div>
       ) : (
         <div className="text-center py-8">
-          <p className="text-gray-600">Loading job details...</p>
+          <p className="text-lg text-gray-600">Loading...</p>
         </div>
       )}
     </div>
@@ -688,12 +687,12 @@ const DriverVerificationApp = () => {
       {/* Header with Logo */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <img 
                 src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
                 alt="OOOSH Tours" 
-                className="h-8 w-auto"
+                className="h-12 w-auto"
               />
             </div>
           </div>
@@ -706,37 +705,29 @@ const DriverVerificationApp = () => {
           
           {/* Header Section */}
           <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-8 text-center">
-            <h1 className="text-2xl font-bold text-white mb-2">
-              Hire Agreement - Proposal for Insurance
+            <h1 className="text-3xl font-bold text-white mb-2">
+              Hire agreement - proposal for insurance
             </h1>
-            <p className="text-purple-100">
+            <p className="text-lg text-purple-100">
               Complete your driver verification to join this hire
             </p>
           </div>
 
           {/* Job Details Section */}
           <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-6 py-6 border-b border-purple-200">
-            <h2 className="text-lg font-semibold text-purple-900 mb-3">Booking Details</h2>
+            <h2 className="text-xl font-semibold text-purple-900 mb-3">Booking details</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-purple-700 font-medium">Job ID</p>
-                <p className="text-purple-900 font-semibold">{jobDetails?.jobNumber || jobId}</p>
+                <p className="text-base text-purple-700 font-medium">Job ID</p>
+                <p className="text-lg text-purple-900 font-semibold">{jobDetails?.jobNumber || jobId}</p>
               </div>
               <div>
-                <p className="text-sm text-purple-700 font-medium">Customer</p>
-                <p className="text-purple-900 font-semibold">{jobDetails?.customer || 'Loading...'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-purple-700 font-medium">Hire Period</p>
-                <p className="text-purple-900 font-semibold">
+                <p className="text-base text-purple-700 font-medium">Hire period</p>
+                <p className="text-lg text-purple-900 font-semibold">
                   {jobDetails?.startDate && jobDetails?.endDate ? 
                     `${jobDetails.startDate} to ${jobDetails.endDate}` : 
                     'Loading dates...'}
                 </p>
-              </div>
-              <div>
-                <p className="text-sm text-purple-700 font-medium">Status</p>
-                <p className="text-purple-900 font-semibold">{jobDetails?.status || 'Confirmed'}</p>
               </div>
             </div>
           </div>
@@ -745,18 +736,18 @@ const DriverVerificationApp = () => {
           <div className="px-6 py-8">
             <div className="space-y-6">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Your Email Address
+                <label htmlFor="email" className="block text-base font-medium text-gray-700 mb-2">
+                  Your email address
                 </label>
                 <input
                   type="email"
                   id="email"
                   value={driverEmail}
                   onChange={(e) => setDriverEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
                   placeholder="driver@example.com"
                 />
-                <p className="text-xs text-gray-500 mt-2">We'll send a verification code to this email address</p>
+                <p className="text-sm text-gray-500 mt-2">We'll send a verification code to this email address</p>
               </div>
 
               {error && (
@@ -764,7 +755,7 @@ const DriverVerificationApp = () => {
                   <div className="flex">
                     <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
                     <div className="ml-3">
-                      <p className="text-sm text-red-800">{error}</p>
+                      <p className="text-base text-red-800">{error}</p>
                     </div>
                   </div>
                 </div>
@@ -773,20 +764,20 @@ const DriverVerificationApp = () => {
               <button
                 onClick={sendVerificationEmail}
                 disabled={loading}
-                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 font-medium"
+                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 font-medium text-base"
               >
-                {loading ? 'Sending Code...' : 'Send Verification Code'}
+                {loading ? 'Sending code...' : 'Send verification code'}
               </button>
             </div>
           </div>
 
           {/* Requirements Section */}
           <div className="bg-gray-50 px-6 py-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">What You'll Need</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">What you'll need</h3>
             
-            <div className="space-y-4 text-sm text-gray-600">
+            <div className="space-y-4 text-base text-gray-600">
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🆔 UK Driving License Requirements:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🆔 UK driving license requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Valid UK photocard driving license (front and back photos)</li>
                   <li>Must be valid for the hire period</li>
@@ -795,7 +786,16 @@ const DriverVerificationApp = () => {
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🏠 Proof of Address (2 required):</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK license holders:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Valid passport for identity verification</li>
+                  <li>International driving permit or valid foreign license</li>
+                  <li>No DVLA check required</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">🏠 Proof of address (2 required):</h4>
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Bank statements, utility bills, council tax, or credit card statements</li>
                   <li>Must be within the last 90 days</li>
@@ -805,60 +805,60 @@ const DriverVerificationApp = () => {
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🔍 DVLA Check:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🔍 DVLA check (UK licenses only):</h4>
                 <p className="ml-5">
                   Current DVLA license check from{' '}
                   <a 
-                    href="https://www.gov.uk/check-driving-licence" 
+                    href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                    className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
                   >
-                    gov.uk/check-driving-licence <ExternalLink className="h-3 w-3 ml-1" />
+                    How to get a DVLA check code <ExternalLink className="h-4 w-4 ml-1" />
                   </a>
                 </p>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">📋 Insurance Questions:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">📋 insurance questions:</h4>
                 <p className="ml-5">Complete health and driving history questionnaire for insurance compliance</p>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">✍️ Digital Signature:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">✍️ Digital signature:</h4>
                 <p className="ml-5">Electronic signature on driver declaration and terms & conditions</p>
               </div>
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between text-xs text-gray-500">
+              <div className="flex items-center justify-between text-sm text-gray-500">
                 <span>Need help?</span>
                 <a 
                   href="tel:01273911382" 
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
                 >
-                  <Phone className="h-3 w-3 mr-1" />
+                  <Phone className="h-4 w-4 mr-1" />
                   01273 911382
                 </a>
               </div>
               
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-2 text-sm text-gray-500">
                 <a 
-                  href="https://www.oooshtours.co.uk/driver-guide" 
+                  href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
                 >
-                  Driver Guide <ExternalLink className="h-3 w-3 ml-1" />
+                  DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
                 </a>
                 {' | '}
                 <a 
-                  href="https://www.oooshtours.co.uk/terms" 
+                  href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
                 >
-                  Terms & Conditions <ExternalLink className="h-3 w-3 ml-1" />
+                  Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
                 </a>
               </div>
             </div>
@@ -872,22 +872,22 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Mail className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900">Check Your Email</h2>
-        <p className="text-gray-600 mt-2">We sent a 6-digit code to:</p>
-        <p className="text-sm font-medium text-gray-900">{driverEmail}</p>
+        <h2 className="text-2xl font-bold text-gray-900">Check your email</h2>
+        <p className="text-lg text-gray-600 mt-2">We sent a 6-digit code to:</p>
+        <p className="text-base font-medium text-gray-900">{driverEmail}</p>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
-            Verification Code
+          <label htmlFor="code" className="block text-base font-medium text-gray-700 mb-1">
+            Verification code
           </label>
           <input
             type="text"
             id="code"
             value={verificationCode}
             onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-lg font-mono"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-xl font-mono"
             placeholder="123456"
             maxLength="6"
           />
@@ -895,22 +895,22 @@ const DriverVerificationApp = () => {
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-800">{error}</p>
+            <p className="text-base text-red-800">{error}</p>
           </div>
         )}
 
         <button
           onClick={verifyEmailCode}
           disabled={loading || verificationCode.length < 6}
-          className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-base"
         >
-          {loading ? 'Verifying...' : 'Verify Code'}
+          {loading ? 'Verifying...' : 'Verify code'}
         </button>
 
         <button
           onClick={sendVerificationEmail}
           disabled={loading}
-          className="w-full text-purple-600 hover:text-purple-700 text-sm disabled:opacity-50"
+          className="w-full text-purple-600 hover:text-purple-700 text-base disabled:opacity-50"
         >
           Didn't receive the code? Send again
         </button>
@@ -934,13 +934,13 @@ const DriverVerificationApp = () => {
           ) : (
             <FileText className="mx-auto h-12 w-12 text-orange-600 mb-4" />
           )}
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-2xl font-bold text-gray-900">
             {isVerified && !needsDocuments && !needsDVLA ? 
               `Welcome back!` : 
-              'Verification Status'}
+              'Verification status'}
           </h2>
           {insuranceData && (
-            <p className="text-sm text-green-600 mt-1">✓ Insurance questions completed</p>
+            <p className="text-base text-green-600 mt-1">✓ insurance questions completed</p>
           )}
         </div>
 
@@ -948,19 +948,19 @@ const DriverVerificationApp = () => {
         {driverStatus?.documents && (
           <div className="space-y-3 mb-6">
             <DocumentStatus 
-              title="Driving License" 
+              title="Driving license" 
               status={driverStatus.documents.license} 
             />
             <DocumentStatus 
-              title="Proof of Address #1" 
+              title="Proof of address #1" 
               status={driverStatus.documents.poa1} 
             />
             <DocumentStatus 
-              title="Proof of Address #2" 
+              title="Proof of address #2" 
               status={driverStatus.documents.poa2} 
             />
             <DocumentStatus 
-              title="DVLA Check" 
+              title="DVLA check" 
               status={driverStatus.documents.dvlaCheck} 
             />
           </div>
@@ -971,27 +971,27 @@ const DriverVerificationApp = () => {
           {needsDocuments && (
             <button
               onClick={startVerification}
-              className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
             >
-              Upload Documents
+              Upload documents
             </button>
           )}
           
           {needsDVLA && !needsDocuments && (
             <button
               onClick={startDVLACheck}
-              className="w-full bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 text-base"
             >
-              Upload DVLA Check
+              Upload DVLA check
             </button>
           )}
           
           {!needsDocuments && !needsDVLA && (
             <button
               onClick={() => alert('Added to hire! (Monday.com integration pending)')}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-base"
             >
-              Join This Hire
+              Join this hire
             </button>
           )}
         </div>
@@ -1012,27 +1012,27 @@ const DriverVerificationApp = () => {
           ) : (
             <XCircle className="h-4 w-4 text-red-500 mr-2" />
           )}
-          <span className="text-sm font-medium">{title}</span>
+          <span className="text-base font-medium">{title}</span>
         </div>
         <div className="text-right">
           {isValid ? (
             <div>
               {status.expiryDate && (
-                <span className={`text-xs ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
+                <span className={`text-sm ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
                   Valid until {status.expiryDate}
                 </span>
               )}
               {status.lastCheck && !status.expiryDate && (
-                <span className="text-xs text-green-600">
+                <span className="text-sm text-green-600">
                   Checked {status.lastCheck}
                 </span>
               )}
               {status.type && (
-                <p className="text-xs text-gray-500">{status.type}</p>
+                <p className="text-sm text-gray-500">{status.type}</p>
               )}
             </div>
           ) : (
-            <span className="text-xs text-red-600">Required</span>
+            <span className="text-sm text-red-600">Required</span>
           )}
         </div>
       </div>
@@ -1043,39 +1043,39 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900">Document Verification</h2>
-        <p className="text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
+        <h2 className="text-2xl font-bold text-gray-900">Document verification</h2>
+        <p className="text-lg text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
       </div>
 
       <div className="space-y-4 mb-6">
         <div className="border border-gray-200 rounded-md p-4">
-          <h3 className="font-medium text-gray-900 mb-2">Required Documents:</h3>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• UK Driving License (front and back)</li>
-            <li>• Two Proof of Address documents (within 90 days)</li>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Required documents:</h3>
+          <ul className="text-base text-gray-600 space-y-1">
+            <li>• UK driving license (front and back)</li>
+            <li>• Two proof of address documents (within 90 days)</li>
             <li>• Selfie for identity verification</li>
           </ul>
         </div>
 
         <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
-          <p className="text-sm text-purple-800">
-            <strong>Acceptable Proof of Address:</strong> Utility bills, bank statements, council tax, credit card statements
+          <p className="text-base text-purple-800">
+            <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements
           </p>
         </div>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-          <p className="text-sm text-red-800">{error}</p>
+          <p className="text-base text-red-800">{error}</p>
         </div>
       )}
 
       <button
         onClick={generateIdenfyToken}
         disabled={loading}
-        className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+        className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-base"
       >
-        {loading ? 'Starting Verification...' : 'Start Document Upload'}
+        {loading ? 'Starting verification...' : 'Start document upload'}
       </button>
     </div>
   );
@@ -1084,13 +1084,13 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900">DVLA License Check</h2>
-        <p className="text-gray-600 mt-2">Upload your DVLA check document</p>
+        <h2 className="text-2xl font-bold text-gray-900">DVLA license check</h2>
+        <p className="text-lg text-gray-600 mt-2">Upload your DVLA check document</p>
       </div>
 
       <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
-        <h3 className="font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
-        <ol className="text-sm text-orange-800 space-y-1 list-decimal list-inside">
+        <h3 className="text-lg font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
+        <ol className="text-base text-orange-800 space-y-1 list-decimal list-inside">
           <li>Visit gov.uk/check-driving-licence</li>
           <li>Enter your license details</li>
           <li>Download/screenshot the summary page</li>
@@ -1100,36 +1100,36 @@ const DriverVerificationApp = () => {
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            DVLA Check Document
+          <label className="block text-base font-medium text-gray-700 mb-2">
+            DVLA check document
           </label>
           <input
             type="file"
             accept="image/*,.pdf"
             onChange={(e) => setUploadedFile(e.target.files[0])}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-base"
           />
         </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-800">{error}</p>
+            <p className="text-base text-red-800">{error}</p>
           </div>
         )}
 
         <button
           onClick={() => processDVLACheck(uploadedFile)}
           disabled={loading || !uploadedFile}
-          className="w-full bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
+          className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-base"
         >
-          {loading ? 'Processing Document...' : 'Verify DVLA Check'}
+          {loading ? 'Processing document...' : 'Verify DVLA check'}
         </button>
 
         <button
           onClick={() => setCurrentStep('driver-status')}
-          className="w-full text-gray-600 hover:text-gray-700 text-sm"
+          className="w-full text-gray-600 hover:text-gray-700 text-base"
         >
-          Back to Status
+          Back to status
         </button>
       </div>
     </div>
@@ -1139,9 +1139,9 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Processing Verification</h2>
-        <p className="text-gray-600">Please wait while we verify your documents...</p>
-        <p className="text-sm text-gray-500 mt-2">This usually takes 30-60 seconds</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Processing verification</h2>
+        <p className="text-lg text-gray-600">Please wait while we verify your documents...</p>
+        <p className="text-base text-gray-500 mt-2">This usually takes 30-60 seconds</p>
       </div>
     </div>
   );
@@ -1150,18 +1150,18 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
         <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Verification Complete!</h2>
-        <p className="text-gray-600 mb-4">You're approved for this hire.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification complete!</h2>
+        <p className="text-lg text-gray-600 mb-4">You're approved for this hire.</p>
         
         <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
-          <p className="text-sm text-green-800">
+          <p className="text-base text-green-800">
             Your verification has been added to the hire roster. You'll receive confirmation details shortly.
           </p>
         </div>
 
         <button
           onClick={() => window.close()}
-          className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-base"
         >
           Close
         </button>
@@ -1173,11 +1173,11 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
         <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Verification Issues</h2>
-        <p className="text-gray-600 mb-4">We couldn't approve your verification.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification issues</h2>
+        <p className="text-lg text-gray-600 mb-4">We couldn't approve your verification.</p>
         
         <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-sm text-red-800">
+          <p className="text-base text-red-800">
             This may be due to document quality, insurance requirements, or other factors. 
             Please contact OOOSH for assistance.
           </p>
@@ -1186,17 +1186,17 @@ const DriverVerificationApp = () => {
         <div className="space-y-3">
           <button
             onClick={startVerification}
-            className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
           >
-            Try Again
+            Try again
           </button>
           
           <a
             href="tel:01273911382"
-            className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center"
+            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-base"
           >
             <Phone className="h-4 w-4 mr-2" />
-            Call OOOSH Support
+            Call OOOSH support
           </a>
         </div>
       </div>
@@ -1222,8 +1222,8 @@ const DriverVerificationApp = () => {
 
   return (
     <>
-      {/* Favicon */}
-      <link rel="icon" type="image/png" href="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" />
+      {/* Custom Favicon */}
+      <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236B46C1' stroke-width='4' stroke-dasharray='20 8'/%3E%3C/svg%3E" />
       
       {currentStep === 'email-entry' ? (
         renderStep()
