@@ -1,9 +1,9 @@
 // File: src/App.js
 // OOOSH Driver Verification - Professional Clean Design
-// Updated with OOOSH branding and cleaner layout
+// FIXED: Removed unused Calendar import to resolve deployment error
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, Calendar, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink } from 'lucide-react';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
