@@ -130,12 +130,13 @@ function analyzeDocumentStatus(driver) {
     license: { valid: false },
     poa1: { valid: false },
     poa2: { valid: false },
-    dvlaCheck: { valid: false }
+    dvlaCheck: { valid: false },
+    licenseCheck: { valid: true } // Optional check, defaults to valid if not set
   };
 
   const today = new Date();
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+  // All documents checked against expiry dates for consistency
 
   // Check License Status
   if (driver.licenseValidTo) {
@@ -170,15 +171,25 @@ function analyzeDocumentStatus(driver) {
     };
   }
 
-  // Check DVLA Check Status (30-day rule)
-  if (driver.dvlaCheckDate) {
-    const dvlaDate = new Date(driver.dvlaCheckDate);
-    const dvlaValid = dvlaDate > thirtyDaysAgo;
+  // Check DVLA Check Status - NOW USING EXPIRY DATE
+  if (driver.dvlaValidUntil) {
+    const dvlaExpiry = new Date(driver.dvlaValidUntil);
     documents.dvlaCheck = {
-      valid: dvlaValid,
-      lastCheck: driver.dvlaCheckDate,
-      status: dvlaValid ? 'valid' : 'expired',
-      ageInDays: Math.floor((today - dvlaDate) / (24 * 60 * 60 * 1000))
+      valid: dvlaExpiry > today,
+      expiryDate: driver.dvlaValidUntil,
+      status: dvlaExpiry > today ? 'valid' : 'expired',
+      type: 'DVLA Check'
+    };
+  }
+
+  // Check License Last Checked Status (90-day rule)
+  if (driver.licenseNextCheckDue) {
+    const licenseCheckDue = new Date(driver.licenseNextCheckDue);
+    documents.licenseCheck = {
+      valid: licenseCheckDue > today,
+      nextCheckDue: driver.licenseNextCheckDue,
+      status: licenseCheckDue > today ? 'valid' : 'due',
+      type: 'License Verification'
     };
   }
 
@@ -202,22 +213,36 @@ function determineOverallStatus(documents, driver) {
   const hasValidPoa1 = documents.poa1.valid;
   const hasValidPoa2 = documents.poa2.valid;
   const hasValidDvla = documents.dvlaCheck.valid;
+  const licenseCheckCurrent = documents.licenseCheck?.valid !== false; // Don't require if not set
 
-  // Check overall status from Board A
+  // Check overall status from Board A for insurance issues
   const boardStatus = driver.overallStatus;
 
-  // If Board A says "Done" and all documents valid
-  if (boardStatus === 'Done' && hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidDvla) {
+  // Insurance review status overrides everything
+  if (boardStatus === 'Insurance Review') {
+    return 'insurance_review';
+  }
+
+  // Technical issues
+  if (boardStatus === 'Stuck') {
+    return 'stuck';
+  }
+
+  // If everything is valid and no insurance issues
+  if (hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidDvla && licenseCheckCurrent) {
     return 'verified';
   }
 
-  // If Board A says "Done" but some documents expired
-  if (boardStatus === 'Done' && hasValidLicense) {
+  // If we have basic documents but some are expired - return specific expiry info
+  if (hasValidLicense) {
     if (!hasValidPoa1 || !hasValidPoa2) {
       return 'poa_expired';
     }
     if (!hasValidDvla) {
       return 'dvla_expired';
+    }
+    if (!licenseCheckCurrent) {
+      return 'license_check_due';
     }
   }
 
@@ -248,7 +273,8 @@ function createNewDriverStatus(email) {
       license: { valid: false, status: 'required' },
       poa1: { valid: false, status: 'required' },
       poa2: { valid: false, status: 'required' },
-      dvlaCheck: { valid: false, status: 'required' }
+      dvlaCheck: { valid: false, status: 'required' },
+      licenseCheck: { valid: true, status: 'not_required' }
     },
     boardAId: null,
     lastUpdated: null
