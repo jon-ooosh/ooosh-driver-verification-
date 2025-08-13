@@ -605,7 +605,7 @@ const DriverVerificationApp = () => {
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900">insurance questions</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Insurance questions</h2>
           <p className="text-lg text-gray-600 mt-2">Required for insurance compliance</p>
         </div>
 
