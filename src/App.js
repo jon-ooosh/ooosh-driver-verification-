@@ -794,8 +794,10 @@ const DriverVerificationApp = () => {
                 <>which is from <strong>{formatHireDate(jobDetails.startDate)} to {formatHireDate(jobDetails.endDate)}</strong>. Or</>
               ) : (
                 <>. Or</>
-              )}, if you have recently completed a form for a different hire, it will re-validate your documents. 
+              )}, if you have recently completed a form for a different hire, it will re-validate your documents.{' '}
               {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
+            </p>
+            <p className="text-base text-blue-800 leading-relaxed mt-3">
               Please make sure you review our{' '}
               <a 
                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
@@ -879,50 +881,45 @@ const DriverVerificationApp = () => {
               <div>
                 <h4 className="font-medium text-gray-800 mb-2">👥 All drivers:</h4>
                 <ul className="list-disc ml-5 space-y-1">
-                  <li>Must be aged at least 23 years old</li>
-                  <li>Must have held a driving licence for at least 2 years</li>
+                  <li>Must be at least 23 years old</li>
+                  <li>Must have held a full driving licence for at least 2 years</li>
+                  <li>Must have a valid driving licence (we'll need photos of front and back)</li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🆔 UK driving licence requirements:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🆔 UK licence additional requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
-                  <li>Valid photocard driving licence (photos of front and back)</li>
-                  <li>Must be valid for the hire period</li>
+                  <li>
+                    Current DVLA licence check from{' '}
+                    <a 
+                      href="https://www.gov.uk/view-driving-licence" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
+                    >
+                      gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
+                    </a>
+                  </li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence holders additional requirements:</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence additional requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
-                  <li>Valid passport</li>
+                  <li>Current passport (we'll need a photo)</li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-medium text-gray-800 mb-2">🏠 Proof of address (2 required):</h4>
+                <h4 className="font-medium text-gray-800 mb-2">🏠 All drivers - two proofs of address:</h4>
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Bank statements, utility bills, council tax, or credit card statements</li>
                   <li>Both must be dated within the last 90 days</li>
                   <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
                   <li>Must show your current home address</li>
-                  <li>Documents must be from different sources</li>
+                  <li>Documents must be from two different sources</li>
                 </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🔍 DVLA check (UK licences only):</h4>
-                <p className="ml-5">
-                  Current DVLA licence check from{' '}
-                  <a 
-                    href="https://www.gov.uk/view-driving-licence" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
-                  >
-                    gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
-                  </a>
-                </p>
               </div>
 
               <div>
