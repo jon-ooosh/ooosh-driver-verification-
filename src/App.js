@@ -730,9 +730,6 @@ const DriverVerificationApp = () => {
             <h1 className="text-3xl font-bold text-white mb-2">
               Hire agreement - proposal for insurance
             </h1>
-            <p className="text-lg text-purple-100">
-              Complete your driver verification to join this hire
-            </p>
           </div>
 
           {/* Job Details Section */}
@@ -759,7 +756,7 @@ const DriverVerificationApp = () => {
             <p className="text-base text-blue-800 leading-relaxed">
               This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>, 
               or if you have recently completed a form for a different hire, it will re-validate your documents. 
-              It's best completed on a smartphone though it can be done on a computer with camera. 
+              {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
               Please make sure you review our{' '}
               <a 
                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
@@ -794,42 +791,49 @@ const DriverVerificationApp = () => {
             )}
           </div>
 
-          {/* Email Entry Section */}
-          <div className="px-6 py-8">
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-base font-medium text-gray-700 mb-2">
-                  Your email address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={driverEmail}
-                  onChange={(e) => setDriverEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
-                  placeholder="driver@example.com"
-                />
-                <p className="text-sm text-gray-500 mt-2">We'll send a verification code to this email address</p>
+          {/* Email Entry Section - Enhanced CTA */}
+          <div className="px-6 py-8 bg-white border-b-4 border-purple-200">
+            <div className="max-w-md mx-auto">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Get started</h2>
+                <p className="text-lg text-gray-600">Enter your email address to begin verification</p>
               </div>
+              
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="email" className="block text-lg font-medium text-gray-700 mb-3">
+                    Enter your email address to get started
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={driverEmail}
+                    onChange={(e) => setDriverEmail(e.target.value)}
+                    className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
+                    placeholder="driver@example.com"
+                  />
+                  <p className="text-base text-gray-500 mt-2">We'll send a verification code to this email address</p>
+                </div>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
-                    <div className="ml-3">
-                      <p className="text-base text-red-800">{error}</p>
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex">
+                      <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                      <div className="ml-3">
+                        <p className="text-base text-red-800">{error}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <button
-                onClick={sendVerificationEmail}
-                disabled={loading}
-                className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 font-medium text-base"
-              >
-                {loading ? 'Sending code...' : 'Send verification code'}
-              </button>
+                <button
+                  onClick={sendVerificationEmail}
+                  disabled={loading}
+                  className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 font-semibold text-lg"
+                >
+                  {loading ? 'Sending code...' : 'Send verification code'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -839,11 +843,18 @@ const DriverVerificationApp = () => {
             
             <div className="space-y-4 text-base text-gray-600">
               <div>
+                <h4 className="font-medium text-gray-800 mb-2">👥 All drivers:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Must be aged at least 23 years old</li>
+                  <li>Must have held a driving licence for at least 2 years</li>
+                </ul>
+              </div>
+
+              <div>
                 <h4 className="font-medium text-gray-800 mb-2">🆔 UK driving licence requirements:</h4>
                 <ul className="list-disc ml-5 space-y-1">
                   <li>Valid photocard driving licence (photos of front and back)</li>
                   <li>Must be valid for the hire period</li>
-                  <li>Licence held for minimum 2 years</li>
                 </ul>
               </div>
 
