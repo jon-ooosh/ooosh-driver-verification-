@@ -54,14 +54,15 @@ exports.handler = async (event, context) => {
     console.log('🔗 STEP 2: Testing webhook call...');
     
     const minimalWebhookData = {
+      final: true, // CRITICAL: Must include this field
       clientId: `ooosh_${testJobId}_${testEmail.replace('@', '_at_').replace(/\./g, '_dot_')}_${Date.now()}`,
-      jobId: testJobId,
+      scanRef: `test_scan_${testJobId}`,
       status: {
         overall: 'APPROVED',
         autoDocument: 'DOC_VALIDATED',
         autoFace: 'FACE_MATCH',
-        manualDocument: null,
-        manualFace: null,
+        manualDocument: 'DOC_VALIDATED',
+        manualFace: 'FACE_MATCH',
         mismatchTags: [],
         fraudTags: [],
         suspicionReasons: []
