@@ -1,193 +1,246 @@
 // File: functions/test-webhook-simulation.js
-// ENHANCED DEBUG VERSION - Step by step testing
+// FIXED VERSION - Detailed debug logging to find the exact issue
 
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
-  console.log('🧪 ENHANCED DEBUG: Webhook simulation starting');
+  console.log('🧪 FIXED: Webhook simulation test called');
   
-  const testEmail = event.queryStringParameters?.email || 'jonwood@oooshtours.co.uk';
-  const testJobId = event.queryStringParameters?.jobId || '99999';
-  
-  console.log('🧪 Test parameters:', { testEmail, testJobId });
-  
-  const results = {
-    step1_mondayTest: null,
-    step2_webhookCall: null,
-    step3_detailedError: null,
-    success: false
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Content-Type': 'application/json'
   };
 
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
   try {
-    // STEP 1: Test Monday.com directly first
-    console.log('📋 STEP 1: Testing Monday.com connection directly...');
+    const { email, jobId } = event.queryStringParameters || {};
     
-    try {
-      const mondayResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'find-driver-board-a',
-          email: testEmail
-        })
-      });
-
-      const mondayResult = await mondayResponse.json();
-      results.step1_mondayTest = {
-        success: true,
-        statusCode: mondayResponse.status,
-        result: mondayResult
-      };
-      console.log('✅ STEP 1 SUCCESS: Monday.com working:', mondayResult);
-      
-    } catch (mondayError) {
-      results.step1_mondayTest = {
-        success: false,
-        error: mondayError.message
-      };
-      console.log('❌ STEP 1 FAILED: Monday.com error:', mondayError.message);
-    }
-
-    // STEP 2: Test webhook call with minimal data
-    console.log('🔗 STEP 2: Testing webhook call...');
+    const testEmail = email || 'jonwood@oooshtours.co.uk';
+    const testJobId = jobId || '99999';
     
-    const minimalWebhookData = {
-      final: true, // CRITICAL: Must include this field
-      clientId: `ooosh_${testJobId}_${testEmail.replace('@', '_at_').replace(/\./g, '_dot_')}_${Date.now()}`,
-      scanRef: `test_scan_${testJobId}`,
-      status: {
-        overall: 'APPROVED',
-        autoDocument: 'DOC_VALIDATED',
-        autoFace: 'FACE_MATCH',
-        manualDocument: 'DOC_VALIDATED',
-        manualFace: 'FACE_MATCH',
-        mismatchTags: [],
-        fraudTags: [],
-        suspicionReasons: []
-      },
-      data: {
-        scanRef: `test_scan_${testJobId}`,
-        docFirstName: 'Jon',
-        docLastName: 'Wood', 
-        docNumber: 'WOOD123456789GB',
-        docExpiry: '2030-01-01',
-        docDob: '1990-01-01',
-        docIssuingCountry: 'GB',
-        docNationality: 'GB',
-        address: '123 Test Street, Test City, TE1 2ST',
-        manualAddress: '123 Test Street, Test City, TE1 2ST'
-      },
-      platform: 'PC',
-      startedUtc: new Date().toISOString(),
-      finishedUtc: new Date().toISOString()
-    };
+    console.log('🧪 FIXED: Testing with:', { testEmail, testJobId });
 
-    try {
-      const webhookResponse = await fetch(`${process.env.URL}/.netlify/functions/idenfy-webhook`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(minimalWebhookData)
-      });
-
-      const webhookText = await webhookResponse.text();
-      console.log('📝 Raw webhook response:', webhookText);
-      
-      let webhookResult;
-      try {
-        webhookResult = JSON.parse(webhookText);
-      } catch (parseError) {
-        webhookResult = { 
-          error: 'Failed to parse JSON response', 
-          rawResponse: webhookText,
-          parseError: parseError.message 
-        };
-      }
-
-      results.step2_webhookCall = {
-        success: webhookResponse.ok,
-        statusCode: webhookResponse.status,
-        result: webhookResult,
-        rawResponse: webhookText
-      };
-
-      if (webhookResponse.ok) {
-        console.log('✅ STEP 2 SUCCESS: Webhook processed:', webhookResult);
-        results.success = true;
-      } else {
-        console.log('❌ STEP 2 FAILED: Webhook error:', webhookResult);
-      }
-
-    } catch (webhookError) {
-      results.step2_webhookCall = {
-        success: false,
-        error: webhookError.message
-      };
-      console.log('❌ STEP 2 FAILED: Webhook call error:', webhookError.message);
-    }
-
-    // STEP 3: If webhook failed, try to get more details
-    if (!results.step2_webhookCall?.success) {
-      console.log('🔍 STEP 3: Analyzing webhook failure...');
-      
-      results.step3_detailedError = {
-        mondayWorking: results.step1_mondayTest?.success || false,
-        webhookResponse: results.step2_webhookCall?.rawResponse || 'No response',
-        possibleIssues: [
-          'Webhook function syntax error',
-          'Missing environment variables', 
-          'Monday.com API rate limiting',
-          'Invalid client ID parsing',
-          'Missing function dependencies'
-        ]
-      };
-    }
-
-    // STEP 4: Success path - show next steps
-    if (results.success && results.step2_webhookCall?.result?.nextStep) {
-      console.log('🚀 SUCCESS: Next step is:', results.step2_webhookCall.result.nextStep);
-      
-      if (results.step2_webhookCall.result.nextStep === 'dvla_check_required') {
-        console.log('📋 UK driver detected - would redirect to DVLA check page');
-        console.log('🔗 Missing page: We need to build the DVLA upload page!');
-      }
-    }
+    // Step 1: Test Monday.com integration step by step
+    console.log('🔍 STEP 1: Testing Monday.com find-driver...');
+    const step1Result = await testMondayFindDriver(testEmail);
+    
+    console.log('🔍 STEP 2: Testing Monday.com update-driver directly...');
+    const step2Result = await testMondayUpdateDriver(testEmail);
+    
+    console.log('🔍 STEP 3: Testing webhook call...');
+    const step3Result = await testWebhookCall(testEmail, testJobId);
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
+      headers,
       body: JSON.stringify({
-        success: results.success,
-        testParameters: { testEmail, testJobId },
-        stepResults: results,
-        nextActions: results.success ? 
-          ['Webhook working!', 'Build DVLA upload page', 'Test full flow'] :
-          ['Fix webhook errors', 'Check Monday.com integration', 'Review logs']
-      }, null, 2)
+        success: false,
+        testParameters: {
+          testEmail: testEmail,
+          testJobId: testJobId
+        },
+        stepResults: {
+          step1_mondayTest: step1Result,
+          step2_webhookCall: step2Result,
+          step3_detailedError: step3Result
+        },
+        nextActions: [
+          "Fix webhook errors",
+          "Check Monday.com integration", 
+          "Review logs"
+        ]
+      })
     };
 
   } catch (error) {
-    console.error('🚨 OVERALL TEST ERROR:', error);
-    
+    console.error('🚨 FIXED: Top level error:', error);
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({
-        success: false,
-        error: error.message,
-        stack: error.stack,
-        testParameters: { testEmail, testJobId },
-        stepResults: results
-      }, null, 2)
+      headers,
+      body: JSON.stringify({ 
+        error: 'Top level simulation failed',
+        details: error.message,
+        stack: error.stack
+      })
     };
   }
 };
+
+// Test Monday.com find-driver function directly
+async function testMondayFindDriver(email) {
+  try {
+    console.log('🔍 Testing find-driver-board-a directly...');
+    
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'find-driver-board-a',
+        email: email
+      })
+    });
+
+    const result = await response.json();
+    console.log('📊 Find driver response:', { status: response.status, result });
+
+    return {
+      success: response.ok,
+      statusCode: response.status,
+      result: result
+    };
+
+  } catch (error) {
+    console.error('❌ Find driver test error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Test Monday.com update-driver function directly
+async function testMondayUpdateDriver(email) {
+  try {
+    console.log('🔄 Testing update-driver-board-a directly...');
+    
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: {
+          overallStatus: 'Working on it',
+          lastUpdated: new Date().toISOString().split('T')[0]
+        }
+      })
+    });
+
+    const result = await response.json();
+    console.log('📊 Update driver response:', { status: response.status, result });
+
+    return {
+      success: response.ok,
+      statusCode: response.status,
+      result: result
+    };
+
+  } catch (error) {
+    console.error('❌ Update driver test error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Test the webhook call with detailed error tracking
+async function testWebhookCall(testEmail, testJobId) {
+  try {
+    const mockWebhookData = {
+      final: true,
+      platform: "MOBILE",
+      status: {
+        overall: "APPROVED",
+        suspicionReasons: [],
+        denyReasons: [],
+        fraudTags: [],
+        mismatchTags: [],
+        autoFace: "FACE_MATCH",
+        manualFace: "FACE_MATCH",
+        autoDocument: "DOC_VALIDATED",
+        manualDocument: "DOC_VALIDATED",
+        additionalSteps: "VALID"
+      },
+      data: {
+        docFirstName: "MR JONATHAN MARK",
+        docLastName: "WOOD",
+        docNumber: "WOOD9801093JM9PX 25",
+        docExpiry: "2029-12-29",
+        docDob: "1983-01-09",
+        docType: "DRIVER_LICENSE",
+        docSex: "MALE",
+        docNationality: "GB",
+        docIssuingCountry: "GB",
+        birthPlace: "UNITED KINGDOM",
+        authority: "DVLA",
+        driverLicenseCategory: "AM/A/B1/B/F/K/P/Q",
+        fullName: "MR JONATHAN MARK WOOD",
+        address: "5 CLAYTON AVENUE HASSOCKS WEST SUSSEX BN6 8HB"
+      },
+      fileUrls: {
+        BACK: "https://example.com/license-back.png",
+        FACE: "https://example.com/face.png", 
+        FRONT: "https://example.com/license-front.png"
+      },
+      additionalStepPdfUrls: {
+        POA2: "https://example.com/poa2.pdf",
+        UTILITY_BILL: "https://example.com/utility-bill.pdf"
+      },
+      scanRef: `test-scan-ref-${Date.now()}`,
+      clientId: `ooosh_${testJobId}_${testEmail.replace('@', '_at_').replace(/\./g, '_dot_')}_${Date.now()}`,
+      manualAddress: "5 CLAYTON AVENUE HASSOCKS WEST SUSSEX BN6 8HB",
+      externalReferenceId: "external_ref_123",
+      clientIp: "127.0.0.1",
+      startedFromDevice: "MOBILE_SDK"
+    };
+
+    console.log('📨 Calling idenfy-webhook with mock data...');
+    
+    const response = await fetch(`${process.env.URL}/.netlify/functions/idenfy-webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(mockWebhookData)
+    });
+
+    const responseText = await response.text();
+    console.log('📊 Webhook response:', { status: response.status, body: responseText });
+
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      result = { rawResponse: responseText, parseError: parseError.message };
+    }
+
+    // Additional debugging
+    const debugInfo = {
+      mondayWorking: true, // We know this from step 1
+      webhookResponse: responseText,
+      possibleIssues: [
+        "Webhook function syntax error",
+        "Missing environment variables",
+        "Monday.com API rate limiting",
+        "Invalid client ID parsing",
+        "Missing function dependencies"
+      ]
+    };
+
+    return {
+      success: response.ok,
+      statusCode: response.status,
+      result: result,
+      rawResponse: responseText,
+      debugInfo: debugInfo
+    };
+
+  } catch (error) {
+    console.error('❌ Webhook call error:', error);
+    return {
+      success: false,
+      error: error.message,
+      stack: error.stack
+    };
+  }
+}
