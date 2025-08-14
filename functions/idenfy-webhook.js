@@ -142,9 +142,24 @@ function parseClientId(clientId) {
       const timestamp = parts[parts.length - 1];
       const emailParts = parts.slice(2, -1); // Everything except ooosh, jobId, and timestamp
       
-      // FIXED: Convert email format back to normal
+      // FIXED: Convert email format back to normal - handle missing _at_
       let email = emailParts.join('_');
-      email = email.replace(/_at_/g, '@').replace(/_dot_/g, '.');
+      
+      // If no _at_ found, assume it's missing the @ symbol
+      if (!email.includes('_at_')) {
+        // Look for pattern like "jonwood_oooshtours" and convert to "jonwood@oooshtours"
+        const emailRegex = /^([^_]+)_([^_]+_[^_]+)$/;
+        const match = email.match(emailRegex);
+        if (match) {
+          email = `${match[1]}@${match[2]}`;
+        }
+      } else {
+        // Normal conversion
+        email = email.replace(/_at_/g, '@');
+      }
+      
+      // Convert _dot_ to .
+      email = email.replace(/_dot_/g, '.');
       
       console.log('✅ Parsed client ID:', { jobId, email, timestamp });
       return { email, jobId };
