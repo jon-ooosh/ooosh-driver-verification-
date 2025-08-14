@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone } from 'lucide-react';
+import DVLAProcessingPage from './DVLAProcessingPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -1459,7 +1460,7 @@ const DriverVerificationApp = () => {
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
       case 'driver-status': return renderDriverStatus();
       case 'document-upload': return renderDocumentUpload();
-      case 'dvla-processing': return <DVLAProcessingPlaceholder />;
+      case 'dvla-processing': return <DVLAProcessingPage />;
       case 'dvla-check': return renderDVLACheck();
       case 'processing': return renderProcessing();
       case 'complete': return renderComplete();
