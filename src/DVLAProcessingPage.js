@@ -13,7 +13,7 @@ const DVLAProcessingPage = () => {
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
   const [currentStep, setCurrentStep] = useState('loading');
-  const [uploadedFiles, setUploadedFiles] = useState({});
+  // const [uploadedFiles, setUploadedFiles] = useState({});
   const [processingResults, setProcessingResults] = useState({});
   const [finalDecision, setFinalDecision] = useState(null);
 
@@ -29,7 +29,7 @@ const DVLAProcessingPage = () => {
       setError('No driver email provided');
       setCurrentStep('error');
     }
-  }, [driverEmail, loadDriverData]);
+  }, [driverEmail]);
 
   const loadDriverData = async () => {
     try {
