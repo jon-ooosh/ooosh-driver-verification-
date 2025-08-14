@@ -2,7 +2,7 @@
 // OOOSH Driver Verification - DVLA Processing & Final Validation
 // Handles both UK drivers (DVLA + POA) and Non-UK drivers (POA only)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Shield, FileText, Upload, CheckCircle, AlertCircle, 
   Eye, ChevronRight, Loader
@@ -13,7 +13,6 @@ const DVLAProcessingPage = () => {
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
   const [currentStep, setCurrentStep] = useState('loading');
-  // const [uploadedFiles, setUploadedFiles] = useState({});
   const [processingResults, setProcessingResults] = useState({});
   const [finalDecision, setFinalDecision] = useState(null);
 
@@ -22,16 +21,7 @@ const DVLAProcessingPage = () => {
   const driverEmail = urlParams.get('email');
   const isUKDriver = urlParams.get('uk') === 'true';
 
-  useEffect(() => {
-    if (driverEmail) {
-      loadDriverData();
-    } else {
-      setError('No driver email provided');
-      setCurrentStep('error');
-    }
-  }, [driverEmail]);
-
-  const loadDriverData = async () => {
+  const loadDriverData = useCallback(async () => {
     try {
       setLoading(true);
       console.log('🔍 Loading driver data for:', driverEmail);
@@ -67,7 +57,16 @@ const DVLAProcessingPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [driverEmail, isUKDriver]);
+
+  useEffect(() => {
+    if (driverEmail) {
+      loadDriverData();
+    } else {
+      setError('No driver email provided');
+      setCurrentStep('error');
+    }
+  }, [driverEmail, loadDriverData]);
 
   const handleFileUpload = async (fileType, file) => {
     try {
@@ -101,7 +100,6 @@ const DVLAProcessingPage = () => {
         console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
         
         // Store results
-        setUploadedFiles(prev => ({ ...prev, [fileType]: file }));
         setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
 
         // Update Monday.com with results
