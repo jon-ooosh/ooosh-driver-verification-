@@ -1,6 +1,6 @@
 // File: functions/monday-integration.js
 // OOOSH Driver Verification - Complete Monday.com Integration
-// UPDATED: Consistent expiry date strategy + new license check column
+// FIXED: Internal function calls for update operations
 
 const fetch = require('node-fetch');
 
@@ -87,7 +87,7 @@ exports.handler = async (event, context) => {
 // BOARD A (DRIVER DATABASE) FUNCTIONS
 // ========================================
 
-// Create or update driver in Board A
+// FIXED: Create or update driver in Board A
 async function createDriverBoardA(data) {
   console.log('🔄 Creating/updating driver in Board A');
   
@@ -98,17 +98,17 @@ async function createDriverBoardA(data) {
       throw new Error('Email is required');
     }
 
-    // First check if driver already exists
-    const existingDriver = await findDriverBoardA({ email });
+    // FIXED: Check if driver already exists using internal helper
+    const existingDriver = await findDriverBoardAInternal(email);
     
-    if (existingDriver.success && existingDriver.driver) {
+    if (existingDriver) {
       console.log('✅ Driver exists, updating record');
       return await updateDriverBoardA({ email, updates: driverData });
     }
 
     console.log('👤 Creating new driver in Board A');
 
-    // Prepare column values for Board A with UPDATED DATE STRATEGY
+    // Prepare column values for Board A
     const columnValues = formatBoardAColumnValues(driverData);
 
     const mutation = `
@@ -153,7 +153,7 @@ async function createDriverBoardA(data) {
   }
 }
 
-// Update existing driver in Board A
+// FIXED: Update existing driver in Board A
 async function updateDriverBoardA(data) {
   console.log('🔄 Updating driver in Board A');
   
@@ -164,14 +164,14 @@ async function updateDriverBoardA(data) {
       throw new Error('Email and updates are required');
     }
 
-    // Find the driver first
-    const existingDriver = await findDriverBoardA({ email });
+    // FIXED: Find the driver using internal helper function (not HTTP endpoint)
+    const existingDriver = await findDriverBoardAInternal(email);
     
-    if (!existingDriver.success || !existingDriver.driver) {
+    if (!existingDriver || !existingDriver.id) {
       throw new Error('Driver not found in Board A');
     }
 
-    const driverId = existingDriver.driver.id;
+    const driverId = existingDriver.id;
     console.log('📝 Updating driver ID:', driverId);
 
     // Format updates for Board A columns
@@ -219,18 +219,14 @@ async function updateDriverBoardA(data) {
   }
 }
 
-// Find driver in Board A
-async function findDriverBoardA(data) {
-  console.log('🔍 Finding driver in Board A');
+// NEW: Internal helper function for finding driver (returns driver object directly)
+async function findDriverBoardAInternal(email) {
+  console.log('🔍 Internal: Finding driver in Board A for:', email);
   
   try {
-    const { email } = data;
-    
     if (!email) {
       throw new Error('Email is required');
     }
-
-    console.log('🔍 Searching for email:', email);
 
     const query = `
       query {
@@ -259,30 +255,47 @@ async function findDriverBoardA(data) {
 
     const response = await callMondayAPI(query);
     
-    if (response.data?.items_page_by_column_values?.items?.length > 0) {
-      const item = response.data.items_page_by_column_values.items[0];
-      console.log('✅ Driver found in Board A:', item.id);
-      
-      // Parse the driver data
-      const driver = parseBoardAData(item);
-      
+    if (response.data?.items_page?.items?.length > 0) {
+      const item = response.data.items_page.items[0];
+      const driver = parseBoardADriver(item);
+      console.log('✅ Internal: Driver found:', driver.id);
+      return driver; // Return driver object directly, not HTTP response
+    } else {
+      console.log('❌ Internal: Driver not found');
+      return null; // Return null if not found
+    }
+
+  } catch (error) {
+    console.error('❌ Internal find driver error:', error);
+    return null; // Return null on error
+  }
+}
+
+// EXISTING: Find driver in Board A (HTTP endpoint version)
+async function findDriverBoardA(data) {
+  console.log('🔍 Finding driver in Board A');
+  
+  try {
+    const { email } = data;
+    const driver = await findDriverBoardAInternal(email);
+    
+    if (driver) {
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: true,
           driver: driver,
-          boardAId: item.id
+          boardAId: driver.id
         })
       };
     } else {
-      console.log('❌ Driver not found in Board A');
       return {
         statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: false,
-          message: 'Driver not found in Board A'
+          error: 'Driver not found in Board A'
         })
       };
     }
@@ -305,30 +318,28 @@ async function uploadFileBoardA(data) {
   console.log('📁 Uploading file to Board A');
   
   try {
-    const { email, fileType, fileData, filename } = data;
+    const { email, fileType, fileData, fileName } = data;
     
     if (!email || !fileType || !fileData) {
-      throw new Error('Email, fileType, and fileData are required');
+      throw new Error('Email, file type, and file data are required');
     }
 
     // Find the driver first
-    const existingDriver = await findDriverBoardA({ email });
+    const driver = await findDriverBoardAInternal(email);
     
-    if (!existingDriver.success || !existingDriver.driver) {
+    if (!driver) {
       throw new Error('Driver not found in Board A');
     }
 
-    const driverId = existingDriver.driver.id;
-
     // Map file types to Board A column IDs
     const fileColumnMap = {
-      'license_front': 'file_mktrypb7',
-      'license_back': 'file_mktr76g6',
-      'passport': 'file_mktr56t0',
-      'poa1': 'file_mktrf9jv',
-      'poa2': 'file_mktr3fdw',
-      'dvla': 'file_mktrwhn8',
-      'signature': 'file_mktrfanc'
+      'license-front': 'file_mktrwq0c',
+      'license-back': 'file_mktrfp1c', 
+      'passport': 'file_mktr2am4',
+      'poa1': 'file_mktrftkh',
+      'poa2': 'file_mktrvagt',
+      'dvla-check': 'file_mktrs8hd',
+      'signature': 'files1'
     };
 
     const columnId = fileColumnMap[fileType];
@@ -336,22 +347,53 @@ async function uploadFileBoardA(data) {
       throw new Error(`Unknown file type: ${fileType}`);
     }
 
-    // Upload file using Monday.com file API
-    const uploadResult = await uploadFileToMonday(driverId, columnId, fileData, filename);
+    // Prepare file upload mutation
+    const mutation = `
+      mutation ($file: File!) {
+        add_file_to_column (
+          item_id: ${driver.id},
+          column_id: "${columnId}",
+          file: $file
+        ) {
+          id
+        }
+      }
+    `;
+
+    // Create form data for file upload
+    const FormData = require('form-data');
+    const form = new FormData();
     
-    if (uploadResult.success) {
+    const fileBuffer = Buffer.from(fileData, 'base64');
+    form.append('query', mutation);
+    form.append('variables', JSON.stringify({ file: null }));
+    form.append('map', JSON.stringify({ "0": ["variables.file"] }));
+    form.append('0', fileBuffer, { filename: fileName || `${fileType}.png` });
+
+    const response = await fetch(MONDAY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
+        ...form.getHeaders()
+      },
+      body: form
+    });
+
+    const result = await response.json();
+    
+    if (result.data?.add_file_to_column?.id) {
       console.log('✅ File uploaded to Board A');
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: true,
-          fileId: uploadResult.fileId,
-          message: `${fileType} uploaded to Board A`
+          fileId: result.data.add_file_to_column.id,
+          message: `${fileType} uploaded successfully`
         })
       };
     } else {
-      throw new Error(uploadResult.error);
+      throw new Error('Failed to upload file to Board A');
     }
 
   } catch (error) {
@@ -368,7 +410,7 @@ async function uploadFileBoardA(data) {
 }
 
 // ========================================
-// BOARD B (DRIVER ASSIGNMENTS) FUNCTIONS  
+// BOARD B (DRIVER ASSIGNMENTS) FUNCTIONS
 // ========================================
 
 // Find driver in Board B
@@ -388,11 +430,11 @@ async function findDriverBoardB(data) {
           board_id: ${BOARD_B_ID},
           columns: [
             {
-              column_id: "email",
+              column_id: "email_mktrtl5i",
               column_values: ["${email}"]
             }
           ],
-          limit: 1
+          limit: 5
         ) {
           items {
             id
@@ -409,27 +451,25 @@ async function findDriverBoardB(data) {
 
     const response = await callMondayAPI(query);
     
-    if (response.data?.items_page_by_column_values?.items?.length > 0) {
-      const item = response.data.items_page_by_column_values.items[0];
-      console.log('✅ Driver found in Board B:', item.id);
-      
+    if (response.data?.items_page?.items?.length > 0) {
+      const assignments = response.data.items_page.items.map(item => parseBoardBDriver(item));
+      console.log('✅ Driver assignments found in Board B');
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: true,
-          driver: item,
-          boardBId: item.id
+          assignments: assignments,
+          count: assignments.length
         })
       };
     } else {
-      console.log('❌ Driver not found in Board B');
       return {
         statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: false,
-          message: 'Driver not found in Board B'
+          error: 'No driver assignments found in Board B'
         })
       };
     }
@@ -458,14 +498,13 @@ async function copyAToB(data) {
       throw new Error('Email is required');
     }
 
-    // Get driver data from Board A
-    const boardAResult = await findDriverBoardA({ email });
+    // Get driver data from Board A using internal helper
+    const driverA = await findDriverBoardAInternal(email);
     
-    if (!boardAResult.success || !boardAResult.driver) {
+    if (!driverA) {
       throw new Error('Driver not found in Board A');
     }
 
-    const driverA = boardAResult.driver;
     console.log('📋 Found driver in Board A, copying to Board B');
 
     // Map Board A data to Board B columns (14 essential fields)
@@ -532,127 +571,135 @@ async function copyAToB(data) {
 }
 
 // ========================================
-// COLUMN FORMATTING FUNCTIONS
+// DATA FORMATTING FUNCTIONS
 // ========================================
 
-// Format data for Board A columns with UPDATED DATE STRATEGY
-function formatBoardAColumnValues(data) {
+// Format driver data for Board A columns
+function formatBoardAColumnValues(driverData) {
   const columnValues = {};
-
-  // Identity & Contact
-  if (data.driverName) columnValues.text_mktry2je = data.driverName;
-  if (data.email) columnValues.email_mktrgzj = { email: data.email, text: data.email };
-  if (data.phoneNumber) columnValues.text_mktrfqe2 = data.phoneNumber;
-  if (data.dateOfBirth) columnValues.date_mktr2x01 = { date: data.dateOfBirth };
-  if (data.nationality) columnValues.text_mktrdh72 = data.nationality;
-
-  // License Information
-  if (data.licenseNumber) columnValues.text_mktrrv38 = data.licenseNumber;
-  if (data.licenseIssuedBy) columnValues.text_mktrz69 = data.licenseIssuedBy;
-  if (data.datePassedTest) columnValues.date_mktr93jq = { date: data.datePassedTest };
-  if (data.licenseValidFrom) columnValues.date_mktrmdx5 = { date: data.licenseValidFrom };
-  if (data.licenseValidTo) columnValues.date_mktrwk94 = { date: data.licenseValidTo };
-  if (data.licenseEnding) columnValues.text_mktr8kvs = data.licenseEnding;
-
-  // Addresses
-  if (data.homeAddress) columnValues.long_text_mktr2jhb = data.homeAddress;
-  if (data.licenseAddress) columnValues.long_text_mktrs5a0 = data.licenseAddress;
-
-  // UPDATED: Document Expiry Dates (consistent approach)
-  if (data.poa1ValidUntil) columnValues.date_mktr1keg = { date: data.poa1ValidUntil };
-  if (data.poa2ValidUntil) columnValues.date_mktra1a6 = { date: data.poa2ValidUntil };
-  if (data.dvlaValidUntil) columnValues.date_mktrmjfr = { date: data.dvlaValidUntil }; // RENAMED from dvlaCheckDate
-  if (data.licenseNextCheckDue) columnValues.date_mktsbgpy = { date: data.licenseNextCheckDue }; // NEW COLUMN
-
-  // Insurance Questions (Yes/No status columns)
-  if (data.hasDisability !== undefined) columnValues.status = { label: data.hasDisability ? 'Yes' : 'No' };
-  if (data.hasConvictions !== undefined) columnValues.color_mktr4w0 = { label: data.hasConvictions ? 'Yes' : 'No' };
-  if (data.hasProsecution !== undefined) columnValues.color_mktrbt3x = { label: data.hasProsecution ? 'Yes' : 'No' };
-  if (data.hasAccidents !== undefined) columnValues.color_mktraeas = { label: data.hasAccidents ? 'Yes' : 'No' };
-  if (data.hasInsuranceIssues !== undefined) columnValues.color_mktrpe6q = { label: data.hasInsuranceIssues ? 'Yes' : 'No' };
-  if (data.hasDrivingBan !== undefined) columnValues.color_mktr2t8a = { label: data.hasDrivingBan ? 'Yes' : 'No' };
-  if (data.additionalDetails) columnValues.long_text_mktr1a66 = data.additionalDetails;
-
-  // System Fields
-  if (data.overallStatus) columnValues.color_mktrwatg = { label: data.overallStatus };
-  if (data.lastUpdated) columnValues.date_mktrk8kv = { date: data.lastUpdated };
-
+  
+  // Text fields
+  if (driverData.driverName) columnValues['text_mktry2je'] = driverData.driverName;
+  if (driverData.email) columnValues['email_mktrgzj'] = { email: driverData.email, text: driverData.email };
+  if (driverData.phoneNumber) columnValues['text_mktrfqe2'] = driverData.phoneNumber;
+  if (driverData.nationality) columnValues['text_mktrdh72'] = driverData.nationality;
+  if (driverData.licenseNumber) columnValues['text_mktrrv38'] = driverData.licenseNumber;
+  if (driverData.licenseIssuedBy) columnValues['text_mktrz69'] = driverData.licenseIssuedBy;
+  if (driverData.licenseEnding) columnValues['text_mktr8kvs'] = driverData.licenseEnding;
+  if (driverData.homeAddress) columnValues['long_text_mktr2jhb'] = driverData.homeAddress;
+  if (driverData.licenseAddress) columnValues['long_text_mktrs5a0'] = driverData.licenseAddress;
+  if (driverData.additionalDetails) columnValues['long_text_mktr1a66'] = driverData.additionalDetails;
+  
+  // Date fields
+  if (driverData.dateOfBirth) columnValues['date_mktr2x01'] = { date: driverData.dateOfBirth };
+  if (driverData.datePassedTest) columnValues['date_mktr93jq'] = { date: driverData.datePassedTest };
+  if (driverData.licenseValidFrom) columnValues['date_mktrmdx5'] = { date: driverData.licenseValidFrom };
+  if (driverData.licenseValidTo) columnValues['date_mktrwk94'] = { date: driverData.licenseValidTo };
+  if (driverData.poa1ValidUntil) columnValues['date_mktr1keg'] = { date: driverData.poa1ValidUntil };
+  if (driverData.poa2ValidUntil) columnValues['date_mktra1a6'] = { date: driverData.poa2ValidUntil };
+  if (driverData.dvlaValidUntil) columnValues['date_mktsnj4'] = { date: driverData.dvlaValidUntil };
+  if (driverData.licenseNextCheckDue) columnValues['date_mktsbgpy'] = { date: driverData.licenseNextCheckDue };
+  if (driverData.lastUpdated) columnValues['date_mktrk8kv'] = { date: driverData.lastUpdated };
+  
+  // Status fields (Yes/No)
+  if (driverData.hasDisability !== undefined) {
+    columnValues['color_mktrx02'] = { label: driverData.hasDisability ? 'Yes' : 'No' };
+  }
+  if (driverData.hasConvictions !== undefined) {
+    columnValues['color_mktr4r5'] = { label: driverData.hasConvictions ? 'Yes' : 'No' };
+  }
+  if (driverData.hasProsecution !== undefined) {
+    columnValues['color_mktr51z'] = { label: driverData.hasProsecution ? 'Yes' : 'No' };
+  }
+  if (driverData.hasAccidents !== undefined) {
+    columnValues['color_mktraeas'] = { label: driverData.hasAccidents ? 'Yes' : 'No' };
+  }
+  if (driverData.hasInsuranceIssues !== undefined) {
+    columnValues['color_mktrpe6q'] = { label: driverData.hasInsuranceIssues ? 'Yes' : 'No' };
+  }
+  if (driverData.hasDrivingBan !== undefined) {
+    columnValues['color_mktr2t8a'] = { label: driverData.hasDrivingBan ? 'Yes' : 'No' };
+  }
+  
+  // Overall status
+  if (driverData.overallStatus) {
+    columnValues['color_mktrwatg'] = { label: driverData.overallStatus };
+  }
+  
   return columnValues;
 }
 
-// Format data for Board B columns (14 essential fields)
-function formatBoardBColumnValues(data) {
+// Format driver data for Board B columns
+function formatBoardBColumnValues(driverData) {
   const columnValues = {};
-
-  // Map Board A → Board B (14 essential fields)
-  if (data.driverName) columnValues.text8 = data.driverName;
-  if (data.email) columnValues.email = { email: data.email, text: data.email };
-  if (data.phoneNumber) columnValues.text9__1 = data.phoneNumber;
-  if (data.dateOfBirth) columnValues.date45 = { date: data.dateOfBirth };
-  if (data.nationality) columnValues.text_mktqjbpm = data.nationality;
-  if (data.licenseNumber) columnValues.text6 = data.licenseNumber;
-  if (data.licenseIssuedBy) columnValues.text_mktqwkqn = data.licenseIssuedBy;
-  if (data.licenseValidFrom) columnValues.date_mktqphhq = { date: data.licenseValidFrom };
-  if (data.licenseValidTo) columnValues.driver_licence_valid_to = { date: data.licenseValidTo };
-  if (data.datePassedTest) columnValues.date2 = { date: data.datePassedTest };
-  if (data.homeAddress) columnValues.long_text6 = data.homeAddress;
-  if (data.licenseAddress) columnValues.long_text8 = data.licenseAddress;
-  if (data.jobNumber) columnValues.text86 = data.jobNumber;
-  if (data.signatureDate) columnValues.date4 = { date: data.signatureDate };
-
-  // Note: Signature file handled via mirror column lookup_mktr22y3
-
+  
+  // Essential fields for Board B (14 fields)
+  if (driverData.driverName) columnValues['text_mktrps13'] = driverData.driverName;
+  if (driverData.email) columnValues['email_mktrtl5i'] = { email: driverData.email, text: driverData.email };
+  if (driverData.phoneNumber) columnValues['text_mktr0qql'] = driverData.phoneNumber;
+  if (driverData.dateOfBirth) columnValues['date_mktr7l3'] = { date: driverData.dateOfBirth };
+  if (driverData.nationality) columnValues['text_mktr6uj9'] = driverData.nationality;
+  if (driverData.licenseNumber) columnValues['text_mktr6u73'] = driverData.licenseNumber;
+  if (driverData.licenseIssuedBy) columnValues['text_mktrn4f'] = driverData.licenseIssuedBy;
+  if (driverData.licenseValidFrom) columnValues['date_mktr4q3'] = { date: driverData.licenseValidFrom };
+  if (driverData.licenseValidTo) columnValues['date_mktr7d8'] = { date: driverData.licenseValidTo };
+  if (driverData.datePassedTest) columnValues['date_mktr7nk'] = { date: driverData.datePassedTest };
+  if (driverData.homeAddress) columnValues['long_text_mktrx0x8'] = driverData.homeAddress;
+  if (driverData.licenseAddress) columnValues['long_text_mktr7j36'] = driverData.licenseAddress;
+  if (driverData.jobNumber) columnValues['text_mktr8m4'] = driverData.jobNumber;
+  if (driverData.signatureDate) columnValues['date4'] = { date: driverData.signatureDate };
+  
   return columnValues;
 }
 
-// Parse Board A data from Monday.com response
-function parseBoardAData(item) {
+// Parse Board A driver data from Monday.com response
+function parseBoardADriver(item) {
   const driver = {
     id: item.id,
-    name: item.name
+    name: item.name,
+    driverName: '',
+    email: '',
+    phoneNumber: '',
+    dateOfBirth: '',
+    nationality: '',
+    licenseNumber: '',
+    licenseIssuedBy: '',
+    licenseValidTo: '',
+    licenseEnding: '',
+    homeAddress: '',
+    licenseAddress: '',
+    hasDisability: false,
+    hasConvictions: false,
+    hasProsecution: false,
+    hasAccidents: false,
+    hasInsuranceIssues: false,
+    hasDrivingBan: false,
+    additionalDetails: '',
+    lastUpdated: ''
   };
 
-  // Parse column values
   item.column_values.forEach(col => {
     const value = col.value ? JSON.parse(col.value) : null;
     
     switch (col.id) {
-      // Identity & Contact
       case 'text_mktry2je': driver.driverName = col.text; break;
       case 'email_mktrgzj': driver.email = value?.email || col.text; break;
       case 'text_mktrfqe2': driver.phoneNumber = col.text; break;
       case 'date_mktr2x01': driver.dateOfBirth = value?.date; break;
       case 'text_mktrdh72': driver.nationality = col.text; break;
-      
-      // License Information
       case 'text_mktrrv38': driver.licenseNumber = col.text; break;
       case 'text_mktrz69': driver.licenseIssuedBy = col.text; break;
-      case 'date_mktr93jq': driver.datePassedTest = value?.date; break;
-      case 'date_mktrmdx5': driver.licenseValidFrom = value?.date; break;
       case 'date_mktrwk94': driver.licenseValidTo = value?.date; break;
       case 'text_mktr8kvs': driver.licenseEnding = col.text; break;
-      
-      // Addresses
       case 'long_text_mktr2jhb': driver.homeAddress = col.text; break;
       case 'long_text_mktrs5a0': driver.licenseAddress = col.text; break;
-      
-      // UPDATED: Document Expiry Dates
-      case 'date_mktr1keg': driver.poa1ValidUntil = value?.date; break;
-      case 'date_mktra1a6': driver.poa2ValidUntil = value?.date; break;
-      case 'date_mktrmjfr': driver.dvlaValidUntil = value?.date; break; // RENAMED
-      case 'date_mktsbgpy': driver.licenseNextCheckDue = value?.date; break; // NEW
-      
-      // Insurance Questions
-      case 'status': driver.hasDisability = value?.label === 'Yes'; break;
-      case 'color_mktr4w0': driver.hasConvictions = value?.label === 'Yes'; break;
-      case 'color_mktrbt3x': driver.hasProsecution = value?.label === 'Yes'; break;
+      case 'color_mktrx02': driver.hasDisability = value?.label === 'Yes'; break;
+      case 'color_mktr4r5': driver.hasConvictions = value?.label === 'Yes'; break;
+      case 'color_mktr51z': driver.hasProsecution = value?.label === 'Yes'; break;
       case 'color_mktraeas': driver.hasAccidents = value?.label === 'Yes'; break;
       case 'color_mktrpe6q': driver.hasInsuranceIssues = value?.label === 'Yes'; break;
       case 'color_mktr2t8a': driver.hasDrivingBan = value?.label === 'Yes'; break;
       case 'long_text_mktr1a66': driver.additionalDetails = col.text; break;
-      
-      // System Fields
-      case 'color_mktrwatg': driver.overallStatus = value?.label; break;
       case 'date_mktrk8kv': driver.lastUpdated = value?.date; break;
     }
   });
@@ -660,9 +707,66 @@ function parseBoardAData(item) {
   return driver;
 }
 
+// Parse Board B driver data from Monday.com response
+function parseBoardBDriver(item) {
+  const assignment = {
+    id: item.id,
+    name: item.name,
+    driverName: '',
+    email: '',
+    jobNumber: '',
+    signatureDate: ''
+  };
+
+  item.column_values.forEach(col => {
+    const value = col.value ? JSON.parse(col.value) : null;
+    
+    switch (col.id) {
+      case 'text_mktrps13': assignment.driverName = col.text; break;
+      case 'email_mktrtl5i': assignment.email = value?.email || col.text; break;
+      case 'text_mktr8m4': assignment.jobNumber = col.text; break;
+      case 'date4': assignment.signatureDate = value?.date; break;
+    }
+  });
+
+  return assignment;
+}
+
 // ========================================
 // UTILITY FUNCTIONS
 // ========================================
+
+// Call Monday.com API
+async function callMondayAPI(query, variables = {}) {
+  const response = await fetch(MONDAY_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`
+    },
+    body: JSON.stringify({
+      query: query,
+      variables: variables
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Monday.com API error: ${response.status} ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  
+  if (result.errors) {
+    throw new Error(`Monday.com GraphQL error: ${JSON.stringify(result.errors)}`);
+  }
+
+  return result;
+}
+
+// Escape JSON for GraphQL
+function escapeJson(jsonString) {
+  return jsonString.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
 
 // Test Monday.com connection
 async function testConnection() {
@@ -735,24 +839,24 @@ async function testTwoBoardSystem(data) {
       }
     });
 
-    if (!createResult.success) {
-      throw new Error(`Board A creation failed: ${createResult.error}`);
+    if (!createResult.statusCode || createResult.statusCode !== 200) {
+      throw new Error(`Board A creation failed: ${createResult.error || 'Unknown error'}`);
     }
 
     // Test 2: Find driver in Board A
     console.log('🔍 Test 2: Finding driver in Board A...');
     const findResult = await findDriverBoardA({ email: testEmail });
     
-    if (!findResult.success) {
-      throw new Error(`Board A lookup failed: ${findResult.error}`);
+    if (!findResult.statusCode || findResult.statusCode !== 200) {
+      throw new Error(`Board A lookup failed: ${findResult.error || 'Unknown error'}`);
     }
 
     // Test 3: Copy A→B
     console.log('🔄 Test 3: Copying A→B...');
     const copyResult = await copyAToB({ email: testEmail, jobId: testJobId });
     
-    if (!copyResult.success) {
-      throw new Error(`A→B copy failed: ${copyResult.error}`);
+    if (!copyResult.statusCode || copyResult.statusCode !== 200) {
+      throw new Error(`A→B copy failed: ${copyResult.error || 'Unknown error'}`);
     }
 
     console.log('✅ Two-board system test completed successfully');
@@ -762,17 +866,17 @@ async function testTwoBoardSystem(data) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        tests: {
-          boardACreation: createResult.success,
-          boardALookup: findResult.success,
-          aBCopy: copyResult.success
+        results: {
+          boardACreation: 'Success',
+          boardALookup: 'Success', 
+          aToBCopy: 'Success'
         },
-        message: 'Two-board system working correctly'
+        message: 'Two-board system working perfectly'
       })
     };
 
   } catch (error) {
-    console.error('Two-board system test failed:', error);
+    console.error('Two-board system test error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -782,101 +886,4 @@ async function testTwoBoardSystem(data) {
       })
     };
   }
-}
-
-// Call Monday.com API
-async function callMondayAPI(query) {
-  const response = await fetch(MONDAY_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`
-    },
-    body: JSON.stringify({ query })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Monday.com API error: ${response.status} ${response.statusText}`);
-  }
-
-  const result = await response.json();
-  
-  if (result.errors) {
-    throw new Error(`Monday.com GraphQL errors: ${JSON.stringify(result.errors)}`);
-  }
-  
-  return result;
-}
-
-// Upload file to Monday.com
-async function uploadFileToMonday(itemId, columnId, fileData, filename) {
-  try {
-    console.log(`📁 Uploading file to item ${itemId}, column ${columnId}`);
-
-    const FormData = require('form-data');
-    const formData = new FormData();
-
-    // Convert base64 to buffer
-    const buffer = Buffer.from(fileData, 'base64');
-
-    // GraphQL mutation for file upload
-    const mutation = `
-      mutation ($file: File!) {
-        add_file_to_column (
-          item_id: ${itemId},
-          column_id: "${columnId}",
-          file: $file
-        ) {
-          id
-        }
-      }
-    `;
-
-    // CRITICAL: FormData mapping with the "map" field
-    formData.append('query', mutation);
-    formData.append('variables', JSON.stringify({ file: null }));
-    formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // KEY FIX!
-    formData.append('0', buffer, { 
-      filename: filename || 'document.png', 
-      contentType: 'image/png' 
-    });
-
-    const response = await fetch('https://api.monday.com/v2/file', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-        ...formData.getHeaders()
-      },
-      body: formData
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`File upload failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    
-    if (result.data?.add_file_to_column?.id) {
-      console.log('✅ File uploaded successfully:', result.data.add_file_to_column.id);
-      return { 
-        success: true, 
-        fileId: result.data.add_file_to_column.id 
-      };
-    } else {
-      throw new Error('No file ID returned from upload');
-    }
-
-  } catch (error) {
-    console.error('File upload error:', error);
-    return { 
-      success: false, 
-      error: error.message 
-    };
-  }
-}
-
-// Escape JSON for GraphQL
-function escapeJson(str) {
-  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
