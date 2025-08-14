@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Shield, FileText, Upload, CheckCircle, AlertCircle, 
-  Clock, Eye, ChevronRight, Loader
+  Eye, ChevronRight, Loader
 } from 'lucide-react';
 
 const DVLAProcessingPage = () => {
@@ -29,7 +29,7 @@ const DVLAProcessingPage = () => {
       setError('No driver email provided');
       setCurrentStep('error');
     }
-  }, [driverEmail]);
+  }, [driverEmail, loadDriverData]);
 
   const loadDriverData = async () => {
     try {
