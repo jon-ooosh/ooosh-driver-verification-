@@ -4,13 +4,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone } from 'lucide-react';
+import DVLAProcessingPage from './DVLAProcessingPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
-  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-check, processing, complete, rejected
+  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-processing, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -35,17 +36,28 @@ const DriverVerificationApp = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Extract job ID from URL on load
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const jobParam = urlParams.get('job');
-    if (jobParam) {
-      setJobId(jobParam);
-      validateJobAndFetchDetails(jobParam);
-    } else {
-      setError('Invalid verification link. Please check your email for the correct link.');
-    }
-  }, []);
+ useEffect(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const jobParam = urlParams.get('job');
+  
+  // Check if this is a DVLA processing redirect from webhook
+  const emailParam = urlParams.get('email');
+  const stepParam = urlParams.get('step');
+  
+  if (stepParam === 'dvla-processing' && emailParam) {
+    // Direct route to DVLA processing from webhook
+    setDriverEmail(emailParam);
+    setCurrentStep('dvla-processing');
+    return;
+  }
+  
+  if (jobParam) {
+    setJobId(jobParam);
+    validateJobAndFetchDetails(jobParam);
+  } else {
+    setError('Invalid verification link. Please check your email for the correct link.');
+  }
+}, []);
 
   // Check for verification complete callback from Idenfy
   useEffect(() => {
@@ -1420,6 +1432,7 @@ const DriverVerificationApp = () => {
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
       case 'driver-status': return renderDriverStatus();
       case 'document-upload': return renderDocumentUpload();
+      case 'dvla-processing': return <DVLAProcessingPage />;
       case 'dvla-check': return renderDVLACheck();
       case 'processing': return renderProcessing();
       case 'complete': return renderComplete();
