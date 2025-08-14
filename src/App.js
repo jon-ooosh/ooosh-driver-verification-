@@ -744,42 +744,6 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // DVLA Processing Component (Placeholder until DVLAProcessingPage.js is deployed)
-  const DVLAProcessingPlaceholder = () => (
-    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Shield className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900">DVLA Processing</h1>
-        <p className="text-base text-gray-600 mt-2">Processing your verification documents</p>
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <h3 className="text-base font-medium text-blue-900 mb-2">System Status</h3>
-        <p className="text-sm text-blue-800">
-          DVLA processing system is being deployed. This page will be updated shortly with full functionality.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <h3 className="text-base font-medium text-purple-900 mb-2">What happens next:</h3>
-          <ul className="text-sm text-purple-800 space-y-1">
-            <li>• UK drivers: DVLA document upload and validation</li>
-            <li>• All drivers: Proof of address cross-validation</li>
-            <li>• Final insurance decision and Monday.com updates</li>
-          </ul>
-        </div>
-
-        <button
-          onClick={() => setCurrentStep('driver-status')}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
-        >
-          Return to Driver Status
-        </button>
-      </div>
-    </div>
-  );
-
   // Render functions for each step
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
