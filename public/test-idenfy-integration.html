@@ -323,28 +323,98 @@
             <div id="testResults"></div>
             <div class="recommendations" id="recommendations" style="display: none;"></div>
         </div>
+
+        <!-- Debug Log Container -->
+        <div style="margin-top: 30px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
+            <h3 style="margin: 0 0 15px 0; color: #2d3748;">🔍 Debug Log</h3>
+            <div id="debugLog" style="
+                background: white; 
+                border: 1px solid #e2e8f0; 
+                border-radius: 6px; 
+                padding: 10px; 
+                max-height: 300px; 
+                overflow-y: auto; 
+                font-family: monospace; 
+                font-size: 12px;
+                color: #2d3748;
+            "></div>
+            <button onclick="clearDebugLog()" style="
+                margin-top: 10px; 
+                padding: 8px 16px; 
+                background: #e2e8f0; 
+                border: none; 
+                border-radius: 4px; 
+                cursor: pointer;
+                font-size: 12px;
+            ">Clear Log</button>
+        </div>
     </div>
 
     <script>
         let currentTests = null;
 
+        // Enhanced logging function
+        function logToPage(message, type = 'info') {
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            
+            // Also show on page
+            const debugContainer = document.getElementById('debugLog');
+            if (debugContainer) {
+                const logEntry = document.createElement('div');
+                logEntry.style.cssText = `
+                    padding: 5px 10px; 
+                    margin: 2px 0; 
+                    border-radius: 4px; 
+                    font-family: monospace; 
+                    font-size: 12px;
+                    background: ${type === 'error' ? '#fed7d7' : type === 'warn' ? '#fefcbf' : '#e6fffa'};
+                    color: ${type === 'error' ? '#c53030' : type === 'warn' ? '#744210' : '#234e52'};
+                `;
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                debugContainer.appendChild(logEntry);
+                debugContainer.scrollTop = debugContainer.scrollHeight;
+            }
+        }
+
         async function runAllTests() {
-            showLoading('Running complete Idenfy integration test suite');
+            logToPage('🚀 Starting runAllTests function');
             
             try {
+                logToPage('📋 Looking for results container');
+                const resultsContainer = document.getElementById('resultsContainer');
+                if (!resultsContainer) {
+                    throw new Error('Results container element not found!');
+                }
+                logToPage('✅ Results container found');
+
+                showLoading('Running complete Idenfy integration test suite');
+                logToPage('📡 Making fetch request to test function');
+                
                 const response = await fetch('/.netlify/functions/test-idenfy-integration', {
-                    method: 'GET'
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
+                logToPage(`📊 Response status: ${response.status} ${response.statusText}`);
+                
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    logToPage(`❌ Response error: ${errorText}`, 'error');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
                 }
                 
+                logToPage('📦 Parsing JSON response');
                 const results = await response.json();
+                logToPage(`✅ Got results: ${Object.keys(results).join(', ')}`);
+                
                 currentTests = results;
                 displayResults(results);
                 
             } catch (error) {
+                logToPage(`❌ Error in runAllTests: ${error.message}`, 'error');
+                logToPage(`❌ Error stack: ${error.stack}`, 'error');
                 showError('Failed to run integration tests', error.message);
             }
         }
@@ -393,97 +463,180 @@
         }
 
         function showLoading(message) {
-            const container = document.getElementById('resultsContainer');
-            container.style.display = 'block';
-            container.innerHTML = `
-                <div class="loading">
-                    <h3>${message}</h3>
-                </div>
-            `;
+            logToPage(`🔄 ShowLoading called with: ${message}`);
+            
+            try {
+                const container = document.getElementById('resultsContainer');
+                if (!container) {
+                    logToPage('❌ resultsContainer element not found in showLoading!', 'error');
+                    throw new Error('Results container not found');
+                }
+                
+                logToPage('✅ Setting container display and innerHTML');
+                container.style.display = 'block';
+                container.innerHTML = `
+                    <div class="loading">
+                        <h3>${message}</h3>
+                    </div>
+                `;
+                logToPage('✅ Loading display set successfully');
+                
+            } catch (error) {
+                logToPage(`❌ Error in showLoading: ${error.message}`, 'error');
+                // Fallback: try to show error somewhere visible
+                document.body.insertAdjacentHTML('beforeend', `
+                    <div style="position: fixed; top: 20px; right: 20px; background: red; color: white; padding: 15px; border-radius: 8px; z-index: 9999;">
+                        ERROR: ${error.message}
+                    </div>
+                `);
+            }
         }
 
         function showError(title, message) {
-            const container = document.getElementById('resultsContainer');
-            container.style.display = 'block';
-            container.innerHTML = `
-                <div class="test-result failure">
-                    <div class="test-header">
-                        <h3 class="test-title">${title}</h3>
-                        <span class="test-status failure">Error</span>
+            logToPage(`❌ ShowError called with: ${title} - ${message}`, 'error');
+            
+            try {
+                const container = document.getElementById('resultsContainer');
+                if (!container) {
+                    logToPage('❌ resultsContainer not found in showError!', 'error');
+                    // Create a temporary error display
+                    document.body.insertAdjacentHTML('beforeend', `
+                        <div style="position: fixed; top: 20px; right: 20px; background: #fed7d7; color: #c53030; padding: 15px; border-radius: 8px; z-index: 9999; max-width: 400px;">
+                            <strong>${title}</strong><br>${message}
+                        </div>
+                    `);
+                    return;
+                }
+                
+                container.style.display = 'block';
+                container.innerHTML = `
+                    <div class="test-result failure">
+                        <div class="test-header">
+                            <h3 class="test-title">${title}</h3>
+                            <span class="test-status failure">Error</span>
+                        </div>
+                        <div class="test-details">
+                            <p><strong>Error:</strong> ${message}</p>
+                            <p>Check the debug log below for more details.</p>
+                        </div>
                     </div>
-                    <div class="test-details">
-                        <p><strong>Error:</strong> ${message}</p>
-                        <p>Check the browser console for more details.</p>
-                    </div>
-                </div>
-            `;
+                `;
+                logToPage('✅ Error display set successfully');
+                
+            } catch (error) {
+                logToPage(`❌ Error in showError: ${error.message}`, 'error');
+            }
         }
 
         function displayResults(results) {
-            const container = document.getElementById('resultsContainer');
-            const summaryContainer = document.getElementById('resultsSummary');
-            const resultsContainer = document.getElementById('testResults');
-            const recommendationsContainer = document.getElementById('recommendations');
+            logToPage(`📊 DisplayResults called with results containing: ${Object.keys(results).join(', ')}`);
             
-            container.style.display = 'block';
-            
-            // Update summary
-            summaryContainer.innerHTML = `
-                <div class="summary-badge total">Total: ${results.summary.total}</div>
-                <div class="summary-badge passed">Passed: ${results.summary.passed}</div>
-                <div class="summary-badge failed">Failed: ${results.summary.failed}</div>
-                <div class="summary-badge warnings">Warnings: ${results.summary.warnings}</div>
-            `;
-            
-            // Display individual test results
-            resultsContainer.innerHTML = '';
-            
-            Object.entries(results.tests).forEach(([testKey, test]) => {
-                const status = test.success ? 'success' : (test.details?.warning ? 'warning' : 'failure');
-                const statusText = test.success ? 'Passed' : (test.details?.warning ? 'Warning' : 'Failed');
+            try {
+                const container = document.getElementById('resultsContainer');
+                const summaryContainer = document.getElementById('resultsSummary');
+                const resultsContainer = document.getElementById('testResults');
+                const recommendationsContainer = document.getElementById('recommendations');
                 
-                const testElement = document.createElement('div');
-                testElement.className = `test-result ${status}`;
-                testElement.innerHTML = `
-                    <div class="test-header">
-                        <h3 class="test-title">${test.name}</h3>
-                        <span class="test-status ${status}">${statusText}</span>
-                    </div>
-                    <div class="test-details">
-                        <div class="test-description">${test.description}</div>
-                        
-                        ${test.expectations ? `
-                            <div class="expectations">
-                                <h4>Expected Outcomes:</h4>
-                                <ul>
-                                    ${test.expectations.map(exp => `<li>${exp}</li>`).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
-                        
-                        ${test.details ? `
-                            <div class="test-data">
-                                <h4>Test Details:</h4>
-                                <pre>${JSON.stringify(test.details, null, 2)}</pre>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
+                if (!container) {
+                    throw new Error('resultsContainer element not found');
+                }
+                if (!summaryContainer) {
+                    throw new Error('resultsSummary element not found');
+                }
+                if (!resultsContainer) {
+                    throw new Error('testResults element not found');
+                }
+                if (!recommendationsContainer) {
+                    throw new Error('recommendations element not found');
+                }
                 
-                resultsContainer.appendChild(testElement);
-            });
-            
-            // Display recommendations
-            if (results.recommendations && results.recommendations.length > 0) {
-                recommendationsContainer.style.display = 'block';
-                recommendationsContainer.innerHTML = `
-                    <h3>📋 Recommendations</h3>
-                    <ul>
-                        ${results.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-                    </ul>
+                logToPage('✅ All required elements found for displayResults');
+                
+                container.style.display = 'block';
+                logToPage('✅ Container display set to block');
+                
+                // Update summary
+                logToPage(`📈 Updating summary with: ${JSON.stringify(results.summary)}`);
+                summaryContainer.innerHTML = `
+                    <div class="summary-badge total">Total: ${results.summary.total}</div>
+                    <div class="summary-badge passed">Passed: ${results.summary.passed}</div>
+                    <div class="summary-badge failed">Failed: ${results.summary.failed}</div>
+                    <div class="summary-badge warnings">Warnings: ${results.summary.warnings}</div>
                 `;
-            } else {
-                recommendationsContainer.style.display = 'none';
+                logToPage('✅ Summary updated');
+                
+                // Display individual test results
+                resultsContainer.innerHTML = '';
+                logToPage(`🧪 Processing ${Object.keys(results.tests).length} test results`);
+                
+                Object.entries(results.tests).forEach(([testKey, test]) => {
+                    logToPage(`🔍 Processing test: ${testKey} - ${test.name}`);
+                    
+                    const status = test.success ? 'success' : (test.details?.warning ? 'warning' : 'failure');
+                    const statusText = test.success ? 'Passed' : (test.details?.warning ? 'Warning' : 'Failed');
+                    
+                    const testElement = document.createElement('div');
+                    testElement.className = `test-result ${status}`;
+                    testElement.innerHTML = `
+                        <div class="test-header">
+                            <h3 class="test-title">${test.name}</h3>
+                            <span class="test-status ${status}">${statusText}</span>
+                        </div>
+                        <div class="test-details">
+                            <div class="test-description">${test.description}</div>
+                            
+                            ${test.expectations ? `
+                                <div class="expectations">
+                                    <h4>Expected Outcomes:</h4>
+                                    <ul>
+                                        ${test.expectations.map(exp => `<li>${exp}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            
+                            ${test.details ? `
+                                <div class="test-data">
+                                    <h4>Test Details:</h4>
+                                    <pre>${JSON.stringify(test.details, null, 2)}</pre>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    resultsContainer.appendChild(testElement);
+                    logToPage(`✅ Test ${testKey} added to results`);
+                });
+                
+                logToPage('✅ All test results processed');
+                
+                // Display recommendations
+                if (results.recommendations && results.recommendations.length > 0) {
+                    logToPage(`📋 Showing ${results.recommendations.length} recommendations`);
+                    recommendationsContainer.style.display = 'block';
+                    recommendationsContainer.innerHTML = `
+                        <h3>📋 Recommendations</h3>
+                        <ul>
+                            ${results.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                    `;
+                } else {
+                    logToPage('📋 No recommendations to display');
+                    recommendationsContainer.style.display = 'none';
+                }
+                
+                logToPage('✅ DisplayResults completed successfully');
+                
+            } catch (error) {
+                logToPage(`❌ Error in displayResults: ${error.message}`, 'error');
+                logToPage(`❌ Error stack: ${error.stack}`, 'error');
+                
+                // Try to show error in a basic way
+                document.body.insertAdjacentHTML('beforeend', `
+                    <div style="position: fixed; bottom: 20px; right: 20px; background: #fed7d7; color: #c53030; padding: 15px; border-radius: 8px; z-index: 9999; max-width: 400px;">
+                        <strong>Display Error:</strong> ${error.message}<br>
+                        <small>Check debug log for details</small>
+                    </div>
+                `);
             }
         }
 
@@ -530,9 +683,30 @@
             }
         }
 
-        // Initialize page
+        function clearDebugLog() {
+            const debugContainer = document.getElementById('debugLog');
+            if (debugContainer) {
+                debugContainer.innerHTML = '';
+            }
+        }
+
+        // Initialize page with logging
         document.addEventListener('DOMContentLoaded', () => {
+            logToPage('🌟 Page loaded, initializing');
+            
+            // Check if all required elements exist
+            const requiredElements = ['resultsContainer', 'resultsSummary', 'testResults', 'recommendations', 'debugLog'];
+            requiredElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    logToPage(`✅ Element found: ${id}`);
+                } else {
+                    logToPage(`❌ Element missing: ${id}`, 'error');
+                }
+            });
+            
             checkApiConfig();
+            logToPage('✅ Page initialization complete');
         });
     </script>
 </body>
