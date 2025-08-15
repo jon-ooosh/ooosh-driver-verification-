@@ -5,6 +5,9 @@ const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   console.log('🧪 Running Idenfy Integration Tests');
+  console.log('Event method:', event.httpMethod);
+  console.log('Event path:', event.path);
+  console.log('Event headers:', JSON.stringify(event.headers, null, 2));
   
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -14,60 +17,154 @@ exports.handler = async (event, context) => {
   };
 
   if (event.httpMethod === 'OPTIONS') {
+    console.log('Handling OPTIONS request');
     return { statusCode: 200, headers, body: '' };
   }
 
   try {
+    console.log('🚀 Starting test suite execution');
+    
     const testResults = {
       timestamp: new Date().toISOString(),
       testSuite: 'Idenfy Integration Validation',
       environment: process.env.NETLIFY ? 'Production' : 'Development',
+      version: '1.0.0',
       tests: {},
       summary: {
         total: 0,
         passed: 0,
         failed: 0,
         warnings: 0
+      },
+      systemInfo: {
+        nodeVersion: process.version,
+        platform: process.platform,
+        hasIdenfyCredentials: !!(process.env.IDENFY_API_KEY && process.env.IDENFY_API_SECRET),
+        hasMondayToken: !!process.env.MONDAY_API_TOKEN,
+        baseUrl: process.env.URL || 'Not set'
       }
     };
 
+    console.log('📊 System info:', JSON.stringify(testResults.systemInfo, null, 2));
+
     // Test 1: Standard Successful Webhook (All documents pass)
-    console.log('📋 Test 1: Standard Successful Webhook');
-    testResults.tests.standardSuccess = await testStandardSuccessWebhook();
+    console.log('📋 Running Test 1: Standard Successful Webhook');
+    try {
+      testResults.tests.standardSuccess = await testStandardSuccessWebhook();
+      console.log('✅ Test 1 completed:', testResults.tests.standardSuccess.success);
+    } catch (error) {
+      console.error('❌ Test 1 failed:', error);
+      testResults.tests.standardSuccess = {
+        name: 'Standard Successful Webhook',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.standardSuccess);
 
     // Test 2: POA Failure Webhook (Same source documents) 
-    console.log('📋 Test 2: POA Failure - Same Source Documents');
-    testResults.tests.poaFailureSameSource = await testPOAFailureSameSource();
+    console.log('📋 Running Test 2: POA Failure - Same Source Documents');
+    try {
+      testResults.tests.poaFailureSameSource = await testPOAFailureSameSource();
+      console.log('✅ Test 2 completed:', testResults.tests.poaFailureSameSource.success);
+    } catch (error) {
+      console.error('❌ Test 2 failed:', error);
+      testResults.tests.poaFailureSameSource = {
+        name: 'POA Failure - Same Source Documents',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.poaFailureSameSource);
 
     // Test 3: ID Pass + POA Fail Webhook
-    console.log('📋 Test 3: ID Pass + POA Fail Scenario');
-    testResults.tests.idPassPoaFail = await testIdPassPoaFail();
+    console.log('📋 Running Test 3: ID Pass + POA Fail Scenario');
+    try {
+      testResults.tests.idPassPoaFail = await testIdPassPoaFail();
+      console.log('✅ Test 3 completed:', testResults.tests.idPassPoaFail.success);
+    } catch (error) {
+      console.error('❌ Test 3 failed:', error);
+      testResults.tests.idPassPoaFail = {
+        name: 'ID Pass + POA Fail',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.idPassPoaFail);
 
     // Test 4: Test Additional Steps API Token Generation
-    console.log('📋 Test 4: Additional Steps API Token Generation');
-    testResults.tests.additionalStepsToken = await testAdditionalStepsTokenGeneration();
+    console.log('📋 Running Test 4: Additional Steps API Token Generation');
+    try {
+      testResults.tests.additionalStepsToken = await testAdditionalStepsTokenGeneration();
+      console.log('✅ Test 4 completed:', testResults.tests.additionalStepsToken.success);
+    } catch (error) {
+      console.error('❌ Test 4 failed:', error);
+      testResults.tests.additionalStepsToken = {
+        name: 'Additional Steps Token Generation',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.additionalStepsToken);
 
     // Test 5: POA-Only Upload Simulation
-    console.log('📋 Test 5: POA-Only Upload via Additional Steps');
-    testResults.tests.poaOnlyUpload = await testPOAOnlyUpload();
+    console.log('📋 Running Test 5: POA-Only Upload via Additional Steps');
+    try {
+      testResults.tests.poaOnlyUpload = await testPOAOnlyUpload();
+      console.log('✅ Test 5 completed:', testResults.tests.poaOnlyUpload.success);
+    } catch (error) {
+      console.error('❌ Test 5 failed:', error);
+      testResults.tests.poaOnlyUpload = {
+        name: 'POA-Only Upload',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.poaOnlyUpload);
 
     // Test 6: Document Type Detection
-    console.log('📋 Test 6: Document Type Detection for Source Diversity');
-    testResults.tests.documentTypeDetection = await testDocumentTypeDetection();
+    console.log('📋 Running Test 6: Document Type Detection for Source Diversity');
+    try {
+      testResults.tests.documentTypeDetection = await testDocumentTypeDetection();
+      console.log('✅ Test 6 completed:', testResults.tests.documentTypeDetection.success);
+    } catch (error) {
+      console.error('❌ Test 6 failed:', error);
+      testResults.tests.documentTypeDetection = {
+        name: 'Document Type Detection',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.documentTypeDetection);
 
     // Test 7: Webhook Payload Validation
-    console.log('📋 Test 7: Webhook Payload Structure Validation');
-    testResults.tests.webhookValidation = await testWebhookPayloadValidation();
+    console.log('📋 Running Test 7: Webhook Payload Structure Validation');
+    try {
+      testResults.tests.webhookValidation = await testWebhookPayloadValidation();
+      console.log('✅ Test 7 completed:', testResults.tests.webhookValidation.success);
+    } catch (error) {
+      console.error('❌ Test 7 failed:', error);
+      testResults.tests.webhookValidation = {
+        name: 'Webhook Payload Validation',
+        success: false,
+        error: error.message,
+        details: { error: error.message, stack: error.stack }
+      };
+    }
     updateSummary(testResults, testResults.tests.webhookValidation);
 
     // Generate final recommendations
+    console.log('📋 Generating recommendations');
     testResults.recommendations = generateTestRecommendations(testResults);
+
+    console.log('✅ Test suite completed successfully');
+    console.log('📊 Final summary:', JSON.stringify(testResults.summary, null, 2));
 
     return {
       statusCode: 200,
@@ -77,14 +174,17 @@ exports.handler = async (event, context) => {
 
   } catch (error) {
     console.error('❌ Test suite error:', error);
+    console.error('❌ Error stack:', error.stack);
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
         error: 'Test suite failed',
         details: error.message,
-        stack: error.stack
-      })
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      }, null, 2)
     };
   }
 };
