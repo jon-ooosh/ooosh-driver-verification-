@@ -10,6 +10,7 @@ const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
   const [driverPhone, setDriverPhone] = useState('');
+  const [countryCode, setCountryCode] = useState('+44');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
   // Steps: landing, email-entry, email-verification, contact-details, insurance-questionnaire, driver-status, document-upload, dvla-processing, processing, complete, rejected
@@ -235,7 +236,18 @@ const DriverVerificationApp = () => {
         
         // Pre-populate phone if we have it
         if (driverData.phone) {
-          setDriverPhone(driverData.phone);
+          // Split country code and number if phone contains '+'
+          if (driverData.phone.startsWith('+')) {
+            const match = driverData.phone.match(/^(\+\d{1,4})\s?(.*)$/);
+            if (match) {
+              setCountryCode(match[1]);
+              setDriverPhone(match[2]);
+            } else {
+              setDriverPhone(driverData.phone);
+            }
+          } else {
+            setDriverPhone(driverData.phone);
+          }
         }
         
         // Smart routing: returning drivers still need contact details but can skip questionnaire
@@ -255,8 +267,10 @@ const DriverVerificationApp = () => {
 
   // Handle contact details completion
   const handleContactDetailsComplete = async () => {
-    if (!driverPhone || driverPhone.replace(/\D/g, '').length < 10) {
-      setError('Please enter a valid phone number with at least 10 digits');
+    const fullPhoneNumber = `${countryCode} ${driverPhone}`.trim();
+    
+    if (!driverPhone || driverPhone.replace(/\D/g, '').length < 9) {
+      setError('Please enter a valid phone number');
       return;
     }
 
@@ -264,7 +278,7 @@ const DriverVerificationApp = () => {
     setError('');
     
     try {
-      // Save phone number to Monday.com Board A
+      // Save full phone number (country code + number) to Monday.com Board A
       const response = await fetch('/.netlify/functions/monday-integration', {
         method: 'POST',
         headers: {
@@ -274,7 +288,7 @@ const DriverVerificationApp = () => {
           action: 'update-driver-board-a',
           email: driverEmail,
           updates: {
-            phoneNumber: driverPhone
+            phoneNumber: fullPhoneNumber
           }
         })
       });
@@ -675,28 +689,41 @@ const DriverVerificationApp = () => {
             />
           </div>
 
-          {/* Phone Number */}
+          {/* Phone Number with Country Code */}
           <div>
             <label className="block text-lg font-medium text-gray-700 mb-2">
               Phone number <span className="text-red-500">*</span>
             </label>
-            <input
-              key="phone-input" // Add key to prevent cursor jumping
-              type="tel"
-              value={driverPhone}
-              onChange={(e) => setDriverPhone(e.target.value)}
-              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
-              placeholder="07123 456789"
-              autoComplete="tel"
-            />
-            <p className="text-base text-gray-500 mt-1">
-              We may need to contact you about this hire (minimum 10 digits required)
-            </p>
-            {driverPhone && driverPhone.replace(/\D/g, '').length < 10 && (
-              <p className="text-base text-red-600 mt-1">
-                Please enter at least 10 digits ({driverPhone.replace(/\D/g, '').length}/10)
-              </p>
-            )}
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg bg-white"
+              >
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+33">🇫🇷 +33</option>
+                <option value="+49">🇩🇪 +49</option>
+                <option value="+34">🇪🇸 +34</option>
+                <option value="+39">🇮🇹 +39</option>
+                <option value="+31">🇳🇱 +31</option>
+                <option value="+32">🇧🇪 +32</option>
+                <option value="+41">🇨🇭 +41</option>
+                <option value="+43">🇦🇹 +43</option>
+                <option value="+353">🇮🇪 +353</option>
+                <option value="+61">🇦🇺 +61</option>
+                <option value="+64">🇳🇿 +64</option>
+                <option value="+27">🇿🇦 +27</option>
+              </select>
+              <input
+                type="tel"
+                value={driverPhone}
+                onChange={(e) => setDriverPhone(e.target.value)}
+                className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
+                placeholder="123 456 7890"
+                autoComplete="tel-national"
+              />
+            </div>
           </div>
 
           {/* Returning driver info */}
@@ -742,7 +769,7 @@ const DriverVerificationApp = () => {
           <div className="flex justify-center">
             <button
               onClick={handleContactDetailsComplete}
-              disabled={loading || !driverPhone || driverPhone.replace(/\D/g, '').length < 10}
+              disabled={loading || !driverPhone || driverPhone.replace(/\D/g, '').length < 9}
               className="w-full bg-purple-600 text-white py-4 px-6 rounded-md hover:bg-purple-700 disabled:opacity-50 text-lg font-medium"
             >
               {loading ? 'Saving...' : 'Continue'}
