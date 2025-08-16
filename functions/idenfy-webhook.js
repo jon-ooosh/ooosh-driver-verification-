@@ -1,6 +1,6 @@
 // File: functions/idenfy-webhook.js
-// OOOSH Driver Verification - FIXED Enhanced Idenfy Webhook
-// FIXES: Email parsing, Create vs Update logic, UK driver routing
+// OOOSH Driver Verification - Enhanced Idenfy Webhook with Additional Steps
+// INCLUDES: Additional Steps re-upload detection and processing
 
 const fetch = require('node-fetch');
 
@@ -65,7 +65,9 @@ exports.handler = async (event, context) => {
       scanRef,
       overall: status.overall,
       autoDocument: status.autoDocument,
-      autoFace: status.autoFace
+      autoFace: status.autoFace,
+      hasAdditionalSteps: !!status.additionalSteps,
+      hasAdditionalPdfs: !!webhookData.additionalStepPdfUrls
     });
 
     // FIXED: Extract client info from clientId
@@ -81,7 +83,7 @@ exports.handler = async (event, context) => {
 
     console.log('👤 Client info parsed:', clientInfo);
 
-    // Process the enhanced verification result with FIXED workflow
+    // Process the enhanced verification result with Additional Steps support
     const processResult = await processEnhancedVerificationResult(
       clientInfo.email,
       clientInfo.jobId,
@@ -100,7 +102,8 @@ exports.handler = async (event, context) => {
           message: 'Webhook processed successfully',
           scanRef: scanRef,
           boardAUpdated: processResult.boardAUpdated,
-          nextStep: processResult.nextStep
+          nextStep: processResult.nextStep,
+          additionalStepsProcessed: processResult.additionalStepsProcessed || false
         })
       };
     } else {
@@ -173,10 +176,42 @@ function parseClientId(clientId) {
   }
 }
 
-// FIXED: Process verification with proper Create vs Update logic
+// ENHANCED: Process verification with Additional Steps support
 async function processEnhancedVerificationResult(email, jobId, scanRef, status, data, fullWebhookData) {
   try {
     console.log('🔄 Processing enhanced verification for:', { email, jobId, scanRef });
+
+    // NEW: Check if this is Additional Steps re-upload first
+    const additionalStepsResult = await handleAdditionalStepsReupload(fullWebhookData, { email, jobId });
+    
+    if (additionalStepsResult.isAdditionalSteps) {
+      console.log('🔄 Handling as Additional Steps re-upload');
+      
+      if (additionalStepsResult.success && additionalStepsResult.poaValidated) {
+        // POA re-validation successful - continue normal workflow
+        console.log('✅ POA re-validation successful, continuing to DVLA processing');
+        return {
+          success: true,
+          boardAUpdated: true,
+          nextStep: 'dvla_processing',
+          additionalStepsProcessed: true,
+          reason: 'POA re-validation successful'
+        };
+      } else {
+        // POA re-validation failed - send to manual review
+        console.log('❌ POA re-validation failed, flagging for manual review');
+        return {
+          success: true,
+          boardAUpdated: true,
+          nextStep: 'manual_review',
+          additionalStepsProcessed: true,
+          reason: additionalStepsResult.reason || 'POA re-validation required'
+        };
+      }
+    }
+
+    // Continue with normal verification processing...
+    console.log('📋 Processing as normal verification result');
 
     // Step 1: Analyze Idenfy verification result
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
@@ -239,12 +274,288 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
       success: true, 
       boardAUpdated: true,
       nextStep: nextStep,
-      ukDriver: data.docIssuingCountry === 'GB'
+      ukDriver: data.docIssuingCountry === 'GB',
+      additionalStepsProcessed: false
     };
 
   } catch (error) {
     console.error('💥 Error processing enhanced verification result:', error);
     return { success: false, error: error.message };
+  }
+}
+
+// NEW: Detect and handle Additional Steps (selective POA re-upload)
+async function handleAdditionalStepsReupload(webhookData, clientInfo) {
+  try {
+    console.log('🔍 Checking for Additional Steps re-upload...');
+    
+    // Check if this is an Additional Steps callback
+    const hasAdditionalSteps = webhookData.status?.additionalSteps;
+    const hasAdditionalPdfs = webhookData.additionalStepPdfUrls;
+    
+    if (!hasAdditionalSteps && !hasAdditionalPdfs) {
+      console.log('📋 No Additional Steps detected - regular verification');
+      return { isAdditionalSteps: false };
+    }
+
+    console.log('🎯 Additional Steps detected:', {
+      status: webhookData.status.additionalSteps,
+      pdfs: Object.keys(webhookData.additionalStepPdfUrls || {})
+    });
+
+    // This is a selective re-upload - update Monday.com with new POA
+    const reuploadResult = await processAdditionalStepsReupload(
+      clientInfo.email,
+      webhookData.additionalStepPdfUrls,
+      webhookData.status.additionalSteps,
+      webhookData.scanRef
+    );
+
+    return {
+      isAdditionalSteps: true,
+      success: reuploadResult.success,
+      nextStep: reuploadResult.nextStep,
+      poaValidated: reuploadResult.poaValidated,
+      reason: reuploadResult.reason
+    };
+
+  } catch (error) {
+    console.error('❌ Error handling Additional Steps:', error);
+    return { 
+      isAdditionalSteps: true, 
+      success: false, 
+      error: error.message 
+    };
+  }
+}
+
+// NEW: Process Additional Steps re-upload
+async function processAdditionalStepsReupload(email, additionalPdfs, additionalStatus, scanRef) {
+  try {
+    console.log('📄 Processing Additional Steps re-upload for:', email);
+
+    // Extract new POA document URLs
+    const newPoaDocs = [];
+    if (additionalPdfs?.UTILITY_BILL) {
+      newPoaDocs.push({
+        type: 'UTILITY_BILL',
+        url: additionalPdfs.UTILITY_BILL,
+        status: additionalStatus
+      });
+    }
+
+    if (newPoaDocs.length === 0) {
+      console.log('⚠️ No POA documents found in Additional Steps');
+      return { success: false, error: 'No POA documents in re-upload' };
+    }
+
+    console.log(`📋 Found ${newPoaDocs.length} new POA documents`);
+
+    // Download and process new POA with AWS OCR
+    const ocrResult = await processNewPoaWithOcr(newPoaDocs[0]);
+    
+    if (!ocrResult.success) {
+      console.log('❌ OCR processing failed for new POA');
+      return { 
+        success: true, // Still success from webhook perspective
+        poaValidated: false,
+        nextStep: 'manual_review',
+        reason: 'OCR processing failed'
+      };
+    }
+
+    // Check if new POA solves the source diversity issue
+    const sourceValidation = await validatePoaSourceDiversity(email, ocrResult.extractedData);
+    
+    if (sourceValidation.passed) {
+      console.log('✅ New POA passed source diversity check!');
+      
+      // Update Monday.com with successful re-validation
+      await updateMondayWithRevalidation(email, {
+        newPoaUrl: newPoaDocs[0].url,
+        ocrData: ocrResult.extractedData,
+        sourceValidation: sourceValidation,
+        scanRef: scanRef,
+        status: 'revalidation_complete'
+      });
+
+      return {
+        success: true,
+        poaValidated: true,
+        nextStep: 'dvla_processing', // Continue to DVLA step
+        reason: 'Source diversity resolved'
+      };
+    } else {
+      console.log('❌ New POA still fails source diversity');
+      
+      // Update Monday.com with failed re-validation
+      await updateMondayWithRevalidation(email, {
+        newPoaUrl: newPoaDocs[0].url,
+        ocrData: ocrResult.extractedData,
+        sourceValidation: sourceValidation,
+        scanRef: scanRef,
+        status: 'revalidation_failed'
+      });
+
+      return {
+        success: true,
+        poaValidated: false,
+        nextStep: 'manual_review',
+        reason: 'Still same source type'
+      };
+    }
+
+  } catch (error) {
+    console.error('❌ Error processing Additional Steps re-upload:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// NEW: Process new POA with AWS OCR
+async function processNewPoaWithOcr(poaDoc) {
+  try {
+    console.log('🔍 Running OCR on new POA document...');
+
+    // Call your existing AWS Textract function
+    const response = await fetch(`${process.env.URL}/.netlify/functions/test-claude-ocr`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'process-poa',
+        documentUrl: poaDoc.url,
+        documentType: poaDoc.type
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OCR failed: ${response.status}`);
+    }
+
+    const ocrResult = await response.json();
+    
+    return {
+      success: true,
+      extractedData: {
+        documentType: ocrResult.documentType || 'unknown',
+        address: ocrResult.address,
+        date: ocrResult.date,
+        name: ocrResult.name,
+        sourceType: ocrResult.sourceType // e.g., 'utility', 'bank', etc.
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ OCR processing error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// NEW: Validate POA source diversity against existing documents
+async function validatePoaSourceDiversity(email, newPoaData) {
+  try {
+    console.log('🔍 Validating source diversity for new POA...');
+
+    // Get existing driver data from Monday.com
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'find-driver-board-a',
+        email: email
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get driver data: ${response.status}`);
+    }
+
+    const driverData = await response.json();
+    
+    if (!driverData.success || !driverData.driver) {
+      throw new Error('Driver not found in Monday.com');
+    }
+
+    // Extract existing POA source types (this would be stored from previous OCR)
+    const existingPoaSources = [
+      driverData.driver.poa1SourceType || 'unknown',
+      driverData.driver.poa2SourceType || 'unknown'
+    ];
+
+    console.log('📋 Existing POA sources:', existingPoaSources);
+    console.log('📋 New POA source:', newPoaData.sourceType);
+
+    // Check if new POA is different source type
+    const isDifferentSource = !existingPoaSources.includes(newPoaData.sourceType);
+    
+    return {
+      passed: isDifferentSource,
+      newSourceType: newPoaData.sourceType,
+      existingSources: existingPoaSources,
+      reason: isDifferentSource ? 
+        'Different source type detected' : 
+        'Same source type as existing POA'
+    };
+
+  } catch (error) {
+    console.error('❌ Source diversity validation error:', error);
+    return { 
+      passed: false, 
+      error: error.message 
+    };
+  }
+}
+
+// NEW: Update Monday.com with re-validation results
+async function updateMondayWithRevalidation(email, revalidationData) {
+  try {
+    console.log('📊 Updating Monday.com with re-validation results...');
+
+    const updateData = {
+      // Store new POA data
+      newPoaDocument: revalidationData.newPoaUrl,
+      poaRevalidationDate: new Date().toISOString().split('T')[0],
+      poaSourceValidation: revalidationData.sourceValidation.passed ? 'Passed' : 'Failed',
+      
+      // Update overall status based on re-validation
+      overallStatus: revalidationData.status === 'revalidation_complete' ? 
+        'Working on it' : 'Stuck',
+      
+      // Add re-validation notes
+      additionalDetails: `POA Re-validation: ${revalidationData.reason}. ` +
+        `New source: ${revalidationData.ocrData.sourceType}. ` +
+        `Scan: ${revalidationData.scanRef}`,
+      
+      lastUpdated: new Date().toISOString().split('T')[0]
+    };
+
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: updateData
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Monday.com update failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Monday.com updated with re-validation results');
+    
+    return result;
+
+  } catch (error) {
+    console.error('❌ Error updating Monday.com with re-validation:', error);
+    throw error;
   }
 }
 
@@ -436,7 +747,7 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
   }
 }
 
-// NEW: Process POA validation for UK drivers
+// EXISTING: Process POA validation for UK drivers
 async function processPoaValidation(idenfyData, fullWebhookData) {
   try {
     console.log('🔍 Processing POA validation for UK driver...');
