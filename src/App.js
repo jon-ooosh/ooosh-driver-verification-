@@ -255,8 +255,8 @@ const DriverVerificationApp = () => {
 
   // Handle contact details completion
   const handleContactDetailsComplete = async () => {
-    if (!driverPhone || driverPhone.length < 10) {
-      setError('Please enter a valid phone number');
+    if (!driverPhone || driverPhone.replace(/\D/g, '').length < 10) {
+      setError('Please enter a valid phone number with at least 10 digits');
       return;
     }
 
@@ -265,15 +265,17 @@ const DriverVerificationApp = () => {
     
     try {
       // Save phone number to Monday.com Board A
-      const response = await fetch('/.netlify/functions/save-contact-details', {
+      const response = await fetch('/.netlify/functions/monday-integration', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'update-driver-board-a',
           email: driverEmail,
-          phone: driverPhone,
-          jobId: jobId
+          updates: {
+            phoneNumber: driverPhone
+          }
         })
       });
 
@@ -316,6 +318,19 @@ const DriverVerificationApp = () => {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     
     return new Date(lastCompleted) < oneYearAgo;
+  };
+
+  // Fix date validation - check if document is still valid
+  const isDocumentValid = (expiryDateString) => {
+    if (!expiryDateString) return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    
+    const expiryDate = new Date(expiryDateString);
+    expiryDate.setHours(0, 0, 0, 0); // Reset time to start of day
+    
+    return expiryDate >= today; // Valid if expiry date is today or in future
   };
 
   const checkDriverStatus = async () => {
@@ -642,44 +657,53 @@ const DriverVerificationApp = () => {
             {isReturningDriver ? 'Welcome back!' : 'Contact details'}
           </h2>
           {isReturningDriver && (
-            <p className="text-base text-green-600 mt-1">✓ We found your existing verification record</p>
+            <p className="text-lg text-green-600 mt-1">✓ We found your existing verification record</p>
           )}
         </div>
 
         <div className="space-y-6">
           {/* Email (readonly) */}
           <div>
-            <label className="block text-base font-medium text-gray-700 mb-2">
+            <label className="block text-lg font-medium text-gray-700 mb-2">
               Email address
             </label>
             <input
               type="email"
               value={driverEmail}
               readOnly
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-base"
+              className="w-full px-3 py-3 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-lg"
             />
           </div>
 
           {/* Phone Number */}
           <div>
-            <label className="block text-base font-medium text-gray-700 mb-2">
+            <label className="block text-lg font-medium text-gray-700 mb-2">
               Phone number <span className="text-red-500">*</span>
             </label>
             <input
+              key="phone-input" // Add key to prevent cursor jumping
               type="tel"
               value={driverPhone}
               onChange={(e) => setDriverPhone(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
+              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
               placeholder="07123 456789"
+              autoComplete="tel"
             />
-            <p className="text-sm text-gray-500 mt-1">We may need to contact you about this hire</p>
+            <p className="text-base text-gray-500 mt-1">
+              We may need to contact you about this hire (minimum 10 digits required)
+            </p>
+            {driverPhone && driverPhone.replace(/\D/g, '').length < 10 && (
+              <p className="text-base text-red-600 mt-1">
+                Please enter at least 10 digits ({driverPhone.replace(/\D/g, '').length}/10)
+              </p>
+            )}
           </div>
 
           {/* Returning driver info */}
           {isReturningDriver && driverStatus?.documents && (
             <div className="bg-green-50 border border-green-200 rounded-md p-4">
-              <h3 className="text-lg font-medium text-green-900 mb-2">Your verification status</h3>
-              <div className="space-y-2 text-sm">
+              <h3 className="text-xl font-medium text-green-900 mb-2">Your verification status</h3>
+              <div className="space-y-2 text-base">
                 <DocumentStatusSummary 
                   title="Driving licence" 
                   status={driverStatus.documents.licence} 
@@ -695,7 +719,7 @@ const DriverVerificationApp = () => {
                 {!needsInsuranceQuestionnaire() && (
                   <div className="flex items-center text-green-600">
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    <span>Insurance questions completed</span>
+                    <span className="text-base">Insurance questions completed</span>
                   </div>
                 )}
               </div>
@@ -708,24 +732,18 @@ const DriverVerificationApp = () => {
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <p className="text-base text-red-800">{error}</p>
+                  <p className="text-lg text-red-800">{error}</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Navigation */}
-          <div className="flex space-x-3">
-            <button
-              onClick={() => setCurrentStep('email-verification')}
-              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-base"
-            >
-              Back
-            </button>
+          {/* Navigation - Removed back button */}
+          <div className="flex justify-center">
             <button
               onClick={handleContactDetailsComplete}
-              disabled={loading || !driverPhone}
-              className="flex-1 bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 disabled:opacity-50 text-base"
+              disabled={loading || !driverPhone || driverPhone.replace(/\D/g, '').length < 10}
+              className="w-full bg-purple-600 text-white py-4 px-6 rounded-md hover:bg-purple-700 disabled:opacity-50 text-lg font-medium"
             >
               {loading ? 'Saving...' : 'Continue'}
             </button>
@@ -1417,7 +1435,7 @@ const DriverVerificationApp = () => {
   };
 
   const DocumentStatus = ({ title, status }) => {
-    const isValid = status?.valid;
+    const isValid = status ? isDocumentValid(status.expiryDate) : false;
     const isExpiringSoon = status?.expiryDate && 
                           new Date(status.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     
@@ -1425,31 +1443,31 @@ const DriverVerificationApp = () => {
       <div className="flex items-center justify-between p-3 border rounded-md">
         <div className="flex items-center">
           {isValid ? (
-            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+            <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
           ) : (
-            <XCircle className="h-4 w-4 text-red-500 mr-2" />
+            <XCircle className="h-5 w-5 text-red-500 mr-2" />
           )}
-          <span className="text-base font-medium">{title}</span>
+          <span className="text-lg font-medium">{title}</span>
         </div>
         <div className="text-right">
           {isValid ? (
             <div>
               {status.expiryDate && (
-                <span className={`text-sm ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
+                <span className={`text-base ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
                   Valid until {status.expiryDate}
                 </span>
               )}
               {status.lastCheck && !status.expiryDate && (
-                <span className="text-sm text-green-600">
+                <span className="text-base text-green-600">
                   Checked {status.lastCheck}
                 </span>
               )}
               {status.type && (
-                <p className="text-sm text-gray-500">{status.type}</p>
+                <p className="text-base text-gray-500">{status.type}</p>
               )}
             </div>
           ) : (
-            <span className="text-sm text-red-600">Required</span>
+            <span className="text-base text-red-600">Required</span>
           )}
         </div>
       </div>
@@ -1458,14 +1476,14 @@ const DriverVerificationApp = () => {
 
   // Helper component for contact details summary
   const DocumentStatusSummary = ({ title, status }) => {
-    const isValid = status?.valid;
+    const isValid = status ? isDocumentValid(status.expiryDate) : false;
     return (
       <div className="flex items-center justify-between">
-        <span className="text-green-800">{title}</span>
+        <span className="text-green-800 text-base">{title}</span>
         {isValid ? (
-          <CheckCircle className="h-4 w-4 text-green-600" />
+          <CheckCircle className="h-5 w-5 text-green-600" />
         ) : (
-          <XCircle className="h-4 w-4 text-red-500" />
+          <XCircle className="h-5 w-5 text-red-500" />
         )}
       </div>
     );
