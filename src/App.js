@@ -1,17 +1,18 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete application with DVLA Processing integration
-// ENHANCED: All existing UI improvements + DVLA processing integration
+// OOOSH Driver Verification - Complete application with contact details integration
+// ENHANCED: Contact details step + early Monday.com query + questionnaire moved to checklist
 
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, User } from 'lucide-react';
 import DVLAProcessingPage from './DVLAProcessingPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
+  const [driverPhone, setDriverPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
-  // Steps: landing, email-entry, email-verification, insurance-questionnaire, driver-status, document-upload, dvla-processing, processing, complete, rejected
+  // Steps: landing, email-entry, email-verification, contact-details, insurance-questionnaire, driver-status, document-upload, dvla-processing, processing, complete, rejected
   const [jobDetails, setJobDetails] = useState(null);
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -198,15 +199,15 @@ const DriverVerificationApp = () => {
 
       // Only proceed if we have a successful response AND verification succeeded
       if (data.success && data.verified) {
-        console.log('Verification successful, checking if returning driver');
+        console.log('Verification successful, proceeding to early Monday.com query');
         
         // Show test mode indicator if applicable
         if (data.testMode) {
           console.log('🚨 Test mode verification successful');
         }
         
-        // First check if this is a returning driver
-        await checkDriverStatus();
+        // NEW: Early Monday.com query to check for returning driver
+        await checkDriverStatusEarly();
       } else {
         // This handles edge cases where status is 200 but verification failed
         throw new Error(data.error || 'Invalid verification code');
@@ -218,6 +219,103 @@ const DriverVerificationApp = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // NEW: Early Monday.com query after email verification
+  const checkDriverStatusEarly = async () => {
+    try {
+      console.log('Early driver status check for:', driverEmail);
+      
+      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+      
+      if (response.ok) {
+        const driverData = await response.json();
+        console.log('Early driver status:', driverData);
+        setDriverStatus(driverData);
+        
+        // Pre-populate phone if we have it
+        if (driverData.phone) {
+          setDriverPhone(driverData.phone);
+        }
+        
+        // Smart routing: returning drivers still need contact details but can skip questionnaire
+        setCurrentStep('contact-details');
+      } else {
+        console.log('Driver not found, treating as new driver');
+        setDriverStatus({ status: 'new', email: driverEmail });
+        setCurrentStep('contact-details');
+      }
+      
+    } catch (err) {
+      console.error('Error in early driver status check:', err);
+      setDriverStatus({ status: 'new', email: driverEmail });
+      setCurrentStep('contact-details');
+    }
+  };
+
+  // Handle contact details completion
+  const handleContactDetailsComplete = async () => {
+    if (!driverPhone || driverPhone.length < 10) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Save phone number to Monday.com Board A
+      const response = await fetch('/.netlify/functions/save-contact-details', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: driverEmail,
+          phone: driverPhone,
+          jobId: jobId
+        })
+      });
+
+      if (response.ok) {
+        console.log('Contact details saved successfully');
+      } else {
+        console.error('Failed to save contact details - continuing anyway');
+      }
+      
+      // Route based on driver status
+      if (driverStatus?.status === 'verified' && !needsInsuranceQuestionnaire()) {
+        // Returning driver with complete verification
+        setCurrentStep('driver-status');
+      } else if (driverStatus?.status === 'partial' || needsInsuranceQuestionnaire()) {
+        // Returning driver but needs updates, or new driver
+        setCurrentStep('insurance-questionnaire');
+      } else {
+        // New driver - go to questionnaire
+        setCurrentStep('insurance-questionnaire');
+      }
+      
+    } catch (err) {
+      console.error('Error saving contact details:', err);
+      // Continue anyway - don't block the flow
+      setCurrentStep('insurance-questionnaire');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if returning driver needs to redo insurance questionnaire
+  const needsInsuranceQuestionnaire = () => {
+    if (!driverStatus?.insuranceQuestions) return true;
+    
+    // Check if questionnaire was completed recently (within 1 year)
+    const lastCompleted = driverStatus.insuranceQuestions.completedDate;
+    if (!lastCompleted) return true;
+    
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    
+    return new Date(lastCompleted) < oneYearAgo;
   };
 
   const checkDriverStatus = async () => {
@@ -260,7 +358,7 @@ const DriverVerificationApp = () => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setInsuranceData(insuranceFormData);
     
-    // Save insurance data to Google Sheets via Apps Script
+    // Save insurance data to Monday.com Board A
     try {
       setLoading(true);
       
@@ -306,6 +404,7 @@ const DriverVerificationApp = () => {
   // Start again function
   const startAgain = () => {
     setDriverEmail('');
+    setDriverPhone('');
     setVerificationCode('');
     setError('');
     setLoading(false);
@@ -531,6 +630,111 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // NEW: Contact Details Component
+  const ContactDetails = () => {
+    const isReturningDriver = driverStatus?.status !== 'new';
+    
+    return (
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <div className="text-center mb-6">
+          <User className="mx-auto h-12 w-12 text-purple-600 mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900">
+            {isReturningDriver ? 'Welcome back!' : 'Contact details'}
+          </h2>
+          {isReturningDriver && (
+            <p className="text-base text-green-600 mt-1">✓ We found your existing verification record</p>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          {/* Email (readonly) */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-2">
+              Email address
+            </label>
+            <input
+              type="email"
+              value={driverEmail}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-base"
+            />
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label className="block text-base font-medium text-gray-700 mb-2">
+              Phone number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              value={driverPhone}
+              onChange={(e) => setDriverPhone(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
+              placeholder="07123 456789"
+            />
+            <p className="text-sm text-gray-500 mt-1">We may need to contact you about this hire</p>
+          </div>
+
+          {/* Returning driver info */}
+          {isReturningDriver && driverStatus?.documents && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+              <h3 className="text-lg font-medium text-green-900 mb-2">Your verification status</h3>
+              <div className="space-y-2 text-sm">
+                <DocumentStatusSummary 
+                  title="Driving licence" 
+                  status={driverStatus.documents.licence} 
+                />
+                <DocumentStatusSummary 
+                  title="Proof of address" 
+                  status={driverStatus.documents.poa1} 
+                />
+                <DocumentStatusSummary 
+                  title="DVLA check" 
+                  status={driverStatus.documents.dvlaCheck} 
+                />
+                {!needsInsuranceQuestionnaire() && (
+                  <div className="flex items-center text-green-600">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    <span>Insurance questions completed</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                <div className="ml-3">
+                  <p className="text-base text-red-800">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setCurrentStep('email-verification')}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-base"
+            >
+              Back
+            </button>
+            <button
+              onClick={handleContactDetailsComplete}
+              disabled={loading || !driverPhone}
+              className="flex-1 bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 disabled:opacity-50 text-base"
+            >
+              {loading ? 'Saving...' : 'Continue'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Insurance Questionnaire Component
   const InsuranceQuestionnaire = () => {
     const [formData, setFormData] = useState({
@@ -544,6 +748,7 @@ const DriverVerificationApp = () => {
     });
     
     const [errors, setErrors] = useState({});
+    const isReturningDriver = driverStatus?.status !== 'new';
 
     const handleQuestionChange = (field, value) => {
       setFormData(prev => ({
@@ -646,7 +851,12 @@ const DriverVerificationApp = () => {
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900">Insurance questions</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {isReturningDriver ? 'Update insurance questions' : 'Insurance questions'}
+          </h2>
+          {isReturningDriver && (
+            <p className="text-base text-orange-600 mt-1">Please complete these questions again for this hire</p>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -708,7 +918,7 @@ const DriverVerificationApp = () => {
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
             <h3 className="text-lg font-medium text-purple-900 mb-2">Next step</h3>
             <p className="text-base text-purple-800">
-              Press Continue to proceed to Idenfy, our AI-powered document verification system.
+              Press Continue to proceed to {isReturningDriver ? 'update your documents' : 'document verification'}.
             </p>
           </div>
 
@@ -727,7 +937,7 @@ const DriverVerificationApp = () => {
           {/* Navigation */}
           <div className="flex space-x-3">
             <button
-              onClick={() => setCurrentStep('email-verification')}
+              onClick={() => setCurrentStep('contact-details')}
               className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-base"
             >
               Back
@@ -938,6 +1148,8 @@ const DriverVerificationApp = () => {
                   <li>Must be at least 23 years old</li>
                   <li>Must have held a full driving licence for at least 2 years</li>
                   <li>Must have a valid driving licence (we'll need photos of front and back)</li>
+                  <li>Answer health and driving history questions</li>
+                  <li>Provide contact details (phone number)</li>
                 </ul>
               </div>
 
@@ -974,11 +1186,6 @@ const DriverVerificationApp = () => {
                   <li>Must show your current home address</li>
                   <li>Documents must be from two different sources</li>
                 </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">📋 Insurance questions:</h4>
-                <p className="ml-5">Answer health and driving history questions</p>
               </div>
             </div>
 
@@ -1128,9 +1335,23 @@ const DriverVerificationApp = () => {
               `Welcome back!` : 
               'Verification status'}
           </h2>
-          {insuranceData && (
-            <p className="text-base text-green-600 mt-1">✓ insurance questions completed</p>
-          )}
+          
+          {/* Document checklist with questionnaire moved here */}
+          <div className="mt-4 space-y-2 text-left">
+            {/* Contact details */}
+            <div className="flex items-center text-green-600">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              <span className="text-sm">Contact details completed</span>
+            </div>
+            
+            {/* Insurance questions */}
+            {(insuranceData || !needsInsuranceQuestionnaire()) && (
+              <div className="flex items-center text-green-600">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                <span className="text-sm">Insurance questions completed</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Document Status Breakdown */}
@@ -1231,6 +1452,21 @@ const DriverVerificationApp = () => {
             <span className="text-sm text-red-600">Required</span>
           )}
         </div>
+      </div>
+    );
+  };
+
+  // Helper component for contact details summary
+  const DocumentStatusSummary = ({ title, status }) => {
+    const isValid = status?.valid;
+    return (
+      <div className="flex items-center justify-between">
+        <span className="text-green-800">{title}</span>
+        {isValid ? (
+          <CheckCircle className="h-4 w-4 text-green-600" />
+        ) : (
+          <XCircle className="h-4 w-4 text-red-500" />
+        )}
       </div>
     );
   };
@@ -1421,6 +1657,7 @@ const DriverVerificationApp = () => {
       case 'landing': return renderLanding();
       case 'email-entry': return renderEmailEntry();
       case 'email-verification': return renderEmailVerification();
+      case 'contact-details': return <ContactDetails />;
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
       case 'driver-status': return renderDriverStatus();
       case 'document-upload': return renderDocumentUpload();
