@@ -685,15 +685,24 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // NEW: Contact Details Component
-  const ContactDetails = () => {
+  // NEW: Contact Details Component - FIXED: Prevent re-renders
+  const ContactDetails = React.memo(() => {
     const isReturningDriver = driverStatus?.status !== 'new';
+    
+    // Local handlers to prevent re-renders
+    const handlePhoneChange = React.useCallback((e) => {
+      setPhoneNumber(e.target.value);
+    }, []);
+    
+    const handleCountryChange = React.useCallback((e) => {
+      setCountryCode(e.target.value);
+    }, []);
     
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <User className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-3xl font-bold text-gray-900">
             {isReturningDriver ? 'Welcome back!' : 'Contact details'}
           </h2>
           {isReturningDriver && (
@@ -703,11 +712,53 @@ const DriverVerificationApp = () => {
 
         <div className="space-y-6">
           {/* Progress Tracker */}
-          <ProgressTracker />
+          <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
+            <h3 className="text-xl font-medium text-purple-900 mb-3">Verification Progress</h3>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                <span className="text-base text-green-700">Verify email address</span>
+              </div>
+              <div className="flex items-center">
+                {phoneNumber ? (
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                ) : (
+                  <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                )}
+                <span className={`text-base ${phoneNumber ? 'text-green-700' : 'text-gray-600'}`}>
+                  Phone number
+                </span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Insurance questions</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Driving licence</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Proof of address 1</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Proof of address 2</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">DVLA check</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Confirmation signature</span>
+              </div>
+            </div>
+          </div>
 
           {/* Email (readonly) */}
           <div>
-            <label className="block text-lg font-medium text-gray-700 mb-2">
+            <label className="block text-xl font-medium text-gray-700 mb-2">
               Email address
             </label>
             <input
@@ -720,13 +771,13 @@ const DriverVerificationApp = () => {
 
           {/* Phone Number with Country Code */}
           <div>
-            <label className="block text-lg font-medium text-gray-700 mb-2">
+            <label className="block text-xl font-medium text-gray-700 mb-2">
               Phone number <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
               <select
                 value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
+                onChange={handleCountryChange}
                 className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg bg-white min-w-[120px]"
               >
                 <option value="+44">🇬🇧 +44</option>
@@ -763,11 +814,10 @@ const DriverVerificationApp = () => {
               <input
                 type="tel"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={handlePhoneChange}
                 className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
                 placeholder="123 456 7890"
                 autoComplete="tel-national"
-                name="phoneNumber"
               />
             </div>
           </div>
@@ -824,7 +874,7 @@ const DriverVerificationApp = () => {
         </div>
       </div>
     );
-  };
+  });
 
   // Insurance Questionnaire Component
   const InsuranceQuestionnaire = () => {
@@ -942,7 +992,7 @@ const DriverVerificationApp = () => {
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-3xl font-bold text-gray-900">
             {isReturningDriver ? 'Update insurance questions' : 'Insurance questions'}
           </h2>
           {isReturningDriver && (
@@ -952,7 +1002,43 @@ const DriverVerificationApp = () => {
 
         <div className="space-y-6">
           {/* Progress Tracker */}
-          <ProgressTracker />
+          <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
+            <h3 className="text-xl font-medium text-purple-900 mb-3">Verification Progress</h3>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                <span className="text-base text-green-700">Verify email address</span>
+              </div>
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                <span className="text-base text-green-700">Phone number</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-purple-500 rounded-full mr-3 bg-purple-100"></div>
+                <span className="text-base text-purple-700 font-medium">Insurance questions</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Driving licence</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Proof of address 1</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Proof of address 2</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">DVLA check</span>
+              </div>
+              <div className="flex items-center">
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                <span className="text-base text-gray-600">Confirmation signature</span>
+              </div>
+            </div>
+          </div>
 
           {/* Insurance Questions */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
