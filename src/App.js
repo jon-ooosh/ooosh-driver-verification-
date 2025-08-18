@@ -425,7 +425,8 @@ const DriverVerificationApp = () => {
   // Start again function
   const startAgain = () => {
     setDriverEmail('');
-    setDriverPhone('');
+    setPhoneNumber('');
+    setCountryCode('+44');
     setVerificationCode('');
     setError('');
     setLoading(false);
