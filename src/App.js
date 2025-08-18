@@ -9,7 +9,6 @@ import DVLAProcessingPage from './DVLAProcessingPage';
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
   const [driverEmail, setDriverEmail] = useState('');
-  const [driverPhone, setDriverPhone] = useState('');
   const [countryCode, setCountryCode] = useState('+44');
   const [phoneNumber, setPhoneNumber] = useState(''); // Renamed for clarity
   const [verificationCode, setVerificationCode] = useState('');
