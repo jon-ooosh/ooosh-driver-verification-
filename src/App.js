@@ -236,8 +236,8 @@ const DriverVerificationApp = () => {
         setDriverStatus(driverData);
         
         // Pre-populate phone if we have it
-        if (driverData.phone) {
-          setPhoneNumber(driverData.phone);
+        if (driverData.phoneNumber) {
+          setPhoneNumber(driverData.phoneNumber);
         }
         if (driverData.phoneCountry) {
           setCountryCode(driverData.phoneCountry);
@@ -629,7 +629,7 @@ const DriverVerificationApp = () => {
   const ProgressTracker = () => {
     const steps = [
       { id: 'email', label: 'Verify email address', completed: ['email-verification', 'contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) },
-      { id: 'phone', label: 'Phone number', completed: ['contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (phoneNumber || driverStatus?.phone) },
+      { id: 'phone', label: 'Phone number', completed: ['contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (phoneNumber || driverStatus?.phoneNumber) },
       { id: 'insurance', label: 'Insurance questions', completed: ['driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (insuranceData || !needsInsuranceQuestionnaire()) },
       { id: 'license', label: 'Driving licence', completed: driverStatus?.documents?.licence && isDocumentValid(driverStatus.documents.licence.expiryDate) },
       { id: 'poa1', label: 'Proof of address 1', completed: driverStatus?.documents?.poa1 && isDocumentValid(driverStatus.documents.poa1.expiryDate) },
