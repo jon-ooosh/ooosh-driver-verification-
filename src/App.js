@@ -275,9 +275,9 @@ const DriverVerificationApp = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'update-driver-board-a',
+          action: 'create-driver-board-a',  // Changed: This handles both create and update
           email: driverEmail,
-          updates: {
+          driverData: {
             phoneNumber: phoneNumber,        // text_mktrfqe2 (existing column)
             phoneCountry: countryCode        // text_mkty5hzk (new column)
           }
@@ -622,40 +622,6 @@ const DriverVerificationApp = () => {
     const currentUrl = window.location.href;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentUrl)}`;
     return qrUrl;
-  };
-
-  // Progress tracking component
-  const ProgressTracker = () => {
-    const steps = [
-      { id: 'email', label: 'Verify email address', completed: ['email-verification', 'contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) },
-      { id: 'phone', label: 'Phone number', completed: ['contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (phoneNumber || driverStatus?.phoneNumber) },
-      { id: 'insurance', label: 'Insurance questions', completed: ['driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (insuranceData || !needsInsuranceQuestionnaire()) },
-      { id: 'license', label: 'Driving licence', completed: driverStatus?.documents?.licence && isDocumentValid(driverStatus.documents.licence.expiryDate) },
-      { id: 'poa1', label: 'Proof of address 1', completed: driverStatus?.documents?.poa1 && isDocumentValid(driverStatus.documents.poa1.expiryDate) },
-      { id: 'poa2', label: 'Proof of address 2', completed: driverStatus?.documents?.poa2 && isDocumentValid(driverStatus.documents.poa2.expiryDate) },
-      { id: 'dvla', label: driverStatus?.nationality === 'UK' ? 'DVLA check' : 'Passport', completed: driverStatus?.documents?.dvlaCheck && isDocumentValid(driverStatus.documents.dvlaCheck.expiryDate) },
-      { id: 'signature', label: 'Confirmation signature', completed: currentStep === 'complete' }
-    ];
-
-    return (
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
-        <h3 className="text-lg font-medium text-purple-900 mb-3">Verification Progress</h3>
-        <div className="space-y-2">
-          {steps.map((step) => (
-            <div key={step.id} className="flex items-center">
-              {step.completed ? (
-                <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
-              ) : (
-                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-              )}
-              <span className={`text-base ${step.completed ? 'text-green-700' : 'text-gray-600'}`}>
-                {step.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   // Format date for hire period display (9am 4th September format)
