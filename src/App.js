@@ -237,18 +237,10 @@ const DriverVerificationApp = () => {
         
         // Pre-populate phone if we have it
         if (driverData.phone) {
-          // Split country code and number if phone contains '+'
-          if (driverData.phone.startsWith('+')) {
-            const match = driverData.phone.match(/^(\+\d{1,4})\s?(.*)$/);
-            if (match) {
-              setCountryCode(match[1]);
-              setPhoneNumber(match[2]);
-            } else {
-              setPhoneNumber(driverData.phone);
-            }
-          } else {
-            setPhoneNumber(driverData.phone);
-          }
+          setPhoneNumber(driverData.phone);
+        }
+        if (driverData.phoneCountry) {
+          setCountryCode(driverData.phoneCountry);
         }
         
         // Smart routing: returning drivers still need contact details but can skip questionnaire
@@ -268,8 +260,6 @@ const DriverVerificationApp = () => {
 
   // Handle contact details completion
   const handleContactDetailsComplete = async () => {
-    const fullPhoneNumber = `${countryCode} ${phoneNumber}`.trim();
-    
     if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 9) {
       setError('Please enter a valid phone number');
       return;
@@ -279,7 +269,7 @@ const DriverVerificationApp = () => {
     setError('');
     
     try {
-      // Save both country code and phone number to Monday.com Board A
+      // Save country code and phone number separately to Monday.com Board A
       const response = await fetch('/.netlify/functions/monday-integration', {
         method: 'POST',
         headers: {
@@ -289,9 +279,8 @@ const DriverVerificationApp = () => {
           action: 'update-driver-board-a',
           email: driverEmail,
           updates: {
-            phoneNumber: fullPhoneNumber,
-            countryCode: countryCode,
-            phoneNumberOnly: phoneNumber
+            phoneNumber: phoneNumber,        // text_mktrfqe2 (existing column)
+            phoneCountry: countryCode        // text_mkty5hzk (new column)
           }
         })
       });
