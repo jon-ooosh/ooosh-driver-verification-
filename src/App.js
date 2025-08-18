@@ -11,6 +11,7 @@ const DriverVerificationApp = () => {
   const [driverEmail, setDriverEmail] = useState('');
   const [driverPhone, setDriverPhone] = useState('');
   const [countryCode, setCountryCode] = useState('+44');
+  const [phoneNumber, setPhoneNumber] = useState(''); // Renamed for clarity
   const [verificationCode, setVerificationCode] = useState('');
   const [currentStep, setCurrentStep] = useState('landing'); 
   // Steps: landing, email-entry, email-verification, contact-details, insurance-questionnaire, driver-status, document-upload, dvla-processing, processing, complete, rejected
@@ -241,12 +242,12 @@ const DriverVerificationApp = () => {
             const match = driverData.phone.match(/^(\+\d{1,4})\s?(.*)$/);
             if (match) {
               setCountryCode(match[1]);
-              setDriverPhone(match[2]);
+              setPhoneNumber(match[2]);
             } else {
-              setDriverPhone(driverData.phone);
+              setPhoneNumber(driverData.phone);
             }
           } else {
-            setDriverPhone(driverData.phone);
+            setPhoneNumber(driverData.phone);
           }
         }
         
@@ -267,9 +268,9 @@ const DriverVerificationApp = () => {
 
   // Handle contact details completion
   const handleContactDetailsComplete = async () => {
-    const fullPhoneNumber = `${countryCode} ${driverPhone}`.trim();
+    const fullPhoneNumber = `${countryCode} ${phoneNumber}`.trim();
     
-    if (!driverPhone || driverPhone.replace(/\D/g, '').length < 9) {
+    if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 9) {
       setError('Please enter a valid phone number');
       return;
     }
@@ -278,7 +279,7 @@ const DriverVerificationApp = () => {
     setError('');
     
     try {
-      // Save full phone number (country code + number) to Monday.com Board A
+      // Save both country code and phone number to Monday.com Board A
       const response = await fetch('/.netlify/functions/monday-integration', {
         method: 'POST',
         headers: {
@@ -288,7 +289,9 @@ const DriverVerificationApp = () => {
           action: 'update-driver-board-a',
           email: driverEmail,
           updates: {
-            phoneNumber: fullPhoneNumber
+            phoneNumber: fullPhoneNumber,
+            countryCode: countryCode,
+            phoneNumberOnly: phoneNumber
           }
         })
       });
@@ -632,6 +635,40 @@ const DriverVerificationApp = () => {
     return qrUrl;
   };
 
+  // Progress tracking component
+  const ProgressTracker = () => {
+    const steps = [
+      { id: 'email', label: 'Verify email address', completed: ['email-verification', 'contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) },
+      { id: 'phone', label: 'Phone number', completed: ['contact-details', 'insurance-questionnaire', 'driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (phoneNumber || driverStatus?.phone) },
+      { id: 'insurance', label: 'Insurance questions', completed: ['driver-status', 'document-upload', 'dvla-processing', 'processing', 'complete'].includes(currentStep) && (insuranceData || !needsInsuranceQuestionnaire()) },
+      { id: 'license', label: 'Driving licence', completed: driverStatus?.documents?.licence && isDocumentValid(driverStatus.documents.licence.expiryDate) },
+      { id: 'poa1', label: 'Proof of address 1', completed: driverStatus?.documents?.poa1 && isDocumentValid(driverStatus.documents.poa1.expiryDate) },
+      { id: 'poa2', label: 'Proof of address 2', completed: driverStatus?.documents?.poa2 && isDocumentValid(driverStatus.documents.poa2.expiryDate) },
+      { id: 'dvla', label: driverStatus?.nationality === 'UK' ? 'DVLA check' : 'Passport', completed: driverStatus?.documents?.dvlaCheck && isDocumentValid(driverStatus.documents.dvlaCheck.expiryDate) },
+      { id: 'signature', label: 'Confirmation signature', completed: currentStep === 'complete' }
+    ];
+
+    return (
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+        <h3 className="text-lg font-medium text-purple-900 mb-3">Verification Progress</h3>
+        <div className="space-y-2">
+          {steps.map((step) => (
+            <div key={step.id} className="flex items-center">
+              {step.completed ? (
+                <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+              ) : (
+                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+              )}
+              <span className={`text-base ${step.completed ? 'text-green-700' : 'text-gray-600'}`}>
+                {step.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Format date for hire period display (9am 4th September format)
   const formatHireDate = (dateString) => {
     try {
@@ -676,6 +713,9 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Progress Tracker */}
+          <ProgressTracker />
+
           {/* Email (readonly) */}
           <div>
             <label className="block text-lg font-medium text-gray-700 mb-2">
@@ -698,10 +738,11 @@ const DriverVerificationApp = () => {
               <select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
-                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg bg-white"
+                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg bg-white min-w-[120px]"
               >
                 <option value="+44">🇬🇧 +44</option>
                 <option value="+1">🇺🇸 +1</option>
+                <option value="+1">🇨🇦 +1</option>
                 <option value="+33">🇫🇷 +33</option>
                 <option value="+49">🇩🇪 +49</option>
                 <option value="+34">🇪🇸 +34</option>
@@ -711,17 +752,33 @@ const DriverVerificationApp = () => {
                 <option value="+41">🇨🇭 +41</option>
                 <option value="+43">🇦🇹 +43</option>
                 <option value="+353">🇮🇪 +353</option>
+                <option value="+46">🇸🇪 +46</option>
+                <option value="+47">🇳🇴 +47</option>
+                <option value="+45">🇩🇰 +45</option>
+                <option value="+358">🇫🇮 +358</option>
+                <option value="+48">🇵🇱 +48</option>
+                <option value="+351">🇵🇹 +351</option>
+                <option value="+30">🇬🇷 +30</option>
+                <option value="+420">🇨🇿 +420</option>
+                <option value="+36">🇭🇺 +36</option>
                 <option value="+61">🇦🇺 +61</option>
                 <option value="+64">🇳🇿 +64</option>
                 <option value="+27">🇿🇦 +27</option>
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+86">🇨🇳 +86</option>
+                <option value="+81">🇯🇵 +81</option>
+                <option value="+82">🇰🇷 +82</option>
+                <option value="+55">🇧🇷 +55</option>
+                <option value="+52">🇲🇽 +52</option>
               </select>
               <input
                 type="tel"
-                value={driverPhone}
-                onChange={(e) => setDriverPhone(e.target.value)}
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
                 className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
                 placeholder="123 456 7890"
                 autoComplete="tel-national"
+                name="phoneNumber"
               />
             </div>
           </div>
@@ -769,7 +826,7 @@ const DriverVerificationApp = () => {
           <div className="flex justify-center">
             <button
               onClick={handleContactDetailsComplete}
-              disabled={loading || !driverPhone || driverPhone.replace(/\D/g, '').length < 9}
+              disabled={loading || !phoneNumber || phoneNumber.replace(/\D/g, '').length < 9}
               className="w-full bg-purple-600 text-white py-4 px-6 rounded-md hover:bg-purple-700 disabled:opacity-50 text-lg font-medium"
             >
               {loading ? 'Saving...' : 'Continue'}
@@ -905,6 +962,9 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="space-y-6">
+          {/* Progress Tracker */}
+          <ProgressTracker />
+
           {/* Insurance Questions */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
             <h3 className="text-lg font-medium text-purple-900 mb-4">Health & driving history</h3>
