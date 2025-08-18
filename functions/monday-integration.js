@@ -558,6 +558,7 @@ function formatBoardAColumnValues(data) {
   // Identity & Contact
   if (data.driverName) columnValues.text_mktry2je = data.driverName;
   if (data.email) columnValues.email_mktrgzj = { email: data.email, text: data.email };
+  if (data.phoneCountry) columnValues.text_mkty5hzk = data.phoneCountry;
   if (data.phoneNumber) columnValues.text_mktrfqe2 = data.phoneNumber;
   if (data.dateOfBirth) columnValues.date_mktr2x01 = { date: data.dateOfBirth };
   if (data.nationality) columnValues.text_mktrdh72 = data.nationality;
@@ -655,6 +656,7 @@ function parseBoardAData(item) {
     switch (col.id) {
       case 'text_mktry2je': driver.driverName = col.text; break;
       case 'email_mktrgzj': driver.email = value?.email || col.text; break;
+        case 'text_mkty5hzk': driver.phoneCountry = col.text; break;
       case 'text_mktrfqe2': driver.phoneNumber = col.text; break;
       case 'date_mktr2x01': driver.dateOfBirth = value?.date; break;
       case 'text_mktrdh72': driver.nationality = col.text; break;
