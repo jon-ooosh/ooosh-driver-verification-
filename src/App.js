@@ -1737,6 +1737,7 @@ const renderEmailEntry = () => (
             <Phone className="h-4 w-4 mr-2" />
             Call us
           </a>
+              </div>
 
           <button
             onClick={startAgain}
