@@ -1,13 +1,12 @@
 // File: functions/driver-status.js
 // OOOSH Driver Verification - Get Driver Status Function
-// UPDATED: Now uses Board A (Driver Database - 9798399405) instead of Google Sheets
+// FIXED: Now returns insuranceData, phoneCountry, and proper document dates
 
 const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   console.log('Driver status function called with method:', event.httpMethod);
   
-  // Add CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -15,7 +14,6 @@ exports.handler = async (event, context) => {
     'Content-Type': 'application/json'
   };
 
-  // Handle CORS preflight request
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -24,7 +22,6 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Only allow GET requests
   if (event.httpMethod !== 'GET') {
     return {
       statusCode: 405,
@@ -45,7 +42,6 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // UPDATED: Use Board A lookup instead of Google Sheets
     const driverStatus = await getDriverStatusFromBoardA(email);
     
     console.log('Driver status retrieved:', driverStatus);
@@ -69,12 +65,10 @@ exports.handler = async (event, context) => {
   }
 };
 
-// NEW: Get driver status from Board A (Driver Database - 9798399405)
 async function getDriverStatusFromBoardA(email) {
   console.log('🔍 Looking up driver in Board A:', email);
   
   try {
-    // Call our monday-integration function to find the driver
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
       method: 'POST',
       headers: {
@@ -100,18 +94,31 @@ async function getDriverStatusFromBoardA(email) {
 
     console.log('✅ Found existing driver in Board A');
     
-    // Parse the driver data from Board A
     const driver = result.driver;
     
-    // Analyze document status and determine overall driver status
+    // Analyze document status
     const documentStatus = analyzeDocumentStatus(driver);
     
+    // FIXED: Build insurance data from driver fields
+    const insuranceData = {
+      hasDisability: driver.hasDisability || false,
+      hasConvictions: driver.hasConvictions || false,
+      hasProsecution: driver.hasProsecution || false,
+      hasAccidents: driver.hasAccidents || false,
+      hasInsuranceIssues: driver.hasInsuranceIssues || false,
+      hasDrivingBan: driver.hasDrivingBan || false,
+      additionalDetails: driver.additionalDetails || ''
+    };
+    
+    // FIXED: Return complete data structure
     return {
       status: documentStatus.overallStatus,
       email: email,
       name: driver.driverName || null,
-      phone: driver.phoneNumber || null,
+      phoneNumber: driver.phoneNumber || null,
+      phoneCountry: driver.phoneCountry || null, // FIXED: Added phone country
       documents: documentStatus.documents,
+      insuranceData: insuranceData, // FIXED: Added insurance data
       boardAId: driver.id,
       lastUpdated: driver.lastUpdated || null
     };
@@ -122,7 +129,6 @@ async function getDriverStatusFromBoardA(email) {
   }
 }
 
-// Analyze document status and expiry from Board A data
 function analyzeDocumentStatus(driver) {
   console.log('📊 Analyzing document status for driver');
   
@@ -131,12 +137,10 @@ function analyzeDocumentStatus(driver) {
     poa1: { valid: false },
     poa2: { valid: false },
     dvlaCheck: { valid: false },
-    licenseCheck: { valid: true } // Optional check, defaults to valid if not set
+    licenseCheck: { valid: true }
   };
 
   const today = new Date();
-
-  // All documents checked against expiry dates for consistency
 
   // Check License Status
   if (driver.licenseValidTo) {
@@ -149,29 +153,41 @@ function analyzeDocumentStatus(driver) {
     };
   }
 
-  // Check POA1 Status (90-day rule)
+  // FIXED: Always include expiryDate even if expired
   if (driver.poa1ValidUntil) {
     const poa1Expiry = new Date(driver.poa1ValidUntil);
     documents.poa1 = {
       valid: poa1Expiry > today,
-      expiryDate: driver.poa1ValidUntil,
+      expiryDate: driver.poa1ValidUntil, // ALWAYS include date
       type: 'Proof of Address #1',
       status: poa1Expiry > today ? 'valid' : 'expired'
     };
+  } else {
+    // Even if no date, provide structure
+    documents.poa1 = {
+      valid: false,
+      status: 'required'
+    };
   }
 
-  // Check POA2 Status (90-day rule)
+  // FIXED: Always include expiryDate even if expired
   if (driver.poa2ValidUntil) {
     const poa2Expiry = new Date(driver.poa2ValidUntil);
     documents.poa2 = {
       valid: poa2Expiry > today,
-      expiryDate: driver.poa2ValidUntil,
+      expiryDate: driver.poa2ValidUntil, // ALWAYS include date
       type: 'Proof of Address #2',
       status: poa2Expiry > today ? 'valid' : 'expired'
     };
+  } else {
+    // Even if no date, provide structure
+    documents.poa2 = {
+      valid: false,
+      status: 'required'
+    };
   }
 
-  // Check DVLA Check Status - NOW USING EXPIRY DATE
+  // Check DVLA Check Status
   if (driver.dvlaValidUntil) {
     const dvlaExpiry = new Date(driver.dvlaValidUntil);
     documents.dvlaCheck = {
@@ -180,9 +196,14 @@ function analyzeDocumentStatus(driver) {
       status: dvlaExpiry > today ? 'valid' : 'expired',
       type: 'DVLA Check'
     };
+  } else {
+    documents.dvlaCheck = {
+      valid: false,
+      status: 'required'
+    };
   }
 
-  // Check License Last Checked Status (90-day rule)
+  // Check License Last Checked Status
   if (driver.licenseNextCheckDue) {
     const licenseCheckDue = new Date(driver.licenseNextCheckDue);
     documents.licenseCheck = {
@@ -193,7 +214,6 @@ function analyzeDocumentStatus(driver) {
     };
   }
 
-  // Determine overall status
   const overallStatus = determineOverallStatus(documents, driver);
 
   console.log('📊 Document analysis complete:', {
@@ -207,33 +227,27 @@ function analyzeDocumentStatus(driver) {
   return { overallStatus, documents };
 }
 
-// Determine overall driver status based on document analysis
 function determineOverallStatus(documents, driver) {
   const hasValidLicense = documents.license.valid;
   const hasValidPoa1 = documents.poa1.valid;
   const hasValidPoa2 = documents.poa2.valid;
   const hasValidDvla = documents.dvlaCheck.valid;
-  const licenseCheckCurrent = documents.licenseCheck?.valid !== false; // Don't require if not set
+  const licenseCheckCurrent = documents.licenseCheck?.valid !== false;
 
-  // Check overall status from Board A for insurance issues
   const boardStatus = driver.overallStatus;
 
-  // Insurance review status overrides everything
   if (boardStatus === 'Insurance Review') {
     return 'insurance_review';
   }
 
-  // Technical issues
   if (boardStatus === 'Stuck') {
     return 'stuck';
   }
 
-  // If everything is valid and no insurance issues
   if (hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidDvla && licenseCheckCurrent) {
     return 'verified';
   }
 
-  // If we have basic documents but some are expired - return specific expiry info
   if (hasValidLicense) {
     if (!hasValidPoa1 || !hasValidPoa2) {
       return 'poa_expired';
@@ -246,21 +260,17 @@ function determineOverallStatus(documents, driver) {
     }
   }
 
-  // If we have some documents but not complete
   if (hasValidLicense || hasValidPoa1 || hasValidPoa2) {
     return 'partial';
   }
 
-  // If Board A exists but no documents
   if (driver.driverName) {
     return 'pending';
   }
 
-  // Completely new driver
   return 'new';
 }
 
-// Create new driver status for drivers not found in Board A
 function createNewDriverStatus(email) {
   console.log('👤 Creating new driver status for:', email);
   
@@ -268,7 +278,8 @@ function createNewDriverStatus(email) {
     status: 'new',
     email: email,
     name: null,
-    phone: null,
+    phoneNumber: null,
+    phoneCountry: null,
     documents: {
       license: { valid: false, status: 'required' },
       poa1: { valid: false, status: 'required' },
@@ -276,6 +287,7 @@ function createNewDriverStatus(email) {
       dvlaCheck: { valid: false, status: 'required' },
       licenseCheck: { valid: true, status: 'not_required' }
     },
+    insuranceData: null,
     boardAId: null,
     lastUpdated: null
   };
