@@ -1719,7 +1719,7 @@ const DriverVerificationApp = () => {
       case 'contact-details': return <ContactDetails />;
       case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
       case 'document-upload': return renderDocumentUpload();
-      case 'dvla-processing': return <DVLAProcessingPage />;
+      case 'dvla-processing': return <DVLAProcessingPage driverEmail={driverEmail} />;
       case 'dvla-check': return renderDVLACheck();
       case 'processing': return renderProcessing();
       case 'complete': return renderComplete();
@@ -1744,39 +1744,4 @@ const DriverVerificationApp = () => {
   );
 };
 
-export default DriverVerificationApp;800 mb-2">👥 All drivers:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Must be at least 23 years old</li>
-                  <li>Must have held a full driving licence for at least 2 years</li>
-                  <li>Must have a valid driving licence (we'll need photos of front and back)</li>
-                  <li>Answer health and driving history questions</li>
-                  <li>Provide contact details (phone number)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🆔 UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>
-                    Current DVLA licence check from{' '}
-                    <a 
-                      href="https://www.gov.uk/view-driving-licence" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                    >
-                      gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
-                    </a>
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Current passport (we'll need a photo)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-
+export default DriverVerificationApp;
