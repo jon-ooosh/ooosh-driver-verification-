@@ -660,8 +660,6 @@ const DriverVerificationApp = () => {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentUrl)}`;
     return qrUrl;
   };
-
-  // Format date for hire period display (9am 4th September format)
   const formatHireDate = (dateString) => {
     try {
       const date = new Date(dateString);
@@ -686,51 +684,6 @@ const DriverVerificationApp = () => {
       console.error('Date formatting error:', error);
       return dateString;
     }
-  };
-
-  // Document status summary component
-  const DocumentStatusSummary = ({ title, status }) => {
-    const getStatusIcon = () => {
-      switch (status) {
-        case 'approved':
-          return <CheckCircle className="h-4 w-4 text-green-500" />;
-        case 'expired':
-          return <XCircle className="h-4 w-4 text-red-500" />;
-        case 'processing':
-          return <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
-        default:
-          return <div className="h-4 w-4 border-2 border-gray-300 rounded-full" />;
-      }
-    };
-
-    const getStatusText = () => {
-      switch (status) {
-        case 'approved':
-          return 'Approved';
-        case 'expired':
-          return 'Expired - needs renewal';
-        case 'processing':
-          return 'Processing';
-        default:
-          return 'Not uploaded';
-      }
-    };
-
-    const validDocument = status ? isDocumentValid(status.expiryDate) : false;
-
-    return (
-      <div className="flex items-center justify-between py-2">
-        <span className="text-lg">{title}</span>
-        <div className="flex items-center">
-          {validDocument ? (
-            <CheckCircle className="h-5 w-5 text-green-600" />
-          ) : (
-            getStatusIcon()
-          )}
-          <span className="ml-2 text-lg">{validDocument ? 'Valid' : getStatusText()}</span>
-        </div>
-      </div>
-    );
   };
 
   // FIXED: Contact Details Component - Side by side phone input, no duplicate status
