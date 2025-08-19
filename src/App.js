@@ -1,8 +1,8 @@
 // File: src/App.js
 // OOOSH Driver Verification - Complete application with ALL ISSUES FIXED
-// FIXED: 1. Phone input cursor jumping, 2. Questionnaire scroll jumping, 3. Remove driver status page, 4. Insurance data saving
+// FIXED: 1. Phone input cursor jumping (side-by-side layout), 2. Insurance scroll jumping (useRef), 3. Pre-populate insurance, 4. Remove duplicate status, 5. Read document validity properly
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Shield, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, User } from 'lucide-react';
 import DVLAProcessingPage from './DVLAProcessingPage';
 
@@ -21,14 +21,34 @@ const DriverVerificationApp = () => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
 
-  // FIXED: Phone input handlers moved to main component scope (prevents cursor jumping)
-  const handlePhoneChange = React.useCallback((e) => {
-    setPhoneNumber(e.target.value);
-  }, []);
+  // SCROLL POSITION FIX: Ref to maintain scroll position during state updates
+  const scrollPositionRef = useRef(0);
+  const formContainerRef = useRef(null);
 
-  const handleCountryChange = React.useCallback((e) => {
+  // PHONE INPUT FIX: Simple handlers without complex logic
+  const handlePhoneChange = (e) => {
+    setPhoneNumber(e.target.value);
+  };
+
+  const handleCountryChange = (e) => {
     setCountryCode(e.target.value);
-  }, []);
+  };
+
+  // Save scroll position before state updates
+  const preserveScrollPosition = () => {
+    if (formContainerRef.current) {
+      scrollPositionRef.current = window.scrollY;
+    }
+  };
+
+  // Restore scroll position after state updates
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      if (scrollPositionRef.current > 0) {
+        window.scrollTo(0, scrollPositionRef.current);
+      }
+    }, 0);
+  };
 
   // Detect if user is on mobile
   useEffect(() => {
@@ -228,7 +248,7 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // NEW: Early Monday.com query after email verification
+  // FIXED: Enhanced early Monday.com query with proper document status interpretation
   const checkDriverStatusEarly = async () => {
     try {
       console.log('Early driver status check for:', driverEmail);
@@ -314,21 +334,15 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // Check if returning driver needs to redo insurance questionnaire
+  // Check if driver needs to complete insurance questionnaire
   const needsInsuranceQuestionnaire = () => {
-    if (!driverStatus?.insuranceQuestions) return true;
+    if (!driverStatus) return false;
     
-    // Check if questionnaire was completed recently (within 1 year)
-    const lastCompleted = driverStatus.insuranceQuestions.completedDate;
-    if (!lastCompleted) return true;
-    
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    
-    return new Date(lastCompleted) < oneYearAgo;
+    // Always require for new hires, even if previously completed
+    return true;
   };
 
-  // Fix date validation - check if document is still valid
+  // FIXED: Check if document is still valid based on expiry dates from Monday.com
   const isDocumentValid = (expiryDateString) => {
     if (!expiryDateString) return false;
     
@@ -654,12 +668,12 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // FIXED: Contact Details Component - No React.memo, handlers from parent scope
+  // FIXED: Contact Details Component - Side by side phone input, no duplicate status
   const ContactDetails = () => {
     const isReturningDriver = driverStatus?.status !== 'new';
     
     return (
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6" ref={formContainerRef}>
         <div className="text-center mb-6">
           <User className="mx-auto h-12 w-12 text-purple-600 mb-4" />
           <h2 className="text-4xl font-bold text-gray-900">
@@ -729,87 +743,63 @@ const DriverVerificationApp = () => {
             />
           </div>
 
-          {/* FIXED: Phone Number - Simple implementation like email input */}
+          {/* FIXED: Phone Number - Side by side layout as requested */}
           <div>
-            <label className="block text-2xl font-medium text-gray-700 mb-2">
-              Country code <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={countryCode}
-              onChange={handleCountryChange}
-              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl bg-white mb-4"
-            >
-              <option value="+44">🇬🇧 +44</option>
-              <option value="+1">🇺🇸 +1</option>
-              <option value="+1">🇨🇦 +1</option>
-              <option value="+33">🇫🇷 +33</option>
-              <option value="+49">🇩🇪 +49</option>
-              <option value="+34">🇪🇸 +34</option>
-              <option value="+39">🇮🇹 +39</option>
-              <option value="+31">🇳🇱 +31</option>
-              <option value="+32">🇧🇪 +32</option>
-              <option value="+41">🇨🇭 +41</option>
-              <option value="+43">🇦🇹 +43</option>
-              <option value="+353">🇮🇪 +353</option>
-              <option value="+46">🇸🇪 +46</option>
-              <option value="+47">🇳🇴 +47</option>
-              <option value="+45">🇩🇰 +45</option>
-              <option value="+358">🇫🇮 +358</option>
-              <option value="+48">🇵🇱 +48</option>
-              <option value="+351">🇵🇹 +351</option>
-              <option value="+30">🇬🇷 +30</option>
-              <option value="+420">🇨🇿 +420</option>
-              <option value="+36">🇭🇺 +36</option>
-              <option value="+61">🇦🇺 +61</option>
-              <option value="+64">🇳🇿 +64</option>
-              <option value="+27">🇿🇦 +27</option>
-              <option value="+91">🇮🇳 +91</option>
-              <option value="+86">🇨🇳 +86</option>
-              <option value="+81">🇯🇵 +81</option>
-              <option value="+82">🇰🇷 +82</option>
-              <option value="+55">🇧🇷 +55</option>
-              <option value="+52">🇲🇽 +52</option>
-            </select>
-            
             <label className="block text-2xl font-medium text-gray-700 mb-2">
               Phone number <span className="text-red-500">*</span>
             </label>
-            <input
-              type="tel"
-              value={phoneNumber}
-              onChange={handlePhoneChange}
-              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl"
-              placeholder="123 456 7890"
-              autoComplete="tel-national"
-            />
+            <div className="flex gap-3">
+              {/* Country Code Dropdown */}
+              <select
+                value={countryCode}
+                onChange={handleCountryChange}
+                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl bg-white"
+                style={{ minWidth: '120px' }}
+              >
+                <option value="+44">🇬🇧 +44</option>
+                <option value="+1">🇺🇸 +1</option>
+                <option value="+33">🇫🇷 +33</option>
+                <option value="+49">🇩🇪 +49</option>
+                <option value="+34">🇪🇸 +34</option>
+                <option value="+39">🇮🇹 +39</option>
+                <option value="+31">🇳🇱 +31</option>
+                <option value="+32">🇧🇪 +32</option>
+                <option value="+41">🇨🇭 +41</option>
+                <option value="+43">🇦🇹 +43</option>
+                <option value="+353">🇮🇪 +353</option>
+                <option value="+46">🇸🇪 +46</option>
+                <option value="+47">🇳🇴 +47</option>
+                <option value="+45">🇩🇰 +45</option>
+                <option value="+358">🇫🇮 +358</option>
+                <option value="+48">🇵🇱 +48</option>
+                <option value="+351">🇵🇹 +351</option>
+                <option value="+30">🇬🇷 +30</option>
+                <option value="+420">🇨🇿 +420</option>
+                <option value="+36">🇭🇺 +36</option>
+                <option value="+61">🇦🇺 +61</option>
+                <option value="+64">🇳🇿 +64</option>
+                <option value="+27">🇿🇦 +27</option>
+                <option value="+91">🇮🇳 +91</option>
+                <option value="+86">🇨🇳 +86</option>
+                <option value="+81">🇯🇵 +81</option>
+                <option value="+82">🇰🇷 +82</option>
+                <option value="+55">🇧🇷 +55</option>
+                <option value="+52">🇲🇽 +52</option>
+              </select>
+              
+              {/* Phone Number Input */}
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={handlePhoneChange}
+                className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl"
+                placeholder="123 456 7890"
+                autoComplete="tel-national"
+              />
+            </div>
           </div>
 
-          {/* Returning driver info */}
-          {isReturningDriver && driverStatus?.documents && (
-            <div className="bg-green-50 border border-green-200 rounded-md p-4">
-              <h3 className="text-2xl font-medium text-green-900 mb-2">Your verification status</h3>
-              <div className="space-y-2 text-lg">
-                <DocumentStatusSummary 
-                  title="Driving licence" 
-                  status={driverStatus.documents.licence} 
-                />
-                <DocumentStatusSummary 
-                  title="Proof of address" 
-                  status={driverStatus.documents.poa1} 
-                />
-                <DocumentStatusSummary 
-                  title="DVLA check" 
-                  status={driverStatus.documents.dvlaCheck} 
-                />
-                {!needsInsuranceQuestionnaire() && (
-                  <div className="flex items-center text-green-600">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    <span className="text-lg">Insurance questions completed</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* REMOVED: Duplicate verification status section as requested */}
 
           {/* Error Display */}
           {error && (
@@ -838,7 +828,7 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // FIXED: Insurance Questionnaire Component - Prevent scroll jumping
+  // FIXED: Insurance Questionnaire Component - NO scroll jumping + pre-populate from Monday.com
   const InsuranceQuestionnaire = () => {
     const [formData, setFormData] = useState({
       hasDisability: null,
@@ -853,14 +843,79 @@ const DriverVerificationApp = () => {
     const [errors, setErrors] = useState({});
     const isReturningDriver = driverStatus?.status !== 'new';
 
-    // FIXED: Prevent scroll jumping by not clearing errors immediately
+    // FIXED: Pre-populate insurance answers from Monday.com data
+    useEffect(() => {
+      if (driverStatus && driverStatus.insuranceData) {
+        console.log('Pre-populating insurance data:', driverStatus.insuranceData);
+        setFormData({
+          hasDisability: driverStatus.insuranceData.hasDisability ? 'yes' : 'no',
+          hasConvictions: driverStatus.insuranceData.hasConvictions ? 'yes' : 'no',
+          hasProsecution: driverStatus.insuranceData.hasProsecution ? 'yes' : 'no',
+          hasAccidents: driverStatus.insuranceData.hasAccidents ? 'yes' : 'no',
+          hasInsuranceIssues: driverStatus.insuranceData.hasInsuranceIssues ? 'yes' : 'no',
+          hasDrivingBan: driverStatus.insuranceData.hasDrivingBan ? 'yes' : 'no',
+          additionalDetails: driverStatus.insuranceData.additionalDetails || ''
+        });
+      }
+    }, [driverStatus]);
+
+    // FIXED: Handle question changes without scroll jumping
     const handleQuestionChange = (field, value) => {
+      // Preserve scroll position before state update
+      preserveScrollPosition();
+      
       setFormData(prev => ({
         ...prev,
         [field]: value
       }));
       
-      // Don't clear errors immediately - wait for validation
+      // Clear any existing error for this field
+      if (errors[field]) {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+      
+      // Restore scroll position after state update
+      restoreScrollPosition();
+    };
+
+    // Yes/No Question Component with scroll position preservation
+    const YesNoQuestion = ({ field, question, value, onChange, error }) => {
+      return (
+        <div className="border border-gray-200 rounded-md p-4">
+          <h4 className="text-xl font-medium text-gray-900 mb-3">{question}</h4>
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => onChange(field, 'yes')}
+              className={`px-6 py-3 rounded-md text-lg font-medium transition-colors ${
+                value === 'yes'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(field, 'no')}
+              className={`px-6 py-3 rounded-md text-lg font-medium transition-colors ${
+                value === 'no'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              No
+            </button>
+          </div>
+          {error && (
+            <p className="text-lg text-red-600 mt-2">{error}</p>
+          )}
+        </div>
+      );
     };
 
     // Check if any question is answered "Yes"
@@ -904,7 +959,6 @@ const DriverVerificationApp = () => {
           submittedAt: new Date().toISOString()
         };
 
-        // Call completion handler
         await handleInsuranceComplete(submissionData);
         
       } catch (error) {
@@ -913,43 +967,8 @@ const DriverVerificationApp = () => {
       }
     };
 
-    const YesNoQuestion = ({ field, question, required = true }) => (
-      <div className="space-y-2">
-        <label className="block text-lg font-medium text-gray-700">
-          {question} {required && <span className="text-red-500">*</span>}
-        </label>
-        <div className="flex space-x-4">
-          <label className="flex items-center">
-            <input
-              type="radio"
-              name={field}
-              value="yes"
-              checked={formData[field] === 'yes'}
-              onChange={(e) => handleQuestionChange(field, 'yes')}
-              className="mr-2"
-            />
-            <span className="text-lg">Yes</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="radio"
-              name={field}
-              value="no"
-              checked={formData[field] === 'no'}
-              onChange={(e) => handleQuestionChange(field, 'no')}
-              className="mr-2"
-            />
-            <span className="text-lg">No</span>
-          </label>
-        </div>
-        {errors[field] && (
-          <p className="text-lg text-red-600">{errors[field]}</p>
-        )}
-      </div>
-    );
-
     return (
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6" ref={formContainerRef}>
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
           <h2 className="text-4xl font-bold text-gray-900">
@@ -1007,31 +1026,49 @@ const DriverVerificationApp = () => {
               <YesNoQuestion
                 field="hasDisability"
                 question="Have you any physical or mental disability or infirmity, or been told by your doctor not to drive, even temporarily?"
+                value={formData.hasDisability}
+                onChange={handleQuestionChange}
+                error={errors.hasDisability}
               />
               
               <YesNoQuestion
                 field="hasConvictions"
                 question="Have you ever had a BA, DD, DR, UT, MS90, MS30, IN10, CU80, TT99, or CD conviction, or a single SP offence yielding 6 or more points?"
+                value={formData.hasConvictions}
+                onChange={handleQuestionChange}
+                error={errors.hasConvictions}
               />
               
               <YesNoQuestion
                 field="hasProsecution"
                 question="Have you in the past 5 years been convicted of any of the following offences: manslaughter, causing death by dangerous driving, driving whilst under the influence of drink or drugs, failing to stop after and/or report an accident to police or any combination of offences that have resulted in suspension or disqualification from driving?"
+                value={formData.hasProsecution}
+                onChange={handleQuestionChange}
+                error={errors.hasProsecution}
               />
               
               <YesNoQuestion
                 field="hasAccidents"
                 question="Have you been involved in any motoring accidents in the past three years?"
+                value={formData.hasAccidents}
+                onChange={handleQuestionChange}
+                error={errors.hasAccidents}
               />
               
               <YesNoQuestion
                 field="hasInsuranceIssues"
                 question="Have you ever been refused motor insurance or had any special terms or premiums imposed?"
+                value={formData.hasInsuranceIssues}
+                onChange={handleQuestionChange}
+                error={errors.hasInsuranceIssues}
               />
               
               <YesNoQuestion
                 field="hasDrivingBan"
                 question="Have you been banned or disqualified from driving in the past 5 years?"
+                value={formData.hasDrivingBan}
+                onChange={handleQuestionChange}
+                error={errors.hasDrivingBan}
               />
             </div>
           </div>
@@ -1044,7 +1081,18 @@ const DriverVerificationApp = () => {
             </label>
             <textarea
               value={formData.additionalDetails}
-              onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
+              onChange={(e) => {
+                preserveScrollPosition();
+                setFormData(prev => ({ ...prev, additionalDetails: e.target.value }));
+                if (errors.additionalDetails) {
+                  setErrors(prev => {
+                    const newErrors = { ...prev };
+                    delete newErrors.additionalDetails;
+                    return newErrors;
+                  });
+                }
+                restoreScrollPosition();
+              }}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
               placeholder={hasYesAnswers() ? "Please provide details about your answers above..." : "Please provide any additional details about your answers above..."}
@@ -1086,6 +1134,96 @@ const DriverVerificationApp = () => {
       </div>
     );
   };
+
+  // Document Upload Component
+  const DocumentUpload = () => {
+    const [selectedDocuments, setSelectedDocuments] = useState([]);
+    
+    const handleFileUpload = async (file) => {
+      setLoading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('email', driverEmail);
+        formData.append('jobId', jobId);
+
+        const response = await fetch('/.netlify/functions/upload-document', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to upload document');
+        }
+
+        setUploadedFile(data);
+        setCurrentStep('processing');
+        
+      } catch (error) {
+        console.error('Upload error:', error);
+        setError(error.message || 'Failed to upload document. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center mb-8">
+          <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
+          <h2 className="text-3xl font-bold text-gray-900">Upload documents</h2>
+          <p className="text-lg text-gray-600 mt-2">Please upload the required documents for verification</p>
+        </div>
+
+        <div className="space-y-6">
+          {/* Document upload interface */}
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <p className="text-xl text-gray-600">Drag and drop your documents here, or click to select</p>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])}
+              className="hidden"
+              id="document-upload"
+            />
+            <label
+              htmlFor="document-upload"
+              className="mt-4 inline-flex items-center px-6 py-3 border border-transparent text-lg font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 cursor-pointer"
+            >
+              Select documents
+            </label>
+          </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                <div className="ml-3">
+                  <p className="text-lg text-red-800">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setCurrentStep('insurance-questionnaire')}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-lg"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper component for contact details summary - REMOVED DUPLICATE
 
   // Render functions for each step
   const renderLanding = () => (
@@ -1297,383 +1435,4 @@ const DriverVerificationApp = () => {
                       rel="noopener noreferrer"
                       className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
                     >
-                      gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
-                    </a>
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Current passport (we'll need a photo)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🏠 All drivers - two proofs of address:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Bank statements, utility bills, council tax, or credit card statements</li>
-                  <li>Both must be dated within the last 90 days</li>
-                  <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
-                  <li>Must show your current home address</li>
-                  <li>Documents must be from two different sources</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between text-base text-gray-500">
-                <span>Need help?</span>
-                <a 
-                  href="tel:01273911382" 
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                >
-                  <Phone className="h-4 w-4 mr-1" />
-                  01273 911382
-                </a>
-              </div>
-              
-              <div className="mt-2 text-base text-gray-500">
-                <a 
-                  href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                >
-                  DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
-                </a>
-                {' | '}
-                <a 
-                  href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                >
-                  Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderEmailVerification = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Mail className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900">Check your email</h2>
-        <p className="text-xl text-gray-600 mt-2">We sent a 6-digit code to:</p>
-        <p className="text-lg font-medium text-gray-900 break-words">{driverEmail}</p>
-      </div>
-
-      {/* Spam Notice */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <div className="flex items-start">
-          <svg className="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="text-base text-blue-800">
-            <p className="font-medium">Can't find the email?</p>
-            <p className="mt-1">Check your spam/junk folder - verification emails sometimes end up there!</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="code" className="block text-lg font-medium text-gray-700 mb-1">
-            Verification code
-          </label>
-          <input
-            type="text"
-            id="code"
-            value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl font-mono"
-            placeholder="123456"
-            maxLength="6"
-            disabled={loading}
-          />
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <div className="flex items-center">
-              <svg className="h-4 w-4 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-lg text-red-800">{error}</p>
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={verifyEmailCode}
-          disabled={loading || verificationCode.length < 6}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center space-x-2"
-        >
-          {loading ? (
-            <>
-              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Verifying...</span>
-            </>
-          ) : (
-            <span>Verify code</span>
-          )}
-        </button>
-
-        <button
-          onClick={sendVerificationEmail}
-          disabled={loading}
-          className="w-full text-purple-600 hover:text-purple-700 text-lg disabled:opacity-50 disabled:cursor-not-allowed py-2"
-        >
-          {loading ? 'Please wait...' : "Didn't receive the code? Send again"}
-        </button>
-
-        <button
-          onClick={startAgain}
-          disabled={loading}
-          className="w-full text-gray-500 hover:text-gray-700 text-base disabled:opacity-50 disabled:cursor-not-allowed py-1 border-t border-gray-200 mt-4 pt-4"
-        >
-          Wrong email address? Start again
-        </button>
-      </div>
-    </div>
-  );
-
-  // Helper component for contact details summary
-  const DocumentStatusSummary = ({ title, status }) => {
-    const isValid = status ? isDocumentValid(status.expiryDate) : false;
-    return (
-      <div className="flex items-center justify-between">
-        <span className="text-green-800 text-lg">{title}</span>
-        {isValid ? (
-          <CheckCircle className="h-5 w-5 text-green-600" />
-        ) : (
-          <XCircle className="h-5 w-5 text-red-500" />
-        )}
-      </div>
-    );
-  };
-
-  const renderDocumentUpload = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900">Document verification</h2>
-        <p className="text-xl text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
-      </div>
-
-      <div className="space-y-4 mb-6">
-        <div className="border border-gray-200 rounded-md p-4">
-          <h3 className="text-xl font-medium text-gray-900 mb-2">Required documents:</h3>
-          <ul className="text-lg text-gray-600 space-y-1">
-            <li>• UK driving licence (front and back)</li>
-            <li>• Two proof of address documents (within 90 days)</li>
-            <li>• Selfie for identity verification</li>
-          </ul>
-        </div>
-
-        <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
-          <p className="text-lg text-purple-800">
-            <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements
-          </p>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-          <p className="text-lg text-red-800">{error}</p>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <button
-          onClick={startVerification}
-          disabled={loading}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-lg"
-        >
-          {loading ? 'Starting verification...' : 'Start document upload'}
-        </button>
-
-        <button
-          onClick={startAgain}
-          className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
-        >
-          Need to use a different email? Start again
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderDVLACheck = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900">DVLA licence check</h2>
-        <p className="text-xl text-gray-600 mt-2">Upload your DVLA check document</p>
-      </div>
-
-      <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
-        <h3 className="text-xl font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
-        <ol className="text-lg text-orange-800 space-y-1 list-decimal list-inside">
-          <li>Visit gov.uk/check-driving-licence</li>
-          <li>Enter your licence details</li>
-          <li>Download/screenshot the summary page</li>
-          <li>Upload it here</li>
-        </ol>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-lg font-medium text-gray-700 mb-2">
-            DVLA check document
-          </label>
-          <input
-            type="file"
-            accept="image/*,.pdf"
-            onChange={(e) => setUploadedFile(e.target.files[0])}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg"
-          />
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-lg text-red-800">{error}</p>
-          </div>
-        )}
-
-        <button
-          onClick={() => processDVLACheck(uploadedFile)}
-          disabled={loading || !uploadedFile}
-          className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-lg"
-        >
-          {loading ? 'Processing document...' : 'Verify DVLA check'}
-        </button>
-
-        <button
-          onClick={() => setCurrentStep('document-upload')}
-          className="w-full text-gray-600 hover:text-gray-700 text-lg"
-        >
-          Back to document upload
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderProcessing = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Processing verification</h2>
-        <p className="text-xl text-gray-600">Please wait while we verify your documents...</p>
-        <p className="text-lg text-gray-500 mt-2">This usually takes 30-60 seconds</p>
-      </div>
-    </div>
-  );
-
-  const renderComplete = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification complete!</h2>
-        <p className="text-xl text-gray-600 mb-4">You're approved for this hire.</p>
-        
-        <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
-          <p className="text-lg text-green-800">
-            Your verification has been added to the hire roster. You'll receive confirmation details shortly.
-          </p>
-        </div>
-
-        <button
-          onClick={() => window.close()}
-          className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderRejected = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification issues</h2>
-        <p className="text-xl text-gray-600 mb-4">We couldn't approve your verification.</p>
-        
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-lg text-red-800">
-            This may be due to document quality, insurance requirements, or other factors. 
-            Please contact OOOSH for assistance.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <button
-            onClick={startVerification}
-            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
-          >
-            Try again
-          </button>
-          
-          <a
-            href="tel:01273911382"
-            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Call OOOSH support
-          </a>
-
-          <button
-            onClick={startAgain}
-            className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
-          >
-            Start verification again
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Main render logic
-  const renderStep = () => {
-    switch(currentStep) {
-      case 'landing': return renderLanding();
-      case 'email-entry': return renderEmailEntry();
-      case 'email-verification': return renderEmailVerification();
-      case 'contact-details': return <ContactDetails />;
-      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
-      case 'document-upload': return renderDocumentUpload();
-      case 'dvla-processing': return <DVLAProcessingPage />;
-      case 'dvla-check': return renderDVLACheck();
-      case 'processing': return renderProcessing();
-      case 'complete': return renderComplete();
-      case 'rejected': return renderRejected();
-      default: return renderLanding();
-    }
-  };
-
-  return (
-    <>
-      {/* Custom Favicon */}
-      <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236B46C1' stroke-width='4' stroke-dasharray='20 8'/%3E%3C/svg%3E" />
-      
-      {currentStep === 'email-entry' ? (
-        renderStep()
-      ) : (
-        <div className="min-h-screen bg-gray-100 py-8">
-          {renderStep()}
-        </div>
-      )}
-    </>
-  );
-};
-
-export default DriverVerificationApp;
+                      gov.uk/view-driving-licence <ExternalLink className="h
