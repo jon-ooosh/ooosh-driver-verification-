@@ -1263,7 +1263,9 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-// FIXED renderEmailEntry function - replace this entire function in App.js
+// CORRECTED: End section of App.js starting from renderEmailEntry
+// Find the renderEmailEntry function in your App.js and replace everything from there to the end of the file with this:
+
 const renderEmailEntry = () => (
   <div className="min-h-screen bg-gray-50">
     {/* Header with Logo */}
@@ -1273,7 +1275,7 @@ const renderEmailEntry = () => (
           <div className="flex items-center">
             <img 
               src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-              alt="Ooosh Tours" 
+              alt="OOOSH Tours" 
               className="h-12 w-auto"
             />
           </div>
@@ -1421,7 +1423,7 @@ const renderEmailEntry = () => (
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">🏠 All drivers - two proofs of address:</h4>
               <ul className="list-disc ml-5 space-y-1">
-                <li>Bank statements, utility bills, council tax, credit card statements, government letters</li>
+                <li>Bank statements, utility bills, council tax, or credit card statements</li>
                 <li>Both must be dated within the last 90 days</li>
                 <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
                 <li>Must show your current home address</li>
@@ -1561,7 +1563,6 @@ const renderEmailEntry = () => (
     </div>
   );
 
-  // Updated document upload primer with back button
   const renderDocumentUpload = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
@@ -1582,7 +1583,7 @@ const renderEmailEntry = () => (
 
         <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
           <p className="text-lg text-purple-800">
-            <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements, phone bills, government letters, payslips etc.
+            <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements
           </p>
         </div>
       </div>
@@ -1718,7 +1719,7 @@ const renderEmailEntry = () => (
         <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
           <p className="text-lg text-red-800">
             This may be due to document quality, insurance requirements, or other factors. 
-            Please contact us for assistance.
+            Please contact OOOSH for assistance.
           </p>
         </div>
 
@@ -1735,9 +1736,8 @@ const renderEmailEntry = () => (
             className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
           >
             <Phone className="h-4 w-4 mr-2" />
-            Call us
+            Call OOOSH support
           </a>
-              </div>
 
           <button
             onClick={startAgain}
