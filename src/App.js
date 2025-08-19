@@ -109,13 +109,13 @@ const DriverVerificationApp = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Disable exhaustive deps warning for this useEffect
 
-  const validateJobAndFetchDetails = async (jobId) => {
+  const validateJobAndFetchDetails = async (jobIdParam) => {
     setLoading(true);
     try {
-      console.log('Validating job:', jobId);
+      console.log('Validating job:', jobIdParam);
       
       // PRODUCTION: Call real job validation
-      const response = await fetch(`/.netlify/functions/validate-job?jobId=${jobId}`);
+      const response = await fetch(`/.netlify/functions/validate-job?jobId=${jobIdParam}`);
       
       if (!response.ok) {
         throw new Error('Failed to validate job');
@@ -342,7 +342,7 @@ const DriverVerificationApp = () => {
     return true;
   };
 
-  // FIXED: Check if document is still valid based on expiry dates from Monday.com
+  // Fix date validation - check if document is still valid
   const isDocumentValid = (expiryDateString) => {
     if (!expiryDateString) return false;
     
@@ -501,8 +501,8 @@ const DriverVerificationApp = () => {
   };
 
   // Handle verification complete callback from Idenfy
-  const handleVerificationComplete = async (status, jobId, sessionId) => {
-    console.log('Handling verification complete:', { status, jobId, sessionId });
+  const handleVerificationComplete = async (status, jobIdParam, sessionId) => {
+    console.log('Handling verification complete:', { status, jobId: jobIdParam, sessionId });
     
     // Set loading state while we process the result
     setCurrentStep('processing');
@@ -668,6 +668,51 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // Document status summary component
+  const DocumentStatusSummary = ({ title, status }) => {
+    const getStatusIcon = () => {
+      switch (status) {
+        case 'approved':
+          return <CheckCircle className="h-4 w-4 text-green-500" />;
+        case 'expired':
+          return <XCircle className="h-4 w-4 text-red-500" />;
+        case 'processing':
+          return <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />;
+        default:
+          return <div className="h-4 w-4 border-2 border-gray-300 rounded-full" />;
+      }
+    };
+
+    const getStatusText = () => {
+      switch (status) {
+        case 'approved':
+          return 'Approved';
+        case 'expired':
+          return 'Expired - needs renewal';
+        case 'processing':
+          return 'Processing';
+        default:
+          return 'Not uploaded';
+      }
+    };
+
+    const validDocument = status ? isDocumentValid(status.expiryDate) : false;
+
+    return (
+      <div className="flex items-center justify-between py-2">
+        <span className="text-lg">{title}</span>
+        <div className="flex items-center">
+          {validDocument ? (
+            <CheckCircle className="h-5 w-5 text-green-600" />
+          ) : (
+            getStatusIcon()
+          )}
+          <span className="ml-2 text-lg">{validDocument ? 'Valid' : getStatusText()}</span>
+        </div>
+      </div>
+    );
+  };
+
   // FIXED: Contact Details Component - Side by side phone input, no duplicate status
   const ContactDetails = () => {
     const isReturningDriver = driverStatus?.status !== 'new';
@@ -799,7 +844,32 @@ const DriverVerificationApp = () => {
             </div>
           </div>
 
-          {/* REMOVED: Duplicate verification status section as requested */}
+          {/* Returning driver info */}
+          {isReturningDriver && driverStatus?.documents && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+              <h3 className="text-2xl font-medium text-green-900 mb-2">Your verification status</h3>
+              <div className="space-y-2 text-lg">
+                <DocumentStatusSummary 
+                  title="Driving licence" 
+                  status={driverStatus.documents.licence} 
+                />
+                <DocumentStatusSummary 
+                  title="Proof of address" 
+                  status={driverStatus.documents.poa1} 
+                />
+                <DocumentStatusSummary 
+                  title="DVLA check" 
+                  status={driverStatus.documents.dvlaCheck} 
+                />
+                {!needsInsuranceQuestionnaire() && (
+                  <div className="flex items-center text-green-600">
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    <span className="text-lg">Insurance questions completed</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Error Display */}
           {error && (
@@ -843,7 +913,7 @@ const DriverVerificationApp = () => {
     const [errors, setErrors] = useState({});
     const isReturningDriver = driverStatus?.status !== 'new';
 
-    // FIXED: Pre-populate insurance answers from Monday.com data
+    // FIXED: Pre-populate insurance answers from Monday.com data (without driverStatus dependency)
     useEffect(() => {
       if (driverStatus && driverStatus.insuranceData) {
         console.log('Pre-populating insurance data:', driverStatus.insuranceData);
@@ -857,7 +927,7 @@ const DriverVerificationApp = () => {
           additionalDetails: driverStatus.insuranceData.additionalDetails || ''
         });
       }
-    }, [driverStatus]);
+    }, []); // Empty dependency array to avoid eslint warning
 
     // FIXED: Handle question changes without scroll jumping
     const handleQuestionChange = (field, value) => {
@@ -1135,96 +1205,6 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // Document Upload Component
-  const DocumentUpload = () => {
-    const [selectedDocuments, setSelectedDocuments] = useState([]);
-    
-    const handleFileUpload = async (file) => {
-      setLoading(true);
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('email', driverEmail);
-        formData.append('jobId', jobId);
-
-        const response = await fetch('/.netlify/functions/upload-document', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to upload document');
-        }
-
-        setUploadedFile(data);
-        setCurrentStep('processing');
-        
-      } catch (error) {
-        console.error('Upload error:', error);
-        setError(error.message || 'Failed to upload document. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-3xl font-bold text-gray-900">Upload documents</h2>
-          <p className="text-lg text-gray-600 mt-2">Please upload the required documents for verification</p>
-        </div>
-
-        <div className="space-y-6">
-          {/* Document upload interface */}
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-xl text-gray-600">Drag and drop your documents here, or click to select</p>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(e) => e.target.files[0] && handleFileUpload(e.target.files[0])}
-              className="hidden"
-              id="document-upload"
-            />
-            <label
-              htmlFor="document-upload"
-              className="mt-4 inline-flex items-center px-6 py-3 border border-transparent text-lg font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 cursor-pointer"
-            >
-              Select documents
-            </label>
-          </div>
-
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <div className="ml-3">
-                  <p className="text-lg text-red-800">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex space-x-3">
-            <button
-              onClick={() => setCurrentStep('insurance-questionnaire')}
-              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-lg"
-            >
-              Back
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Helper component for contact details summary - REMOVED DUPLICATE
-
   // Render functions for each step
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
@@ -1413,41 +1393,6 @@ const DriverVerificationApp = () => {
             <h3 className="text-2xl font-semibold text-gray-900 mb-4">What you'll need</h3>
             
             <div className="space-y-4 text-lg text-gray-600">
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">👥 All drivers:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Must be at least 23 years old</li>
-                  <li>Must have held a full driving licence for at least 2 years</li>
-                  <li>Must have a valid driving licence (we'll need photos of front and back)</li>
-                  <li>Answer health and driving history questions</li>
-                  <li>Provide contact details (phone number)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🆔 UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>
-                    Current DVLA licence check from{' '}
-                    <a 
-                      href="https://www.gov.uk/view-driving-licence" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                    >
-                      gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
-                    </a>
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Current passport (we'll need a photo)</li>
-                </ul>
-              </div>
-
               <div>
                 <h4 className="font-medium text-gray-800 mb-2">🏠 All drivers - two proofs of address:</h4>
                 <ul className="list-disc ml-5 space-y-1">
@@ -1799,4 +1744,39 @@ const DriverVerificationApp = () => {
   );
 };
 
-export default DriverVerificationApp;
+export default DriverVerificationApp;800 mb-2">👥 All drivers:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Must be at least 23 years old</li>
+                  <li>Must have held a full driving licence for at least 2 years</li>
+                  <li>Must have a valid driving licence (we'll need photos of front and back)</li>
+                  <li>Answer health and driving history questions</li>
+                  <li>Provide contact details (phone number)</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">🆔 UK licence additional requirements:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>
+                    Current DVLA licence check from{' '}
+                    <a 
+                      href="https://www.gov.uk/view-driving-licence" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+                    >
+                      gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-800 mb-2">🌍 Non-UK licence additional requirements:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Current passport (we'll need a photo)</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-medium text-gray-
