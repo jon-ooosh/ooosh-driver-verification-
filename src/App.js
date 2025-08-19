@@ -428,10 +428,6 @@ const DriverVerificationApp = () => {
     generateIdenfyToken();
   };
 
-  const startDVLACheck = () => {
-    setCurrentStep('dvla-check');
-  };
-
   // Start again function
   const startAgain = () => {
     setDriverEmail('');
