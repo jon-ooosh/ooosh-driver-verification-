@@ -1,5 +1,6 @@
 // File: src/App.js
 // OOOSH Driver Verification - Complete application with contact details integration
+// FIXED: Phone input cursor jumping + 10% bigger text throughout
 // ENHANCED: Contact details step + early Monday.com query + questionnaire moved to checklist
 
 import React, { useState, useEffect } from 'react';
@@ -23,6 +24,15 @@ const DriverVerificationApp = () => {
   
   // Insurance questionnaire data
   const [insuranceData, setInsuranceData] = useState(null);
+
+  // FIXED: Phone input handlers moved to main component scope (prevents cursor jumping)
+  const handlePhoneChange = React.useCallback((e) => {
+    setPhoneNumber(e.target.value);
+  }, []);
+
+  const handleCountryChange = React.useCallback((e) => {
+    setCountryCode(e.target.value);
+  }, []);
 
   // Detect if user is on mobile
   useEffect(() => {
@@ -257,8 +267,8 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // Handle contact details completion
-  const handleContactDetailsComplete = async () => {
+  // FIXED: Save contact details function
+  const saveContactDetails = async () => {
     if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 9) {
       setError('Please enter a valid phone number');
       return;
@@ -275,7 +285,7 @@ const DriverVerificationApp = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'create-driver-board-a',  // Changed: This handles both create and update
+          action: 'create-driver-board-a',  // This handles both create and update
           email: driverEmail,
           driverData: {
             phoneNumber: phoneNumber,        // text_mktrfqe2 (existing column)
@@ -651,39 +661,30 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // NEW: Contact Details Component - FIXED: Prevent re-renders
-  const ContactDetails = React.memo(() => {
+  // FIXED: Contact Details Component - No React.memo, handlers from parent scope
+  const ContactDetails = () => {
     const isReturningDriver = driverStatus?.status !== 'new';
-    
-    // Local handlers to prevent re-renders
-    const handlePhoneChange = React.useCallback((e) => {
-      setPhoneNumber(e.target.value);
-    }, []);
-    
-    const handleCountryChange = React.useCallback((e) => {
-      setCountryCode(e.target.value);
-    }, []);
     
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <User className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-3xl font-bold text-gray-900">
+          <h2 className="text-4xl font-bold text-gray-900">
             {isReturningDriver ? 'Welcome back!' : 'Contact details'}
           </h2>
           {isReturningDriver && (
-            <p className="text-lg text-green-600 mt-1">✓ We found your existing verification record</p>
+            <p className="text-xl text-green-600 mt-1">✓ We found your existing verification record</p>
           )}
         </div>
 
         <div className="space-y-6">
           {/* Progress Tracker */}
           <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
-            <h3 className="text-xl font-medium text-purple-900 mb-3">Verification Progress</h3>
+            <h3 className="text-2xl font-medium text-purple-900 mb-3">Verification Progress</h3>
             <div className="space-y-2">
               <div className="flex items-center">
                 <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
-                <span className="text-base text-green-700">Verify email address</span>
+                <span className="text-lg text-green-700">Verify email address</span>
               </div>
               <div className="flex items-center">
                 {phoneNumber ? (
@@ -691,60 +692,60 @@ const DriverVerificationApp = () => {
                 ) : (
                   <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
                 )}
-                <span className={`text-base ${phoneNumber ? 'text-green-700' : 'text-gray-600'}`}>
+                <span className={`text-lg ${phoneNumber ? 'text-green-700' : 'text-gray-600'}`}>
                   Phone number
                 </span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Insurance questions</span>
+                <span className="text-lg text-gray-600">Insurance questions</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Driving licence</span>
+                <span className="text-lg text-gray-600">Driving licence</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Proof of address 1</span>
+                <span className="text-lg text-gray-600">Proof of address 1</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Proof of address 2</span>
+                <span className="text-lg text-gray-600">Proof of address 2</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">DVLA check</span>
+                <span className="text-lg text-gray-600">DVLA check</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Confirmation signature</span>
+                <span className="text-lg text-gray-600">Confirmation signature</span>
               </div>
             </div>
           </div>
 
           {/* Email (readonly) */}
           <div>
-            <label className="block text-xl font-medium text-gray-700 mb-2">
+            <label className="block text-2xl font-medium text-gray-700 mb-2">
               Email address
             </label>
             <input
               type="email"
               value={driverEmail}
               readOnly
-              className="w-full px-3 py-3 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-lg"
+              className="w-full px-3 py-3 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-xl"
             />
           </div>
 
-          {/* Phone Number with Country Code */}
+          {/* Phone Number with Country Code - FIXED: Use parent handlers */}
           <div>
-            <label className="block text-xl font-medium text-gray-700 mb-2">
+            <label className="block text-2xl font-medium text-gray-700 mb-2">
               Phone number <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
               <select
                 value={countryCode}
                 onChange={handleCountryChange}
-                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg bg-white min-w-[120px]"
+                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl bg-white min-w-[120px]"
               >
                 <option value="+44">🇬🇧 +44</option>
                 <option value="+1">🇺🇸 +1</option>
@@ -781,7 +782,7 @@ const DriverVerificationApp = () => {
                 type="tel"
                 value={phoneNumber}
                 onChange={handlePhoneChange}
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
+                className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl"
                 placeholder="123 456 7890"
                 autoComplete="tel-national"
               />
@@ -791,8 +792,8 @@ const DriverVerificationApp = () => {
           {/* Returning driver info */}
           {isReturningDriver && driverStatus?.documents && (
             <div className="bg-green-50 border border-green-200 rounded-md p-4">
-              <h3 className="text-xl font-medium text-green-900 mb-2">Your verification status</h3>
-              <div className="space-y-2 text-base">
+              <h3 className="text-2xl font-medium text-green-900 mb-2">Your verification status</h3>
+              <div className="space-y-2 text-lg">
                 <DocumentStatusSummary 
                   title="Driving licence" 
                   status={driverStatus.documents.licence} 
@@ -808,7 +809,7 @@ const DriverVerificationApp = () => {
                 {!needsInsuranceQuestionnaire() && (
                   <div className="flex items-center text-green-600">
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    <span className="text-base">Insurance questions completed</span>
+                    <span className="text-lg">Insurance questions completed</span>
                   </div>
                 )}
               </div>
@@ -821,7 +822,7 @@ const DriverVerificationApp = () => {
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <p className="text-lg text-red-800">{error}</p>
+                  <p className="text-xl text-red-800">{error}</p>
                 </div>
               </div>
             </div>
@@ -830,9 +831,9 @@ const DriverVerificationApp = () => {
           {/* Navigation - Removed back button */}
           <div className="flex justify-center">
             <button
-              onClick={handleContactDetailsComplete}
+              onClick={saveContactDetails}
               disabled={loading || !phoneNumber || phoneNumber.replace(/\D/g, '').length < 9}
-              className="w-full bg-purple-600 text-white py-4 px-6 rounded-md hover:bg-purple-700 disabled:opacity-50 text-lg font-medium"
+              className="w-full bg-purple-600 text-white py-4 px-6 rounded-md hover:bg-purple-700 disabled:opacity-50 text-xl font-medium"
             >
               {loading ? 'Saving...' : 'Continue'}
             </button>
@@ -840,7 +841,7 @@ const DriverVerificationApp = () => {
         </div>
       </div>
     );
-  });
+  };
 
   // Insurance Questionnaire Component
   const InsuranceQuestionnaire = () => {
@@ -921,7 +922,7 @@ const DriverVerificationApp = () => {
 
     const YesNoQuestion = ({ field, question, required = true }) => (
       <div className="space-y-2">
-        <label className="block text-base font-medium text-gray-700">
+        <label className="block text-lg font-medium text-gray-700">
           {question} {required && <span className="text-red-500">*</span>}
         </label>
         <div className="flex space-x-4">
@@ -934,7 +935,7 @@ const DriverVerificationApp = () => {
               onChange={(e) => handleQuestionChange(field, 'yes')}
               className="mr-2"
             />
-            <span className="text-base">Yes</span>
+            <span className="text-lg">Yes</span>
           </label>
           <label className="flex items-center">
             <input
@@ -945,11 +946,11 @@ const DriverVerificationApp = () => {
               onChange={(e) => handleQuestionChange(field, 'no')}
               className="mr-2"
             />
-            <span className="text-base">No</span>
+            <span className="text-lg">No</span>
           </label>
         </div>
         {errors[field] && (
-          <p className="text-base text-red-600">{errors[field]}</p>
+          <p className="text-lg text-red-600">{errors[field]}</p>
         )}
       </div>
     );
@@ -958,57 +959,57 @@ const DriverVerificationApp = () => {
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
           <FileText className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h2 className="text-3xl font-bold text-gray-900">
+          <h2 className="text-4xl font-bold text-gray-900">
             {isReturningDriver ? 'Update insurance questions' : 'Insurance questions'}
           </h2>
           {isReturningDriver && (
-            <p className="text-base text-orange-600 mt-1">Please complete these questions again for this hire</p>
+            <p className="text-lg text-orange-600 mt-1">Please complete these questions again for this hire</p>
           )}
         </div>
 
         <div className="space-y-6">
           {/* Progress Tracker */}
           <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
-            <h3 className="text-xl font-medium text-purple-900 mb-3">Verification Progress</h3>
+            <h3 className="text-2xl font-medium text-purple-900 mb-3">Verification Progress</h3>
             <div className="space-y-2">
               <div className="flex items-center">
                 <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
-                <span className="text-base text-green-700">Verify email address</span>
+                <span className="text-lg text-green-700">Verify email address</span>
               </div>
               <div className="flex items-center">
                 <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
-                <span className="text-base text-green-700">Phone number</span>
+                <span className="text-lg text-green-700">Phone number</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-purple-500 rounded-full mr-3 bg-purple-100"></div>
-                <span className="text-base text-purple-700 font-medium">Insurance questions</span>
+                <span className="text-lg text-purple-700 font-medium">Insurance questions</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Driving licence</span>
+                <span className="text-lg text-gray-600">Driving licence</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Proof of address 1</span>
+                <span className="text-lg text-gray-600">Proof of address 1</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Proof of address 2</span>
+                <span className="text-lg text-gray-600">Proof of address 2</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">DVLA check</span>
+                <span className="text-lg text-gray-600">DVLA check</span>
               </div>
               <div className="flex items-center">
                 <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-base text-gray-600">Confirmation signature</span>
+                <span className="text-lg text-gray-600">Confirmation signature</span>
               </div>
             </div>
           </div>
 
           {/* Insurance Questions */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h3 className="text-lg font-medium text-purple-900 mb-4">Health & driving history</h3>
+            <h3 className="text-2xl font-medium text-purple-900 mb-4">Health & driving history</h3>
             <div className="space-y-4">
               <YesNoQuestion
                 field="hasDisability"
@@ -1044,26 +1045,26 @@ const DriverVerificationApp = () => {
 
           {/* Additional Details - Required if any "Yes" answers */}
           <div>
-            <label className="block text-base font-medium text-gray-700 mb-2">
+            <label className="block text-lg font-medium text-gray-700 mb-2">
               Additional information {hasYesAnswers() && <span className="text-red-500">*</span>}
-              {hasYesAnswers() && <span className="text-sm text-gray-500 ml-1">(required due to "Yes" answers above)</span>}
+              {hasYesAnswers() && <span className="text-base text-gray-500 ml-1">(required due to "Yes" answers above)</span>}
             </label>
             <textarea
               value={formData.additionalDetails}
               onChange={(e) => handleQuestionChange('additionalDetails', e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
               placeholder={hasYesAnswers() ? "Please provide details about your answers above..." : "Please provide any additional details about your answers above..."}
             />
             {errors.additionalDetails && (
-              <p className="text-base text-red-600 mt-1">{errors.additionalDetails}</p>
+              <p className="text-lg text-red-600 mt-1">{errors.additionalDetails}</p>
             )}
           </div>
 
           {/* Information about next step */}
           <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-            <h3 className="text-lg font-medium text-purple-900 mb-2">Next step</h3>
-            <p className="text-base text-purple-800">
+            <h3 className="text-xl font-medium text-purple-900 mb-2">Next step</h3>
+            <p className="text-lg text-purple-800">
               Press Continue to proceed to {isReturningDriver ? 'update your documents' : 'document verification'}.
             </p>
           </div>
@@ -1074,7 +1075,7 @@ const DriverVerificationApp = () => {
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <p className="text-base text-red-800">{errors.submit}</p>
+                  <p className="text-lg text-red-800">{errors.submit}</p>
                 </div>
               </div>
             </div>
@@ -1084,13 +1085,13 @@ const DriverVerificationApp = () => {
           <div className="flex space-x-3">
             <button
               onClick={() => setCurrentStep('contact-details')}
-              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-base"
+              className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-lg"
             >
               Back
             </button>
             <button
               onClick={handleSubmit}
-              className="flex-1 bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 text-base"
+              className="flex-1 bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 text-lg"
             >
               Continue to documents
             </button>
@@ -1105,25 +1106,25 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Shield className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900">Hire agreement - proposal for insurance</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Hire agreement - proposal for insurance</h1>
       </div>
       
       {loading ? (
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-2 text-lg text-gray-600">Loading...</p>
+          <p className="mt-2 text-xl text-gray-600">Loading...</p>
         </div>
       ) : error ? (
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <div className="text-center mb-4">
             <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-            <h2 className="text-xl font-bold text-red-900 mb-2">Job number not found</h2>
+            <h2 className="text-2xl font-bold text-red-900 mb-2">Job number not found</h2>
           </div>
           
           <div className="space-y-4">
             <div className="bg-white rounded-md p-4 border border-red-200">
               <h3 className="font-medium text-red-900 mb-3">This may be because:</h3>
-              <ul className="text-sm text-red-800 space-y-2">
+              <ul className="text-base text-red-800 space-y-2">
                 <li className="flex items-start">
                   <span className="text-red-500 mr-2">•</span>
                   <span>The hire period has ended or been cancelled</span>
@@ -1141,7 +1142,7 @@ const DriverVerificationApp = () => {
             
             <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
               <h3 className="font-medium text-blue-900 mb-2">What to do next:</h3>
-              <div className="space-y-3 text-sm text-blue-800">
+              <div className="space-y-3 text-base text-blue-800">
                 <p>📞 <strong>Call us:</strong> <a href="tel:01273911382" className="text-purple-600 hover:text-purple-800 font-medium">01273 911382</a></p>
                 <p>📧 <strong>Email:</strong> <a href="mailto:info@oooshtours.co.uk" className="text-purple-600 hover:text-purple-800 font-medium">info@oooshtours.co.uk</a></p>
                 <p>💬 <strong>Include:</strong> Your job reference number and this error message</p>
@@ -1151,7 +1152,7 @@ const DriverVerificationApp = () => {
         </div>
       ) : (
         <div className="text-center py-8">
-          <p className="text-lg text-gray-600">Loading...</p>
+          <p className="text-xl text-gray-600">Loading...</p>
         </div>
       )}
     </div>
@@ -1180,14 +1181,14 @@ const DriverVerificationApp = () => {
           
           {/* Header Section */}
           <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-8 text-center">
-            <h1 className="text-3xl font-bold text-white mb-2">
+            <h1 className="text-4xl font-bold text-white mb-2">
               Hire agreement - proposal for insurance
             </h1>
           </div>
 
           {/* Introduction Section */}
           <div className="px-6 py-6 bg-blue-50 border-b border-blue-200">
-            <p className="text-base text-blue-800 leading-relaxed">
+            <p className="text-lg text-blue-800 leading-relaxed">
               This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>{' '}
               {jobDetails?.startDate && jobDetails?.endDate ? (
                 <>which is from <strong>{formatHireDate(jobDetails.startDate)} to {formatHireDate(jobDetails.endDate)}</strong>. Or</>
@@ -1196,7 +1197,7 @@ const DriverVerificationApp = () => {
               )}, if you have recently completed a form for a different hire, it will re-validate your documents.{' '}
               {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
             </p>
-            <p className="text-base text-blue-800 leading-relaxed mt-3">
+            <p className="text-lg text-blue-800 leading-relaxed mt-3">
               Please make sure you review our{' '}
               <a 
                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
@@ -1215,7 +1216,7 @@ const DriverVerificationApp = () => {
                   <Smartphone className="h-6 w-6 text-purple-600 mt-1 flex-shrink-0" />
                   <div className="flex-1">
                     <h4 className="font-medium text-blue-900 mb-2">📱 For best experience, use your smartphone</h4>
-                    <p className="text-sm text-blue-700 mb-3">
+                    <p className="text-base text-blue-700 mb-3">
                       Scan this QR code with your phone's camera to open this page on your mobile device:
                     </p>
                     <div className="text-center">
@@ -1236,7 +1237,7 @@ const DriverVerificationApp = () => {
             <div className="max-w-md mx-auto">
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="email" className="block text-2xl font-bold text-gray-900 mb-3 text-center">
+                  <label htmlFor="email" className="block text-3xl font-bold text-gray-900 mb-3 text-center">
                     Enter your email address to get started
                   </label>
                   <input
@@ -1244,11 +1245,11 @@ const DriverVerificationApp = () => {
                     id="email"
                     value={driverEmail}
                     onChange={(e) => setDriverEmail(e.target.value)}
-                    className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
+                    className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xl"
                     placeholder="driver@example.com"
                     disabled={loading}
                   />
-                  <p className="text-base text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
+                  <p className="text-lg text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
                 </div>
 
                 {error && (
@@ -1256,7 +1257,7 @@ const DriverVerificationApp = () => {
                     <div className="flex">
                       <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
                       <div className="ml-3">
-                        <p className="text-base text-red-800">{error}</p>
+                        <p className="text-lg text-red-800">{error}</p>
                       </div>
                     </div>
                   </div>
@@ -1265,7 +1266,7 @@ const DriverVerificationApp = () => {
                 <button
                   onClick={sendVerificationEmail}
                   disabled={loading || !driverEmail}
-                  className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-lg flex items-center justify-center space-x-2"
+                  className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-xl flex items-center justify-center space-x-2"
                 >
                   {loading ? (
                     <>
@@ -1285,9 +1286,9 @@ const DriverVerificationApp = () => {
 
           {/* Requirements Section */}
           <div className="bg-gray-50 px-6 py-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">What you'll need</h3>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-4">What you'll need</h3>
             
-            <div className="space-y-4 text-base text-gray-600">
+            <div className="space-y-4 text-lg text-gray-600">
               <div>
                 <h4 className="font-medium text-gray-800 mb-2">👥 All drivers:</h4>
                 <ul className="list-disc ml-5 space-y-1">
@@ -1308,7 +1309,7 @@ const DriverVerificationApp = () => {
                       href="https://www.gov.uk/view-driving-licence" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
+                      className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
                     >
                       gov.uk/view-driving-licence <ExternalLink className="h-4 w-4 ml-1" />
                     </a>
@@ -1336,23 +1337,23 @@ const DriverVerificationApp = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between text-sm text-gray-500">
+              <div className="flex items-center justify-between text-base text-gray-500">
                 <span>Need help?</span>
                 <a 
                   href="tel:01273911382" 
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
                 >
                   <Phone className="h-4 w-4 mr-1" />
                   01273 911382
                 </a>
               </div>
               
-              <div className="mt-2 text-sm text-gray-500">
+              <div className="mt-2 text-base text-gray-500">
                 <a 
                   href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
                 >
                   DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
                 </a>
@@ -1361,7 +1362,7 @@ const DriverVerificationApp = () => {
                   href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-base"
+                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
                 >
                   Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
                 </a>
@@ -1377,9 +1378,9 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Mail className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900">Check your email</h2>
-        <p className="text-lg text-gray-600 mt-2">We sent a 6-digit code to:</p>
-        <p className="text-base font-medium text-gray-900 break-words">{driverEmail}</p>
+        <h2 className="text-3xl font-bold text-gray-900">Check your email</h2>
+        <p className="text-xl text-gray-600 mt-2">We sent a 6-digit code to:</p>
+        <p className="text-lg font-medium text-gray-900 break-words">{driverEmail}</p>
       </div>
 
       {/* Spam Notice */}
@@ -1388,7 +1389,7 @@ const DriverVerificationApp = () => {
           <svg className="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <div className="text-sm text-blue-800">
+          <div className="text-base text-blue-800">
             <p className="font-medium">Can't find the email?</p>
             <p className="mt-1">Check your spam/junk folder - verification emails sometimes end up there!</p>
           </div>
@@ -1397,7 +1398,7 @@ const DriverVerificationApp = () => {
 
       <div className="space-y-4">
         <div>
-          <label htmlFor="code" className="block text-base font-medium text-gray-700 mb-1">
+          <label htmlFor="code" className="block text-lg font-medium text-gray-700 mb-1">
             Verification code
           </label>
           <input
@@ -1405,7 +1406,7 @@ const DriverVerificationApp = () => {
             id="code"
             value={verificationCode}
             onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-xl font-mono"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl font-mono"
             placeholder="123456"
             maxLength="6"
             disabled={loading}
@@ -1418,7 +1419,7 @@ const DriverVerificationApp = () => {
               <svg className="h-4 w-4 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-base text-red-800">{error}</p>
+              <p className="text-lg text-red-800">{error}</p>
             </div>
           </div>
         )}
@@ -1426,7 +1427,7 @@ const DriverVerificationApp = () => {
         <button
           onClick={verifyEmailCode}
           disabled={loading || verificationCode.length < 6}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-base flex items-center justify-center space-x-2"
+          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center space-x-2"
         >
           {loading ? (
             <>
@@ -1444,7 +1445,7 @@ const DriverVerificationApp = () => {
         <button
           onClick={sendVerificationEmail}
           disabled={loading}
-          className="w-full text-purple-600 hover:text-purple-700 text-base disabled:opacity-50 disabled:cursor-not-allowed py-2"
+          className="w-full text-purple-600 hover:text-purple-700 text-lg disabled:opacity-50 disabled:cursor-not-allowed py-2"
         >
           {loading ? 'Please wait...' : "Didn't receive the code? Send again"}
         </button>
@@ -1452,7 +1453,7 @@ const DriverVerificationApp = () => {
         <button
           onClick={startAgain}
           disabled={loading}
-          className="w-full text-gray-500 hover:text-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed py-1 border-t border-gray-200 mt-4 pt-4"
+          className="w-full text-gray-500 hover:text-gray-700 text-base disabled:opacity-50 disabled:cursor-not-allowed py-1 border-t border-gray-200 mt-4 pt-4"
         >
           Wrong email address? Start again
         </button>
@@ -1476,7 +1477,7 @@ const DriverVerificationApp = () => {
           ) : (
             <FileText className="mx-auto h-12 w-12 text-orange-600 mb-4" />
           )}
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-3xl font-bold text-gray-900">
             {isVerified && !needsDocuments && !needsDVLA ? 
               `Welcome back!` : 
               'Verification status'}
@@ -1487,14 +1488,14 @@ const DriverVerificationApp = () => {
             {/* Contact details */}
             <div className="flex items-center text-green-600">
               <CheckCircle className="h-4 w-4 mr-2" />
-              <span className="text-sm">Contact details completed</span>
+              <span className="text-base">Contact details completed</span>
             </div>
             
             {/* Insurance questions */}
             {(insuranceData || !needsInsuranceQuestionnaire()) && (
               <div className="flex items-center text-green-600">
                 <CheckCircle className="h-4 w-4 mr-2" />
-                <span className="text-sm">Insurance questions completed</span>
+                <span className="text-base">Insurance questions completed</span>
               </div>
             )}
           </div>
@@ -1527,7 +1528,7 @@ const DriverVerificationApp = () => {
           {needsDocuments && (
             <button
               onClick={startVerification}
-              className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
+              className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
             >
               Start document verification
             </button>
@@ -1536,7 +1537,7 @@ const DriverVerificationApp = () => {
           {needsDVLA && !needsDocuments && (
             <button
               onClick={startDVLACheck}
-              className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 text-base"
+              className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg"
             >
               Upload DVLA check
             </button>
@@ -1545,7 +1546,7 @@ const DriverVerificationApp = () => {
           {!needsDocuments && !needsDVLA && (
             <button
               onClick={() => alert('Added to hire! (Monday.com integration pending)')}
-              className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-base"
+              className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
             >
               Join this hire
             </button>
@@ -1553,7 +1554,7 @@ const DriverVerificationApp = () => {
 
           <button
             onClick={startAgain}
-            className="w-full text-gray-500 hover:text-gray-700 text-sm py-2 border-t border-gray-200 mt-4 pt-4"
+            className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
           >
             Different email address? Start again
           </button>
@@ -1575,27 +1576,27 @@ const DriverVerificationApp = () => {
           ) : (
             <XCircle className="h-5 w-5 text-red-500 mr-2" />
           )}
-          <span className="text-lg font-medium">{title}</span>
+          <span className="text-xl font-medium">{title}</span>
         </div>
         <div className="text-right">
           {isValid ? (
             <div>
               {status.expiryDate && (
-                <span className={`text-base ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
+                <span className={`text-lg ${isExpiringSoon ? 'text-orange-600' : 'text-green-600'}`}>
                   Valid until {status.expiryDate}
                 </span>
               )}
               {status.lastCheck && !status.expiryDate && (
-                <span className="text-base text-green-600">
+                <span className="text-lg text-green-600">
                   Checked {status.lastCheck}
                 </span>
               )}
               {status.type && (
-                <p className="text-base text-gray-500">{status.type}</p>
+                <p className="text-lg text-gray-500">{status.type}</p>
               )}
             </div>
           ) : (
-            <span className="text-base text-red-600">Required</span>
+            <span className="text-lg text-red-600">Required</span>
           )}
         </div>
       </div>
@@ -1607,7 +1608,7 @@ const DriverVerificationApp = () => {
     const isValid = status ? isDocumentValid(status.expiryDate) : false;
     return (
       <div className="flex items-center justify-between">
-        <span className="text-green-800 text-base">{title}</span>
+        <span className="text-green-800 text-lg">{title}</span>
         {isValid ? (
           <CheckCircle className="h-5 w-5 text-green-600" />
         ) : (
@@ -1621,14 +1622,14 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900">Document verification</h2>
-        <p className="text-lg text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
+        <h2 className="text-3xl font-bold text-gray-900">Document verification</h2>
+        <p className="text-xl text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
       </div>
 
       <div className="space-y-4 mb-6">
         <div className="border border-gray-200 rounded-md p-4">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Required documents:</h3>
-          <ul className="text-base text-gray-600 space-y-1">
+          <h3 className="text-xl font-medium text-gray-900 mb-2">Required documents:</h3>
+          <ul className="text-lg text-gray-600 space-y-1">
             <li>• UK driving licence (front and back)</li>
             <li>• Two proof of address documents (within 90 days)</li>
             <li>• Selfie for identity verification</li>
@@ -1636,7 +1637,7 @@ const DriverVerificationApp = () => {
         </div>
 
         <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
-          <p className="text-base text-purple-800">
+          <p className="text-lg text-purple-800">
             <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements
           </p>
         </div>
@@ -1644,7 +1645,7 @@ const DriverVerificationApp = () => {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-          <p className="text-base text-red-800">{error}</p>
+          <p className="text-lg text-red-800">{error}</p>
         </div>
       )}
 
@@ -1652,14 +1653,14 @@ const DriverVerificationApp = () => {
         <button
           onClick={generateIdenfyToken}
           disabled={loading}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-base"
+          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-lg"
         >
           {loading ? 'Starting verification...' : 'Start document upload'}
         </button>
 
         <button
           onClick={startAgain}
-          className="w-full text-gray-500 hover:text-gray-700 text-sm py-2 border-t border-gray-200 mt-4 pt-4"
+          className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
         >
           Need to use a different email? Start again
         </button>
@@ -1671,13 +1672,13 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900">DVLA licence check</h2>
-        <p className="text-lg text-gray-600 mt-2">Upload your DVLA check document</p>
+        <h2 className="text-3xl font-bold text-gray-900">DVLA licence check</h2>
+        <p className="text-xl text-gray-600 mt-2">Upload your DVLA check document</p>
       </div>
 
       <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
-        <h3 className="text-lg font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
-        <ol className="text-base text-orange-800 space-y-1 list-decimal list-inside">
+        <h3 className="text-xl font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
+        <ol className="text-lg text-orange-800 space-y-1 list-decimal list-inside">
           <li>Visit gov.uk/check-driving-licence</li>
           <li>Enter your licence details</li>
           <li>Download/screenshot the summary page</li>
@@ -1687,34 +1688,34 @@ const DriverVerificationApp = () => {
 
       <div className="space-y-4">
         <div>
-          <label className="block text-base font-medium text-gray-700 mb-2">
+          <label className="block text-lg font-medium text-gray-700 mb-2">
             DVLA check document
           </label>
           <input
             type="file"
             accept="image/*,.pdf"
             onChange={(e) => setUploadedFile(e.target.files[0])}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-base"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg"
           />
         </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-base text-red-800">{error}</p>
+            <p className="text-lg text-red-800">{error}</p>
           </div>
         )}
 
         <button
           onClick={() => processDVLACheck(uploadedFile)}
           disabled={loading || !uploadedFile}
-          className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-base"
+          className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-lg"
         >
           {loading ? 'Processing document...' : 'Verify DVLA check'}
         </button>
 
         <button
           onClick={() => setCurrentStep('driver-status')}
-          className="w-full text-gray-600 hover:text-gray-700 text-base"
+          className="w-full text-gray-600 hover:text-gray-700 text-lg"
         >
           Back to status
         </button>
@@ -1726,9 +1727,9 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Processing verification</h2>
-        <p className="text-lg text-gray-600">Please wait while we verify your documents...</p>
-        <p className="text-base text-gray-500 mt-2">This usually takes 30-60 seconds</p>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Processing verification</h2>
+        <p className="text-xl text-gray-600">Please wait while we verify your documents...</p>
+        <p className="text-lg text-gray-500 mt-2">This usually takes 30-60 seconds</p>
       </div>
     </div>
   );
@@ -1737,18 +1738,18 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
         <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification complete!</h2>
-        <p className="text-lg text-gray-600 mb-4">You're approved for this hire.</p>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification complete!</h2>
+        <p className="text-xl text-gray-600 mb-4">You're approved for this hire.</p>
         
         <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
-          <p className="text-base text-green-800">
+          <p className="text-lg text-green-800">
             Your verification has been added to the hire roster. You'll receive confirmation details shortly.
           </p>
         </div>
 
         <button
           onClick={() => window.close()}
-          className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-base"
+          className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
         >
           Close
         </button>
@@ -1760,11 +1761,11 @@ const DriverVerificationApp = () => {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center py-8">
         <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Verification issues</h2>
-        <p className="text-lg text-gray-600 mb-4">We couldn't approve your verification.</p>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification issues</h2>
+        <p className="text-xl text-gray-600 mb-4">We couldn't approve your verification.</p>
         
         <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-base text-red-800">
+          <p className="text-lg text-red-800">
             This may be due to document quality, insurance requirements, or other factors. 
             Please contact OOOSH for assistance.
           </p>
@@ -1773,14 +1774,14 @@ const DriverVerificationApp = () => {
         <div className="space-y-3">
           <button
             onClick={startVerification}
-            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-base"
+            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
           >
             Try again
           </button>
           
           <a
             href="tel:01273911382"
-            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-base"
+            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
           >
             <Phone className="h-4 w-4 mr-2" />
             Call OOOSH support
@@ -1788,7 +1789,7 @@ const DriverVerificationApp = () => {
 
           <button
             onClick={startAgain}
-            className="w-full text-gray-500 hover:text-gray-700 text-sm py-2 border-t border-gray-200 mt-4 pt-4"
+            className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
           >
             Start verification again
           </button>
