@@ -1,5 +1,5 @@
 // File: src/App.js
-// OOOSH Driver Verification - Complete application with ALL ISSUES FIXED
+// Ooosh Driver Verification - Complete application with ALL ISSUES FIXED
 // FIXED: 1. Phone input cursor (removed keys), 2. Insurance data retrieval, 3. Document dates, 4. Phone numbers only, 5. UI improvements
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -1202,13 +1202,13 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // Landing page with OOOSH logo instead of shield
+  // Landing page with Ooosh logo instead of shield
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <img 
           src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-          alt="OOOSH Tours" 
+          alt="Ooosh Tours" 
           className="mx-auto h-16 w-auto mb-4"
         />
         <h1 className="text-3xl font-bold text-gray-900">Hire agreement - proposal for insurance</h1>
@@ -1263,217 +1263,217 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-  // Updated email entry page with cleaner styling
-  const renderEmailEntry = () => (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header with Logo */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <img 
-                src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-                alt="OOOSH Tours" 
-                className="h-12 w-auto"
-              />
-            </div>
+// FIXED renderEmailEntry function - replace this entire function in App.js
+const renderEmailEntry = () => (
+  <div className="min-h-screen bg-gray-50">
+    {/* Header with Logo */}
+    <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center py-6">
+          <div className="flex items-center">
+            <img 
+              src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
+              alt="Ooosh Tours" 
+              className="h-12 w-auto"
+            />
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Main Content */}
-      <div className="max-w-2xl mx-auto pt-8 pb-16 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+    {/* Main Content */}
+    <div className="max-w-2xl mx-auto pt-8 pb-16 px-4 sm:px-6 lg:px-8">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        
+        {/* Header Section - Clean styling */}
+        <div className="bg-gray-50 px-6 py-8 text-center border-b">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+            Hire agreement - proposal for insurance
+          </h1>
+        </div>
+
+        {/* Introduction Section - White background */}
+        <div className="px-6 py-6 bg-white border-b border-gray-200">
+          <p className="text-lg text-gray-700 leading-relaxed">
+            This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>{' '}
+            {jobDetails?.startDate && jobDetails?.endDate ? (
+              <>which is from <strong>{formatHireDate(jobDetails.startDate)}</strong> to <strong>{formatHireDate(jobDetails.endDate)}</strong>. Or</>
+            ) : (
+              <>. Or</>
+            )}, if you have recently completed a form for a different hire, it will re-validate your documents.{' '}
+            {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
+          </p>
+          <p className="text-lg text-gray-700 leading-relaxed mt-3">
+            Please make sure you review our{' '}
+            <a 
+              href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-purple-600 hover:text-purple-800 font-medium inline-flex items-center"
+            >
+              T&Cs here <ExternalLink className="h-4 w-4 ml-1" />
+            </a>
+          </p>
           
-          {/* Header Section - Clean styling */}
-          <div className="bg-gray-50 px-6 py-8 text-center border-b">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Hire agreement - proposal for insurance
-            </h1>
+          {/* Mobile QR code */}
+          {!isMobile && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300">
+              <div className="flex items-start space-x-4">
+                <Smartphone className="h-6 w-6 text-purple-600 mt-1 flex-shrink-0" />
+                <div className="flex-1">
+                  <h4 className="font-medium text-gray-900 mb-2">📱 For best experience, use your smartphone</h4>
+                  <p className="text-base text-gray-700 mb-3">
+                    Scan this QR code with your phone's camera to open this page on your mobile device:
+                  </p>
+                  <div className="text-center">
+                    <img 
+                      src={generateQRCode()} 
+                      alt="QR Code for mobile access" 
+                      className="mx-auto border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Email Entry Section */}
+        <div className="px-6 py-8 bg-white border-b-4 border-purple-200">
+          <div className="max-w-md mx-auto">
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-3xl font-bold text-gray-900 mb-3 text-center">
+                  Enter your email address to get started
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={driverEmail}
+                  onChange={(e) => setDriverEmail(e.target.value)}
+                  className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xl"
+                  placeholder="driver@example.com"
+                  disabled={loading}
+                />
+                <p className="text-lg text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex">
+                    <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                    <div className="ml-3">
+                      <p className="text-lg text-red-800">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={sendVerificationEmail}
+                disabled={loading || !driverEmail}
+                className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-xl flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Sending code...</span>
+                  </>
+                ) : (
+                  <span>Send verification code</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Updated Requirements Section */}
+        <div className="bg-gray-50 px-6 py-6">
+          <h3 className="text-2xl font-semibold text-gray-900 mb-4">What you'll need</h3>
+          
+          <div className="space-y-4 text-lg text-gray-700">
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">👥 All drivers:</h4>
+              <ul className="list-disc ml-5 space-y-1">
+                <li>Must be at least 23 years old</li>
+                <li>Must have held a full driving licence for at least 2 years</li>
+                <li>Must have a valid driving licence (we'll need photos of front and back)</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">🆔 UK licence additional requirements:</h4>
+              <ul className="list-disc ml-5 space-y-1">
+                <li>Current DVLA licence check from gov.uk/view-driving-licence</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">🌍 Non-UK licence additional requirements:</h4>
+              <ul className="list-disc ml-5 space-y-1">
+                <li>Current passport (we'll need a photo)</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">🏠 All drivers - two proofs of address:</h4>
+              <ul className="list-disc ml-5 space-y-1">
+                <li>Bank statements, utility bills, council tax, credit card statements, government letters</li>
+                <li>Both must be dated within the last 90 days</li>
+                <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
+                <li>Must show your current home address</li>
+                <li>Documents must be from two different sources</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2">📋 Insurance questions:</h4>
+              <ul className="list-disc ml-5 space-y-1">
+                <li>Answer health and driving history questions</li>
+              </ul>
+            </div>
           </div>
 
-          {/* Introduction Section - White background */}
-          <div className="px-6 py-6 bg-white border-b border-gray-200">
-            <p className="text-lg text-gray-700 leading-relaxed">
-              This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>{' '}
-              {jobDetails?.startDate && jobDetails?.endDate ? (
-                <>which is from <strong>{formatHireDate(jobDetails.startDate)}</strong> to <strong>{formatHireDate(jobDetails.endDate)}</strong>. Or</>
-              ) : (
-                <>. Or</>
-              )}, if you have recently completed a form for a different hire, it will re-validate your documents.{' '}
-              {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
-            </p>
-            <p className="text-lg text-gray-700 leading-relaxed mt-3">
-              Please make sure you review our{' '}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between text-base text-gray-500">
+              <span>Need help?</span>
+              <a 
+                href="tel:01273911382" 
+                className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+              >
+                <Phone className="h-4 w-4 mr-1" />
+                01273 911382
+              </a>
+            </div>
+            
+            <div className="mt-2 text-base text-gray-500">
+              <a 
+                href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+              >
+                DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
+              </a>
+              {' | '}
               <a 
                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-purple-600 hover:text-purple-800 font-medium inline-flex items-center"
+                className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
               >
-                T&Cs here <ExternalLink className="h-4 w-4 ml-1" />
+                Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
               </a>
-            </p>
-            
-            {/* Mobile QR code */}
-            {!isMobile && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300">
-                <div className="flex items-start space-x-4">
-                  <Smartphone className="h-6 w-6 text-purple-600 mt-1 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900 mb-2">📱 For best experience, use your smartphone</h4>
-                    <p className="text-base text-gray-700 mb-3">
-                      Scan this QR code with your phone's camera to open this page on your mobile device:
-                    </p>
-                    <div className="text-center">
-                      <img 
-                        src={generateQRCode()} 
-                        alt="QR Code for mobile access" 
-                        className="mx-auto border border-gray-300 rounded"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Email Entry Section */}
-          <div className="px-6 py-8 bg-white border-b-4 border-purple-200">
-            <div className="max-w-md mx-auto">
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="email" className="block text-3xl font-bold text-gray-900 mb-3 text-center">
-                    Enter your email address to get started
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={driverEmail}
-                    onChange={(e) => setDriverEmail(e.target.value)}
-                    className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xl"
-                    placeholder="driver@example.com"
-                    disabled={loading}
-                  />
-                  <p className="text-lg text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
-                </div>
-
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex">
-                      <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
-                      <div className="ml-3">
-                        <p className="text-lg text-red-800">{error}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  onClick={sendVerificationEmail}
-                  disabled={loading || !driverEmail}
-                  className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-xl flex items-center justify-center space-x-2"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Sending code...</span>
-                    </>
-                  ) : (
-                    <span>Send verification code</span>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Updated Requirements Section */}
-          <div className="bg-gray-50 px-6 py-6">
-            <h3 className="text-2xl font-semibold text-gray-900 mb-4">What you'll need</h3>
-            
-            <div className="space-y-4 text-lg text-gray-700">
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">👥 All drivers:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Must be at least 23 years old</li>
-                  <li>Must have held a full driving licence for at least 2 years</li>
-                  <li>Must have a valid driving licence (we'll need photos of front and back)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">🆔 UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Current DVLA licence check from gov.uk/view-driving-licence</li>
-                </ul>
-              </div>
-
-             <div>
-                <h4 className="font-semibold text-gray-900 mb-2">🌍 Non-UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Current passport (we'll need a photo)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">🏠 All drivers - two proofs of address:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Bank statements, utility bills, council tax, or credit card statements</li>
-                  <li>Both must be dated within the last 90 days</li>
-                  <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
-                  <li>Must show your current home address</li>
-                  <li>Documents must be from two different sources</li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">📋 Insurance questions:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Answer health and driving history questions</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between text-base text-gray-500">
-                <span>Need help?</span>
-                <a 
-                  href="tel:01273911382" 
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                >
-                  <Phone className="h-4 w-4 mr-1" />
-                  01273 911382
-                </a>
-              </div>
-              
-              <div className="mt-2 text-base text-gray-500">
-                <a 
-                  href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                >
-                  DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
-                </a>
-                {' | '}
-                <a 
-                  href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-                >
-                  Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
-                </a>
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 
   const renderEmailVerification = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
@@ -1718,7 +1718,7 @@ const DriverVerificationApp = () => {
         <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
           <p className="text-lg text-red-800">
             This may be due to document quality, insurance requirements, or other factors. 
-            Please contact OOOSH for assistance.
+            Please contact us for assistance.
           </p>
         </div>
 
@@ -1735,7 +1735,7 @@ const DriverVerificationApp = () => {
             className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
           >
             <Phone className="h-4 w-4 mr-2" />
-            Call OOOSH support
+            Call us
           </a>
 
           <button
