@@ -20,9 +20,6 @@ const DriverVerificationApp = () => {
   const [error, setError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
-  
-  // Insurance questionnaire data
-  const [insuranceData, setInsuranceData] = useState(null);
 
   // FIXED: Phone input handlers moved to main component scope (prevents cursor jumping)
   const handlePhoneChange = React.useCallback((e) => {
@@ -382,7 +379,6 @@ const DriverVerificationApp = () => {
   // FIXED: Handle insurance questionnaire completion - save to Monday.com Board A
   const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
-    setInsuranceData(insuranceFormData);
     setLoading(true);
     
     try {
