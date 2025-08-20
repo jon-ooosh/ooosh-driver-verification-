@@ -808,29 +808,40 @@ function parseBoardAData(item) {
       case 'date_mktsbgpy': // License Next Check Due
         driver.licenseNextCheckDue = value?.date || '';
         break;
-      case 'status': // Has Disability
-        driver.hasDisability = value?.label === 'Yes';
-        break;
-      case 'color_mktr4w0': // Has Convictions
-        driver.hasConvictions = value?.label === 'Yes';
-        break;
-    case 'color_mktrbt3x': // Has Prosecution
-  console.log('Prosecution raw value:', value);
-  console.log('Prosecution text:', col.text);
-  // Try multiple ways to get the value
-  driver.hasProsecution = value?.label === 'Yes' || col.text === 'Yes';
+     // Parse insurance questions with detailed logging
+case 'status': // Has Disability
+  console.log('Disability column - value:', JSON.stringify(value), 'text:', col.text);
+  driver.hasDisability = value?.label === 'Yes' || col.text === 'Yes';
+  break;
+case 'color_mktr4w0': // Has Convictions
+  console.log('Convictions column - value:', JSON.stringify(value), 'text:', col.text);
+  driver.hasConvictions = value?.label === 'Yes' || col.text === 'Yes';
+  break;
+case 'color_mktrbt3x': // Has Prosecution
+  console.log('Prosecution column - value:', JSON.stringify(value), 'text:', col.text);
+  // Monday.com color columns might return index or other format
+  driver.hasProsecution = value?.label === 'Yes' || 
+                          col.text === 'Yes' || 
+                          value?.index === 1; // Some color columns use index
   break;
 case 'color_mktraeas': // Has Accidents  
-  console.log('Accidents raw value:', value);
-  console.log('Accidents text:', col.text);
-  driver.hasAccidents = value?.label === 'Yes' || col.text === 'Yes';
+  console.log('Accidents column - value:', JSON.stringify(value), 'text:', col.text);
+  driver.hasAccidents = value?.label === 'Yes' || 
+                       col.text === 'Yes' || 
+                       value?.index === 1;
   break;
-      case 'color_mktrpe6q': // Has Insurance Issues
-        driver.hasInsuranceIssues = value?.label === 'Yes';
-        break;
-      case 'color_mktr2t8a': // Has Driving Ban
-        driver.hasDrivingBan = value?.label === 'Yes';
-        break;
+case 'color_mktrpe6q': // Has Insurance Issues
+  console.log('Insurance Issues column - value:', JSON.stringify(value), 'text:', col.text);
+  driver.hasInsuranceIssues = value?.label === 'Yes' || 
+                              col.text === 'Yes' || 
+                              value?.index === 1;
+  break;
+case 'color_mktr2t8a': // Has Driving Ban
+  console.log('Driving Ban column - value:', JSON.stringify(value), 'text:', col.text);
+  driver.hasDrivingBan = value?.label === 'Yes' || 
+                        col.text === 'Yes' || 
+                        value?.index === 1;
+  break;
       case 'long_text_mktr1a66': // Additional Details
         driver.additionalDetails = col.text || '';
         break;
