@@ -1,5 +1,5 @@
 // File: src/App.js
-// OOOSH Driver Verification - COMPLETE FIXED VERSION
+// ooosh Tours Driver Verification - COMPLETE FIXED VERSION
 // All issues resolved: phone cursor, insurance data, document dates, UI improvements
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -1202,13 +1202,13 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // Landing page with OOOSH logo instead of shield
+  // Landing page with Ooosh logo instead of shield
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <img 
           src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-          alt="OOOSH Tours" 
+          alt="Ooosh Tours Ltd" 
           className="mx-auto h-16 w-auto mb-4"
         />
         <h1 className="text-3xl font-bold text-gray-900">Hire agreement - proposal for insurance</h1>
@@ -1273,7 +1273,7 @@ const DriverVerificationApp = () => {
             <div className="flex items-center">
               <img 
                 src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-                alt="OOOSH Tours" 
+                alt="Ooosh Tours Ltd" 
                 className="h-12 w-auto"
               />
             </div>
@@ -1718,7 +1718,7 @@ const DriverVerificationApp = () => {
        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
          <p className="text-lg text-red-800">
            This may be due to document quality, insurance requirements, or other factors. 
-           Please contact OOOSH for assistance.
+           Please contact us for assistance.
          </p>
        </div>
 
@@ -1732,11 +1732,11 @@ const DriverVerificationApp = () => {
          
          
            href="tel:01273911382"
-           className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
-         >
-           <Phone className="h-4 w-4 mr-2" />
-           Call OOOSH support
-         </a>
+            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            Call us
+          </a>
 
          <button
            onClick={startAgain}
