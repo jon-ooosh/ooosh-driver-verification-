@@ -815,11 +815,11 @@ function parseBoardAData(item) {
         driver.hasConvictions = value?.label === 'Yes';
         break;
      case 'color_mktrbt3x': // Has Prosecution
-  console.log('Prosecution column value:', value, 'text:', col.text);  // ADD THIS LINE
+  console.log('Prosecution column value:', value, 'text:', col.text);
   driver.hasProsecution = value?.label === 'Yes';
   break;
 case 'color_mktraeas': // Has Accidents  
-  console.log('Accidents column value:', value, 'text:', col.text);  // ADD THIS LINE
+  console.log('Accidents column value:', value, 'text:', col.text);
   driver.hasAccidents = value?.label === 'Yes';
   break;
       case 'color_mktrpe6q': // Has Insurance Issues
