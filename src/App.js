@@ -415,11 +415,11 @@ const DriverVerificationApp = () => {
       }
       
     } catch (err) {
-      console.error('Error checking driver status:', err);
-      setDriverStatus({ status: 'new', email: driverEmail });
-      setCurrentStep('insurance-questionnaire');
-    }
-  };
+    console.error('Error checking driver status:', err);
+    setDriverStatus({ status: 'new', email: driverEmail });
+    setCurrentStep('insurance-questionnaire');
+  }
+};
 
   const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
