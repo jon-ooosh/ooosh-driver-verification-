@@ -1723,27 +1723,27 @@ const DriverVerificationApp = () => {
        </div>
 
        <div className="space-y-3">
-         <button
-           onClick={startVerification}
-           className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
-         >
-           Try again
-         </button>
-         
-         
-           href="tel:01273911382"
+       <button
+            onClick={startVerification}
+            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
+          >
+            Try again
+          </button>
+          
+          
+            href="tel:01273911382"
             className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
           >
             <Phone className="h-4 w-4 mr-2" />
             Call us
           </a>
 
-         <button
-           onClick={startAgain}
-           className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
-         >
-           Start verification again
-         </button>
+          <button
+            onClick={startAgain}
+            className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
+          >
+            Start verification again
+          </button>
        </div>
      </div>
    </div>
