@@ -73,6 +73,7 @@ const DriverVerificationApp = () => {
     
     // Apply font to body
     document.body.style.fontFamily = "'Montserrat', sans-serif";
+    document.body.style.fontSize = "110%";
     
     return () => {
       document.head.removeChild(link);
