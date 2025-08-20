@@ -1,5 +1,5 @@
 // File: functions/create-idenfy-session.js
-// ENHANCED VERSION - Supports selective document requirements
+// CORRECTED VERSION - Proper Idenfy API format based on documentation
 
 const fetch = require('node-fetch');
 
@@ -38,7 +38,7 @@ exports.handler = async (event, context) => {
       email, 
       jobId, 
       driverName,
-      verificationType = 'full', // full, license, poa1, poa2, poa_both, passport
+      verificationType = 'full', // full, license, poa1, poa2, poa_both, passport, none
       isUKDriver = true 
     } = JSON.parse(event.body);
     
@@ -69,6 +69,21 @@ exports.handler = async (event, context) => {
       return { statusCode: 200, headers, body: JSON.stringify(mockResponse) };
     }
 
+    // For everything valid, skip Idenfy and go to signature
+    if (verificationType === 'none') {
+      console.log('All documents valid, skipping Idenfy');
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          skipIdenfy: true,
+          message: 'All documents valid, proceed to signature',
+          redirectUrl: `https://ooosh-driver-verification.netlify.app/?status=skip&job=${jobId}&email=${encodeURIComponent(email)}&type=signature`
+        })
+      };
+    }
+
     // Create Idenfy session with specific document requirements
     const idenfyResponse = await createIdenfySession(email, jobId, verificationType, isUKDriver);
     
@@ -76,7 +91,7 @@ exports.handler = async (event, context) => {
       throw new Error(idenfyResponse.error || 'Failed to create Idenfy session');
     }
 
-    // Store session info in Google Apps Script
+    // Store session info (keeping your existing function)
     await updateDriverVerificationStatus(email, jobId, {
       idenfySessionId: idenfyResponse.scanRef,
       idenfyStatus: 'initiated',
@@ -114,7 +129,7 @@ exports.handler = async (event, context) => {
   }
 };
 
-// ENHANCED: Create Idenfy session with selective document requirements
+// CORRECTED: Proper Idenfy API format based on documentation
 async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
@@ -128,7 +143,7 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
     const requestBody = {
       clientId: clientId,
       
-      // Return URLs for different outcomes
+      // Return URLs
       successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
       errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
@@ -136,7 +151,6 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       locale: 'en',
       expiryTime: 3600,
       sessionLength: 1800,
-      tokenType: 'IDENTIFICATION',
       showInstructions: true
     };
 
@@ -145,48 +159,45 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
     
     switch (verificationType) {
       case 'full':
-        // Complete verification for new drivers or everything expired
+        // Complete verification for new drivers
         requestBody.documents = ['DRIVER_LICENSE'];
-        // Idenfy will automatically request POAs with driver license
-        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
-        requestBody.proofOfAddressCount = 2; // Request 2 POAs
+        // CORRECTED: additionalSteps as object with UTILITY_BILL
+        requestBody.additionalSteps = {
+          'UTILITY_BILL': {
+            utilityBillMinCount: 2  // Request 2 POAs
+          }
+        };
         documentsRequired = ['Driving License (front & back)', 'Selfie', 'Proof of Address 1', 'Proof of Address 2'];
-        if (!isUKDriver) {
-          requestBody.documents.push('PASSPORT');
-          documentsRequired.push('Passport');
-        }
         break;
 
       case 'license':
-        // License renewal only
+        // License renewal only (no POAs)
         requestBody.documents = ['DRIVER_LICENSE'];
-        requestBody.additionalSteps = []; // No POAs needed
+        // No additional steps - just license
         documentsRequired = ['Driving License (front & back)', 'Selfie'];
         break;
 
       case 'poa1':
-        // Only POA1 expired
-        requestBody.documents = [];
-        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
-        requestBody.proofOfAddressCount = 1; // Only 1 POA needed
-        requestBody.skipFaceMatching = true; // No selfie for POA only
-        documentsRequired = ['Proof of Address 1'];
-        break;
-
       case 'poa2':
-        // Only POA2 expired
+        // Single POA update - can't differentiate between POA1 and POA2
         requestBody.documents = [];
-        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
-        requestBody.proofOfAddressCount = 1; // Only 1 POA needed
+        requestBody.additionalSteps = {
+          'UTILITY_BILL': {
+            utilityBillMinCount: 1  // Just 1 POA
+          }
+        };
         requestBody.skipFaceMatching = true; // No selfie for POA only
-        documentsRequired = ['Proof of Address 2'];
+        documentsRequired = ['Proof of Address'];
         break;
 
       case 'poa_both':
         // Both POAs expired
         requestBody.documents = [];
-        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
-        requestBody.proofOfAddressCount = 2; // Both POAs needed
+        requestBody.additionalSteps = {
+          'UTILITY_BILL': {
+            utilityBillMinCount: 2  // Both POAs
+          }
+        };
         requestBody.skipFaceMatching = true; // No selfie for POA only
         documentsRequired = ['Proof of Address 1', 'Proof of Address 2'];
         break;
@@ -194,23 +205,32 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       case 'passport':
         // Passport check for non-UK drivers
         requestBody.documents = ['PASSPORT'];
-        requestBody.additionalSteps = [];
-        requestBody.skipFaceMatching = true; // No selfie for passport only
+        requestBody.skipFaceMatching = true; // No selfie if already verified
         documentsRequired = ['Passport'];
         break;
 
       default:
-        // Default to full verification if type unknown
+        // Default to full verification
         requestBody.documents = ['DRIVER_LICENSE'];
-        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
-        requestBody.proofOfAddressCount = 2;
+        requestBody.additionalSteps = {
+          'UTILITY_BILL': {
+            utilityBillMinCount: 2
+          }
+        };
         documentsRequired = ['Driving License', 'Selfie', 'Proof of Address 1', 'Proof of Address 2'];
+    }
+
+    // Add document selection settings if needed
+    if (verificationType === 'full' && !isUKDriver) {
+      // For non-UK drivers, allow passport selection
+      requestBody.showDocumentSelection = true;
+      requestBody.documents = ['DRIVER_LICENSE', 'PASSPORT'];
+      documentsRequired.push('Passport (for non-UK drivers)');
     }
 
     console.log(`Idenfy session config for ${verificationType}:`, {
       documents: requestBody.documents,
       additionalSteps: requestBody.additionalSteps,
-      proofOfAddressCount: requestBody.proofOfAddressCount,
       skipFaceMatching: requestBody.skipFaceMatching
     });
 
@@ -253,7 +273,7 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   }
 }
 
-// Update driver verification status in Google Apps Script (keeping your existing function)
+// Keep your existing updateDriverVerificationStatus function unchanged
 async function updateDriverVerificationStatus(email, jobId, updates) {
   try {
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
