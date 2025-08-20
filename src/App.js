@@ -24,20 +24,20 @@ const DriverVerificationApp = () => {
   const scrollPositionRef = useRef(0);
   const formContainerRef = useRef(null);
 
-  // FIXED: Phone input handlers - no more cursor jumping!
-  const handlePhoneChange = (e) => {
+  // FIXED: Phone input handlers - no more cursor jumping! - Commented out as no longer used
+ // const handlePhoneChange = (e) => {
   // Get cursor position before change
-  const cursorPos = e.target.selectionStart;
+  //const cursorPos = e.target.selectionStart;
   // Only allow numbers
-  const value = e.target.value.replace(/\D/g, '');
-  setPhoneNumber(value);
+  //const value = e.target.value.replace(/\D/g, '');
+  //setPhoneNumber(value);
   // Restore cursor position after React re-render
-  setTimeout(() => {
-    if (e.target) {
-      e.target.setSelectionRange(cursorPos, cursorPos);
-    }
-  }, 0);
-};
+  //setTimeout(() => {
+   // if (e.target) {
+    //  e.target.setSelectionRange(cursorPos, cursorPos);
+   // }
+ // }, 0);
+//};
 
   const handleCountryChange = (e) => {
     setCountryCode(e.target.value);
