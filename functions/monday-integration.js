@@ -749,7 +749,11 @@ function parseBoardAData(item) {
     hasInsuranceIssues: false,
     hasDrivingBan: false,
     additionalDetails: '',
-    lastUpdated: ''
+    lastUpdated: '',
+    poa1ValidUntil: '',
+    poa2ValidUntil: '',
+    dvlaValidUntil: '',
+    licenseNextCheckDue: ''
   };
 
   item.column_values.forEach(col => {
@@ -791,6 +795,18 @@ function parseBoardAData(item) {
         break;
       case 'long_text_mktrs5a0': // License Address
         driver.licenseAddress = col.text || '';
+        break;
+      case 'date_mktr1keg': // POA1 Valid Until
+        driver.poa1ValidUntil = value?.date || '';
+        break;
+      case 'date_mktra1a6': // POA2 Valid Until
+        driver.poa2ValidUntil = value?.date || '';
+        break;
+      case 'date_mktrmjfr': // DVLA Valid Until
+        driver.dvlaValidUntil = value?.date || '';
+        break;
+      case 'date_mktsbgpy': // License Next Check Due
+        driver.licenseNextCheckDue = value?.date || '';
         break;
       case 'status': // Has Disability
         driver.hasDisability = value?.label === 'Yes';
