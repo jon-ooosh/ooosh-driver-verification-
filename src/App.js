@@ -81,8 +81,7 @@ const DriverVerificationApp = () => {
     
     // Apply font to body
     document.body.style.fontFamily = "'Montserrat', sans-serif";
-    document.body.style.fontSize = "110%";
-    
+        
     return () => {
       document.head.removeChild(link);
       document.body.style.fontFamily = '';
@@ -382,9 +381,20 @@ const DriverVerificationApp = () => {
         const driverData = await response.json();
         console.log('Driver status:', driverData);
         setDriverStatus(driverData);
-        
-        if (driverData.status === 'verified') {
-          setCurrentStep('document-upload');
+       // FIXED routing logic
+    if (driverStatus?.status === 'verified' || 
+        (driverStatus?.documents?.license?.valid && 
+         driverStatus?.documents?.poa1?.valid && 
+         driverStatus?.documents?.poa2?.valid && 
+         driverStatus?.documents?.dvlaCheck?.valid)) {
+      // All documents valid - skip to signature
+      // TODO: Add signature step here
+      setCurrentStep('complete'); // For now, mark as complete
+    } else if (!needsInsuranceQuestionnaire()) {
+      setCurrentStep('document-upload');
+    } else {
+      setCurrentStep('insurance-questionnaire');
+    }
         } else if (driverData.status === 'partial') {
           setCurrentStep('document-upload');
         } else {
@@ -807,19 +817,19 @@ const DriverVerificationApp = () => {
             />
           </div>
 
-          {/* FIXED: Phone Number - NO MORE KEY PROPS! */}
-          <div>
-            <label className="block text-2xl font-medium text-gray-700 mb-2">
-              Phone number <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-3">
-              {/* Country Code Dropdown - NO KEY! */}
-              <select
-                value={countryCode}
-                onChange={handleCountryChange}
-                className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl bg-white"
-                style={{ minWidth: '120px' }}
-              >
+         {/* FIXED: Phone Number - UNCONTROLLED COMPONENT */}
+<div>
+  <label className="block text-2xl font-medium text-gray-700 mb-2">
+    Phone number <span className="text-red-500">*</span>
+  </label>
+  <div className="flex gap-3">
+    {/* Country Code Dropdown */}
+    <select
+      value={countryCode}
+      onChange={handleCountryChange}
+      className="px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl bg-white"
+      style={{ minWidth: '120px' }}
+    >
                 <option value="+44">🇬🇧 +44</option>
                 <option value="+1">🇺🇸 +1</option>
                 <option value="+33">🇫🇷 +33</option>
@@ -851,17 +861,21 @@ const DriverVerificationApp = () => {
                 <option value="+52">🇲🇽 +52</option>
               </select>
               
-              {/* Phone Number Input - NO KEY! NUMBERS ONLY! */}
-              <input
-                type="tel"
-                value={phoneNumber}
-                onChange={handlePhoneChange}
-                className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl"
-                placeholder="123 456 7890"
-                autoComplete="tel-national"
-              />
-            </div>
-          </div>
+            {/* Phone Number Input - UNCONTROLLED! */}
+    <input
+      type="tel"
+      defaultValue={phoneNumber}
+      onBlur={(e) => {
+        const value = e.target.value.replace(/\D/g, '');
+        setPhoneNumber(value);
+        e.target.value = value;
+      }}
+      className="flex-1 px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-xl"
+      placeholder="123 456 7890"
+      autoComplete="tel-national"
+    />
+  </div>
+</div>
 
           {/* Error Display */}
           {error && (
