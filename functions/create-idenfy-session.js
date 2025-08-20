@@ -129,7 +129,7 @@ exports.handler = async (event, context) => {
   }
 };
 
-// CORRECTED: Proper Idenfy API format based on documentation
+// CORRECTED: Supports all selective verification types
 async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
@@ -142,97 +142,65 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
     // Base configuration
     const requestBody = {
       clientId: clientId,
-      
-      // Return URLs
       successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
       errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
       unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
-      
       locale: 'en',
       expiryTime: 3600,
       sessionLength: 1800,
+      tokenType: 'IDENTIFICATION',
       showInstructions: true
     };
 
-    // Configure documents based on verification type
-    let documentsRequired = [];
-    
+    // Configure based on verification type
     switch (verificationType) {
       case 'full':
-        // Complete verification for new drivers
+        // Driver license with automatic POA collection
         requestBody.documents = ['DRIVER_LICENSE'];
-        // CORRECTED: additionalSteps as object with UTILITY_BILL
-        requestBody.additionalSteps = {
-          'UTILITY_BILL': {
-            utilityBillMinCount: 2  // Request 2 POAs
-          }
-        };
-        documentsRequired = ['Driving License (front & back)', 'Selfie', 'Proof of Address 1', 'Proof of Address 2'];
+        // No additionalSteps needed - POAs collected automatically
         break;
 
-      case 'license':
-        // License renewal only (no POAs)
+      case 'license_only':
+        // JUST license, no POAs
         requestBody.documents = ['DRIVER_LICENSE'];
-        // No additional steps - just license
-        documentsRequired = ['Driving License (front & back)', 'Selfie'];
+        requestBody.additionalSteps = []; // Empty array to exclude POAs
         break;
 
       case 'poa1':
       case 'poa2':
-        // Single POA update - can't differentiate between POA1 and POA2
-        requestBody.documents = [];
-        requestBody.additionalSteps = {
-          'UTILITY_BILL': {
-            utilityBillMinCount: 1  // Just 1 POA
-          }
-        };
-        requestBody.skipFaceMatching = true; // No selfie for POA only
-        documentsRequired = ['Proof of Address'];
+        // Single POA update
+        requestBody.documents = []; // Empty array for no primary document
+        requestBody.additionalSteps = ['UTILITY_BILL']; // Array of strings
+        requestBody.utilityBillMinCount = 1; // Just 1 POA
+        requestBody.skipFaceMatching = true; // No selfie
         break;
 
       case 'poa_both':
         // Both POAs expired
-        requestBody.documents = [];
-        requestBody.additionalSteps = {
-          'UTILITY_BILL': {
-            utilityBillMinCount: 2  // Both POAs
-          }
-        };
-        requestBody.skipFaceMatching = true; // No selfie for POA only
-        documentsRequired = ['Proof of Address 1', 'Proof of Address 2'];
+        requestBody.documents = []; // Empty array
+        requestBody.additionalSteps = ['UTILITY_BILL']; // Array of strings
+        requestBody.utilityBillMinCount = 2; // Request 2 POAs
+        requestBody.skipFaceMatching = true; // No selfie
         break;
 
-      case 'passport':
-        // Passport check for non-UK drivers
+      case 'passport_only':
+        // Passport for non-UK drivers
         requestBody.documents = ['PASSPORT'];
+        requestBody.additionalSteps = []; // No POAs needed
         requestBody.skipFaceMatching = true; // No selfie if already verified
-        documentsRequired = ['Passport'];
         break;
 
       default:
         // Default to full verification
         requestBody.documents = ['DRIVER_LICENSE'];
-        requestBody.additionalSteps = {
-          'UTILITY_BILL': {
-            utilityBillMinCount: 2
-          }
-        };
-        documentsRequired = ['Driving License', 'Selfie', 'Proof of Address 1', 'Proof of Address 2'];
     }
 
-    // Add document selection settings if needed
-    if (verificationType === 'full' && !isUKDriver) {
-      // For non-UK drivers, allow passport selection
-      requestBody.showDocumentSelection = true;
-      requestBody.documents = ['DRIVER_LICENSE', 'PASSPORT'];
-      documentsRequired.push('Passport (for non-UK drivers)');
-    }
-
-    console.log(`Idenfy session config for ${verificationType}:`, {
+    console.log(`Idenfy session config for ${verificationType}:`, JSON.stringify({
       documents: requestBody.documents,
       additionalSteps: requestBody.additionalSteps,
+      utilityBillMinCount: requestBody.utilityBillMinCount,
       skipFaceMatching: requestBody.skipFaceMatching
-    });
+    }, null, 2));
 
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
@@ -260,8 +228,7 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       sessionToken: result.authToken,
       scanRef: result.scanRef,
       clientId: clientId,
-      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`,
-      documentsRequired: documentsRequired
+      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`
     };
 
   } catch (error) {
