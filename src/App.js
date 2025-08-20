@@ -119,7 +119,8 @@ const DriverVerificationApp = () => {
       
       handleVerificationComplete(status, job, session);
     }
-  }, []);
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // Added eslint-disable comment
 
   const validateJobAndFetchDetails = async (jobIdParam) => {
     setLoading(true);
@@ -349,17 +350,18 @@ const DriverVerificationApp = () => {
     return true; // Always require for new hires
   };
 
-  const isDocumentValid = (expiryDateString) => {
-    if (!expiryDateString) return false;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const expiryDate = new Date(expiryDateString);
-    expiryDate.setHours(0, 0, 0, 0);
-    
-    return expiryDate >= today;
-  };
+  // Removed this as defined elsewhere
+ // const isDocumentValid = (expiryDateString) => {
+ //   if (!expiryDateString) return false;
+ //   
+ //   const today = new Date();
+  //  today.setHours(0, 0, 0, 0);
+  //  
+ //   const expiryDate = new Date(expiryDateString);
+  //  expiryDate.setHours(0, 0, 0, 0);
+ //   
+ //   return expiryDate >= today;
+//  };
 
   const checkDriverStatus = async () => {
     try {
@@ -908,7 +910,8 @@ const DriverVerificationApp = () => {
           additionalDetails: driverStatus.insuranceData.additionalDetails || ''
         });
       }
-    }, [driverStatus?.insuranceData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleQuestionChange = (field, value) => {
       preserveScrollPosition();
