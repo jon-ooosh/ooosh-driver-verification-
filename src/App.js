@@ -379,7 +379,7 @@ const DriverVerificationApp = () => {
  //   return expiryDate >= today;
 //  };
 
-  const checkDriverStatus = async () => {
+ const checkDriverStatus = async () => {
   try {
     console.log('Checking driver status for:', driverEmail);
     
@@ -390,26 +390,29 @@ const DriverVerificationApp = () => {
       console.log('Driver status:', driverData);
       setDriverStatus(driverData);
       
-      // FIXED routing logic
-      if (driverStatus?.status === 'verified' || 
-          (driverStatus?.documents?.license?.valid && 
-           driverStatus?.documents?.poa1?.valid && 
-           driverStatus?.documents?.poa2?.valid && 
-           driverStatus?.documents?.dvlaCheck?.valid)) {
+      // FIXED routing logic - using driverData instead of driverStatus
+      if (driverData?.status === 'verified' || 
+          (driverData?.documents?.license?.valid && 
+           driverData?.documents?.poa1?.valid && 
+           driverData?.documents?.poa2?.valid && 
+           driverData?.documents?.dvlaCheck?.valid)) {
         // All documents valid - skip to signature
         // TODO: Add signature step here
         setCurrentStep('complete'); // For now, mark as complete
+      } else if (driverData.status === 'partial') {
+        setCurrentStep('document-upload');
       } else if (!needsInsuranceQuestionnaire()) {
         setCurrentStep('document-upload');
       } else {
         setCurrentStep('insurance-questionnaire');
       }
-    } else if (driverData.status === 'partial') {
-      setCurrentStep('document-upload');
     } else {
+      console.log('Driver not found, treating as new driver');
+      setDriverStatus({ status: 'new', email: driverEmail });
       setCurrentStep('insurance-questionnaire');
     }
-  } catch (err) {  
+    
+  } catch (err) {
     console.error('Error checking driver status:', err);
     setDriverStatus({ status: 'new', email: driverEmail });
     setCurrentStep('insurance-questionnaire');
