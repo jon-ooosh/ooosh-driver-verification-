@@ -477,26 +477,77 @@ setCurrentStep('insurance-questionnaire');
   };
 
   const generateIdenfyToken = async () => {
-    setLoading(true);
-    setError('');
+  setLoading(true);
+  setError('');
+  
+  try {
+    console.log('Starting Idenfy verification for:', driverEmail);
     
-    try {
-      console.log('Starting Idenfy verification for:', driverEmail);
+    // Determine what type of verification is needed
+    let verificationType = 'full';
+    const docs = driverStatus?.documents;
+    
+    if (docs) {
+      const licenseValid = docs.license?.valid;
+      const poa1Valid = docs.poa1?.valid;
+      const poa2Valid = docs.poa2?.valid;
       
-      const response = await fetch('/.netlify/functions/create-idenfy-session', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ 
-          email: driverEmail, 
-          jobId: jobId,
-          driverName: driverStatus?.name 
-        })
-      });
+      // Determine verification type based on what's expired
+      if (!licenseValid && poa1Valid && poa2Valid) {
+        verificationType = 'license'; // Only license expired
+      } else if (licenseValid && !poa1Valid && poa2Valid) {
+        verificationType = 'poa1'; // Only POA1 expired
+      } else if (licenseValid && poa1Valid && !poa2Valid) {
+        verificationType = 'poa2'; // Only POA2 expired
+      } else if (licenseValid && !poa1Valid && !poa2Valid) {
+        verificationType = 'poa_both'; // Both POAs expired
+      } else {
+        verificationType = 'full'; // Everything expired or new driver
+      }
+    }
+    
+    console.log('Verification type determined:', verificationType);
+    
+    // Show user what needs to be uploaded
+    let verificationMessage = '';
+    switch(verificationType) {
+      case 'license':
+        verificationMessage = 'Your driving license needs renewal';
+        break;
+      case 'poa1':
+        verificationMessage = 'Your first proof of address needs updating';
+        break;
+      case 'poa2':
+        verificationMessage = 'Your second proof of address needs updating';
+        break;
+      case 'poa_both':
+        verificationMessage = 'Both proof of address documents need updating';
+        break;
+      default:
+        verificationMessage = 'Complete verification required';
+    }
+    
+    console.log(verificationMessage);
+    
+    // Determine if UK driver
+    const isUKDriver = driverStatus?.licenseIssuedBy === 'UK' || true; // Default to UK
+    
+    const response = await fetch('/.netlify/functions/create-idenfy-session', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ 
+        email: driverEmail, 
+        jobId: jobId,
+        driverName: driverStatus?.name,
+        verificationType: verificationType,
+        isUKDriver: isUKDriver
+      })
+    });
 
-      const data = await response.json();
+    const data = await response.json();
       console.log('Idenfy session response:', data);
 
       if (!response.ok) {
