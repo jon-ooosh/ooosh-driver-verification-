@@ -380,48 +380,43 @@ const DriverVerificationApp = () => {
 //  };
 
   const checkDriverStatus = async () => {
-    try {
-      console.log('Checking driver status for:', driverEmail);
+  try {
+    console.log('Checking driver status for:', driverEmail);
+    
+    const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+    
+    if (response.ok) {
+      const driverData = await response.json();
+      console.log('Driver status:', driverData);
+      setDriverStatus(driverData);
       
-      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
-      
-      if (response.ok) {
-        const driverData = await response.json();
-        console.log('Driver status:', driverData);
-        setDriverStatus(driverData);
-       // FIXED routing logic
-    if (driverStatus?.status === 'verified' || 
-        (driverStatus?.documents?.license?.valid && 
-         driverStatus?.documents?.poa1?.valid && 
-         driverStatus?.documents?.poa2?.valid && 
-         driverStatus?.documents?.dvlaCheck?.valid)) {
-      // All documents valid - skip to signature
-      // TODO: Add signature step here
-      setCurrentStep('complete'); // For now, mark as complete
-    } else if (!needsInsuranceQuestionnaire()) {
+      // FIXED routing logic
+      if (driverStatus?.status === 'verified' || 
+          (driverStatus?.documents?.license?.valid && 
+           driverStatus?.documents?.poa1?.valid && 
+           driverStatus?.documents?.poa2?.valid && 
+           driverStatus?.documents?.dvlaCheck?.valid)) {
+        // All documents valid - skip to signature
+        // TODO: Add signature step here
+        setCurrentStep('complete'); // For now, mark as complete
+      } else if (!needsInsuranceQuestionnaire()) {
+        setCurrentStep('document-upload');
+      } else {
+        setCurrentStep('insurance-questionnaire');
+      }
+    } else if (driverData.status === 'partial') {
       setCurrentStep('document-upload');
     } else {
       setCurrentStep('insurance-questionnaire');
     }
-        } else if (driverData.status === 'partial') {
-          setCurrentStep('document-upload');
-        } else {
-          setCurrentStep('insurance-questionnaire');
-        }
-      } else {
-        console.log('Driver not found, treating as new driver');
-        setDriverStatus({ status: 'new', email: driverEmail });
-        setCurrentStep('insurance-questionnaire');
-      }
-      
-    } catch (err) {
+  } catch (err) {  
     console.error('Error checking driver status:', err);
     setDriverStatus({ status: 'new', email: driverEmail });
     setCurrentStep('insurance-questionnaire');
   }
 };
-
-  const handleInsuranceComplete = async (insuranceFormData) => {
+      
+     const handleInsuranceComplete = async (insuranceFormData) => {
     console.log('Insurance questionnaire completed:', insuranceFormData);
     setLoading(true);
     
