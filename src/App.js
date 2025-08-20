@@ -26,10 +26,18 @@ const DriverVerificationApp = () => {
 
   // FIXED: Phone input handlers - no more cursor jumping!
   const handlePhoneChange = (e) => {
-    // Only allow numbers
-    const value = e.target.value.replace(/\D/g, '');
-    setPhoneNumber(value);
-  };
+  // Get cursor position before change
+  const cursorPos = e.target.selectionStart;
+  // Only allow numbers
+  const value = e.target.value.replace(/\D/g, '');
+  setPhoneNumber(value);
+  // Restore cursor position after React re-render
+  setTimeout(() => {
+    if (e.target) {
+      e.target.setSelectionRange(cursorPos, cursorPos);
+    }
+  }, 0);
+};
 
   const handleCountryChange = (e) => {
     setCountryCode(e.target.value);
