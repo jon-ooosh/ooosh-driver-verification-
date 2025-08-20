@@ -1,5 +1,5 @@
 // File: functions/create-idenfy-session.js
-// FIXED VERSION - Removes name comparison to prevent mismatches
+// ENHANCED VERSION - Supports selective document requirements
 
 const fetch = require('node-fetch');
 
@@ -34,8 +34,15 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const { email, jobId, driverName } = JSON.parse(event.body);
-    console.log('Creating Idenfy session for:', { email, jobId });
+    const { 
+      email, 
+      jobId, 
+      driverName,
+      verificationType = 'full', // full, license, poa1, poa2, poa_both, passport
+      isUKDriver = true 
+    } = JSON.parse(event.body);
+    
+    console.log('Creating Idenfy session for:', { email, jobId, verificationType, isUKDriver });
 
     if (!email || !jobId) {
       return {
@@ -51,18 +58,19 @@ exports.handler = async (event, context) => {
       
       const mockResponse = {
         success: true,
-        sessionToken: 'mock_session_' + Date.now(),
+        sessionToken: `mock_${verificationType}_${Date.now()}`,
         scanRef: 'MOCK_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
         clientId: email.replace('@', '_at_').replace('.', '_dot_'),
-        redirectUrl: `https://ooosh-driver-verification.netlify.app/verification-complete?status=mock&session=mock_session_${Date.now()}`,
+        redirectUrl: `https://ooosh-driver-verification.netlify.app/?status=mock&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
+        verificationType: verificationType,
         message: 'Mock Idenfy session created for development'
       };
       
       return { statusCode: 200, headers, body: JSON.stringify(mockResponse) };
     }
 
-    // Create Idenfy session with NO name comparison
-    const idenfyResponse = await createIdenfySession(email, jobId);
+    // Create Idenfy session with specific document requirements
+    const idenfyResponse = await createIdenfySession(email, jobId, verificationType, isUKDriver);
     
     if (!idenfyResponse.success) {
       throw new Error(idenfyResponse.error || 'Failed to create Idenfy session');
@@ -72,6 +80,7 @@ exports.handler = async (event, context) => {
     await updateDriverVerificationStatus(email, jobId, {
       idenfySessionId: idenfyResponse.scanRef,
       idenfyStatus: 'initiated',
+      verificationType: verificationType,
       status: 'document_upload_started'
     });
 
@@ -86,6 +95,8 @@ exports.handler = async (event, context) => {
         scanRef: idenfyResponse.scanRef,
         clientId: idenfyResponse.clientId,
         redirectUrl: idenfyResponse.redirectUrl,
+        verificationType: verificationType,
+        documentsRequired: idenfyResponse.documentsRequired,
         message: 'Idenfy session created successfully'
       })
     };
@@ -103,41 +114,105 @@ exports.handler = async (event, context) => {
   }
 };
 
-// FIXED: Create Idenfy session WITHOUT name fields to prevent mismatches
-async function createIdenfySession(email, jobId) {
+// ENHANCED: Create Idenfy session with selective document requirements
+async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
     
     const IDENFY_BASE_URL = 'https://ivs.idenfy.com';
-    const clientId = `ooosh_${jobId}_${email.replace('@', '_').replace('.', '_')}_${Date.now()}`;
+    const clientId = `ooosh_${jobId}_${verificationType}_${Date.now()}`;
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-    // FIXED: Remove firstName/lastName to prevent name mismatch issues
+    // Base configuration
     const requestBody = {
       clientId: clientId,
       
       // Return URLs for different outcomes
-      successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}`,
-      errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}`,
-      unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}`,
-      
-      // REMOVED: callbackUrl - not allowed on this Idenfy plan
-      // We'll handle result processing through the return URLs instead
+      successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
+      errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
+      unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
       
       locale: 'en',
-      
-      // License + automatic POA extraction (no additionalSteps needed)
-      documents: ['DRIVER_LICENSE'],
-      
-      // Session settings
       expiryTime: 3600,
       sessionLength: 1800,
       tokenType: 'IDENTIFICATION',
       showInstructions: true
     };
 
-    console.log('FIXED: Sending request to Idenfy WITHOUT name fields:', JSON.stringify(requestBody, null, 2));
+    // Configure documents based on verification type
+    let documentsRequired = [];
+    
+    switch (verificationType) {
+      case 'full':
+        // Complete verification for new drivers or everything expired
+        requestBody.documents = ['DRIVER_LICENSE'];
+        // Idenfy will automatically request POAs with driver license
+        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
+        requestBody.proofOfAddressCount = 2; // Request 2 POAs
+        documentsRequired = ['Driving License (front & back)', 'Selfie', 'Proof of Address 1', 'Proof of Address 2'];
+        if (!isUKDriver) {
+          requestBody.documents.push('PASSPORT');
+          documentsRequired.push('Passport');
+        }
+        break;
+
+      case 'license':
+        // License renewal only
+        requestBody.documents = ['DRIVER_LICENSE'];
+        requestBody.additionalSteps = []; // No POAs needed
+        documentsRequired = ['Driving License (front & back)', 'Selfie'];
+        break;
+
+      case 'poa1':
+        // Only POA1 expired
+        requestBody.documents = [];
+        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
+        requestBody.proofOfAddressCount = 1; // Only 1 POA needed
+        requestBody.skipFaceMatching = true; // No selfie for POA only
+        documentsRequired = ['Proof of Address 1'];
+        break;
+
+      case 'poa2':
+        // Only POA2 expired
+        requestBody.documents = [];
+        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
+        requestBody.proofOfAddressCount = 1; // Only 1 POA needed
+        requestBody.skipFaceMatching = true; // No selfie for POA only
+        documentsRequired = ['Proof of Address 2'];
+        break;
+
+      case 'poa_both':
+        // Both POAs expired
+        requestBody.documents = [];
+        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
+        requestBody.proofOfAddressCount = 2; // Both POAs needed
+        requestBody.skipFaceMatching = true; // No selfie for POA only
+        documentsRequired = ['Proof of Address 1', 'Proof of Address 2'];
+        break;
+
+      case 'passport':
+        // Passport check for non-UK drivers
+        requestBody.documents = ['PASSPORT'];
+        requestBody.additionalSteps = [];
+        requestBody.skipFaceMatching = true; // No selfie for passport only
+        documentsRequired = ['Passport'];
+        break;
+
+      default:
+        // Default to full verification if type unknown
+        requestBody.documents = ['DRIVER_LICENSE'];
+        requestBody.additionalSteps = ['PROOF_OF_ADDRESS'];
+        requestBody.proofOfAddressCount = 2;
+        documentsRequired = ['Driving License', 'Selfie', 'Proof of Address 1', 'Proof of Address 2'];
+    }
+
+    console.log(`Idenfy session config for ${verificationType}:`, {
+      documents: requestBody.documents,
+      additionalSteps: requestBody.additionalSteps,
+      proofOfAddressCount: requestBody.proofOfAddressCount,
+      skipFaceMatching: requestBody.skipFaceMatching
+    });
 
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
@@ -150,9 +225,9 @@ async function createIdenfySession(email, jobId) {
 
     const result = await response.json();
     console.log('Idenfy API response status:', response.status);
-    console.log('Idenfy API response:', JSON.stringify(result, null, 2));
 
     if (!response.ok) {
+      console.error('Idenfy API error:', result);
       throw new Error(`Idenfy API error (${response.status}): ${result.message || result.error || response.statusText}`);
     }
 
@@ -165,7 +240,8 @@ async function createIdenfySession(email, jobId) {
       sessionToken: result.authToken,
       scanRef: result.scanRef,
       clientId: clientId,
-      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`
+      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`,
+      documentsRequired: documentsRequired
     };
 
   } catch (error) {
@@ -177,7 +253,7 @@ async function createIdenfySession(email, jobId) {
   }
 }
 
-// Update driver verification status in Google Apps Script
+// Update driver verification status in Google Apps Script (keeping your existing function)
 async function updateDriverVerificationStatus(email, jobId, updates) {
   try {
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
