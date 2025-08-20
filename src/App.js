@@ -1708,46 +1708,46 @@ const DriverVerificationApp = () => {
  );
 
  // FIXED: renderRejected with proper <a> tag
- const renderRejected = () => (
-   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-     <div className="text-center py-8">
-       <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-       <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification issues</h2>
-       <p className="text-xl text-gray-600 mb-4">We couldn't approve your verification.</p>
-       
-       <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-         <p className="text-lg text-red-800">
-           This may be due to document quality, insurance requirements, or other factors. 
-           Please contact us for assistance.
-         </p>
-       </div>
+const renderRejected = () => (
+  <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+    <div className="text-center py-8">
+      <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+      <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification issues</h2>
+      <p className="text-xl text-gray-600 mb-4">We couldn't approve your verification.</p>
+      
+      <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+        <p className="text-lg text-red-800">
+          This may be due to document quality, insurance requirements, or other factors. 
+          Please contact us for assistance.
+        </p>
+      </div>
 
-       <div className="space-y-3">
-       <button
-            onClick={startVerification}
-            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
-          >
-            Try again
-          </button>
-          
-          
-            href="tel:01273911382"
-            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Call us
-          </a>
+      <div className="space-y-3">
+        <button
+          onClick={startVerification}
+          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
+        >
+          Try again
+        </button>
+        
+        
+          href="tel:01273911382"
+          className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
+        >
+          <Phone className="h-4 w-4 mr-2" />
+          Call us
+        </a>
 
-          <button
-            onClick={startAgain}
-            className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
-          >
-            Start verification again
-          </button>
-       </div>
-     </div>
-   </div>
- );
+        <button
+          onClick={startAgain}
+          className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
+        >
+          Start verification again
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
  // Main render logic
  const renderStep = () => {
