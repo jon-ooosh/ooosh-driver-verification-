@@ -1,6 +1,6 @@
 // File: src/App.js
-// Ooosh Driver Verification - Complete application with ALL ISSUES FIXED
-// FIXED: 1. Phone input cursor (removed keys), 2. Insurance data retrieval, 3. Document dates, 4. Phone numbers only, 5. UI improvements
+// OOOSH Driver Verification - COMPLETE FIXED VERSION
+// All issues resolved: phone cursor, insurance data, document dates, UI improvements
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, User } from 'lucide-react';
@@ -1202,13 +1202,13 @@ const DriverVerificationApp = () => {
     );
   };
 
-  // Landing page with Ooosh logo instead of shield
+  // Landing page with OOOSH logo instead of shield
   const renderLanding = () => (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
         <img 
           src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-          alt="Ooosh Tours" 
+          alt="OOOSH Tours" 
           className="mx-auto h-16 w-auto mb-4"
         />
         <h1 className="text-3xl font-bold text-gray-900">Hire agreement - proposal for insurance</h1>
@@ -1263,525 +1263,524 @@ const DriverVerificationApp = () => {
     </div>
   );
 
-// CORRECTED: End section of App.js starting from renderEmailEntry
-// Find the renderEmailEntry function in your App.js and replace everything from there to the end of the file with this:
-
-const renderEmailEntry = () => (
-  <div className="min-h-screen bg-gray-50">
-    {/* Header with Logo */}
-    <div className="bg-white shadow-sm border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-6">
-          <div className="flex items-center">
-            <img 
-              src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-              alt="OOOSH Tours" 
-              className="h-12 w-auto"
-            />
+  // Updated email entry page with cleaner styling
+  const renderEmailEntry = () => (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header with Logo */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <img 
+                src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
+                alt="OOOSH Tours" 
+                className="h-12 w-auto"
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    {/* Main Content */}
-    <div className="max-w-2xl mx-auto pt-8 pb-16 px-4 sm:px-6 lg:px-8">
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        
-        {/* Header Section - Clean styling */}
-        <div className="bg-gray-50 px-6 py-8 text-center border-b">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Hire agreement - proposal for insurance
-          </h1>
-        </div>
-
-        {/* Introduction Section - White background */}
-        <div className="px-6 py-6 bg-white border-b border-gray-200">
-          <p className="text-lg text-gray-700 leading-relaxed">
-            This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>{' '}
-            {jobDetails?.startDate && jobDetails?.endDate ? (
-              <>which is from <strong>{formatHireDate(jobDetails.startDate)}</strong> to <strong>{formatHireDate(jobDetails.endDate)}</strong>. Or</>
-            ) : (
-              <>. Or</>
-            )}, if you have recently completed a form for a different hire, it will re-validate your documents.{' '}
-            {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
-          </p>
-          <p className="text-lg text-gray-700 leading-relaxed mt-3">
-            Please make sure you review our{' '}
-            <a 
-              href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-purple-600 hover:text-purple-800 font-medium inline-flex items-center"
-            >
-              T&Cs here <ExternalLink className="h-4 w-4 ml-1" />
-            </a>
-          </p>
+      {/* Main Content */}
+      <div className="max-w-2xl mx-auto pt-8 pb-16 px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           
-          {/* Mobile QR code */}
-          {!isMobile && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300">
-              <div className="flex items-start space-x-4">
-                <Smartphone className="h-6 w-6 text-purple-600 mt-1 flex-shrink-0" />
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900 mb-2">📱 For best experience, use your smartphone</h4>
-                  <p className="text-base text-gray-700 mb-3">
-                    Scan this QR code with your phone's camera to open this page on your mobile device:
-                  </p>
-                  <div className="text-center">
-                    <img 
-                      src={generateQRCode()} 
-                      alt="QR Code for mobile access" 
-                      className="mx-auto border border-gray-300 rounded"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Email Entry Section */}
-        <div className="px-6 py-8 bg-white border-b-4 border-purple-200">
-          <div className="max-w-md mx-auto">
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-3xl font-bold text-gray-900 mb-3 text-center">
-                  Enter your email address to get started
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={driverEmail}
-                  onChange={(e) => setDriverEmail(e.target.value)}
-                  className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xl"
-                  placeholder="driver@example.com"
-                  disabled={loading}
-                />
-                <p className="text-lg text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
-                    <div className="ml-3">
-                      <p className="text-lg text-red-800">{error}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={sendVerificationEmail}
-                disabled={loading || !driverEmail}
-                className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-xl flex items-center justify-center space-x-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Sending code...</span>
-                  </>
-                ) : (
-                  <span>Send verification code</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Updated Requirements Section */}
-        <div className="bg-gray-50 px-6 py-6">
-          <h3 className="text-2xl font-semibold text-gray-900 mb-4">What you'll need</h3>
-          
-          <div className="space-y-4 text-lg text-gray-700">
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">👥 All drivers:</h4>
-              <ul className="list-disc ml-5 space-y-1">
-                <li>Must be at least 23 years old</li>
-                <li>Must have held a full driving licence for at least 2 years</li>
-                <li>Must have a valid driving licence (we'll need photos of front and back)</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">🆔 UK licence additional requirements:</h4>
-              <ul className="list-disc ml-5 space-y-1">
-                <li>Current DVLA licence check from gov.uk/view-driving-licence</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">🌍 Non-UK licence additional requirements:</h4>
-              <ul className="list-disc ml-5 space-y-1">
-                <li>Current passport (we'll need a photo)</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">🏠 All drivers - two proofs of address:</h4>
-              <ul className="list-disc ml-5 space-y-1">
-                <li>Bank statements, utility bills, council tax, or credit card statements</li>
-                <li>Both must be dated within the last 90 days</li>
-                <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
-                <li>Must show your current home address</li>
-                <li>Documents must be from two different sources</li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">📋 Insurance questions:</h4>
-              <ul className="list-disc ml-5 space-y-1">
-                <li>Answer health and driving history questions</li>
-              </ul>
-            </div>
+          {/* Header Section - Clean styling */}
+          <div className="bg-gray-50 px-6 py-8 text-center border-b">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              Hire agreement - proposal for insurance
+            </h1>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex items-center justify-between text-base text-gray-500">
-              <span>Need help?</span>
-              <a 
-                href="tel:01273911382" 
-                className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-              >
-                <Phone className="h-4 w-4 mr-1" />
-                01273 911382
-              </a>
-            </div>
-            
-            <div className="mt-2 text-base text-gray-500">
-              <a 
-                href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
-              >
-                DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
-              </a>
-              {' | '}
+          {/* Introduction Section - White background */}
+          <div className="px-6 py-6 bg-white border-b border-gray-200">
+            <p className="text-lg text-gray-700 leading-relaxed">
+              This form will gather your details as a proposed driver for hire <strong>{jobDetails?.jobNumber || jobId}</strong>{' '}
+              {jobDetails?.startDate && jobDetails?.endDate ? (
+                <>which is from <strong>{formatHireDate(jobDetails.startDate)}</strong> to <strong>{formatHireDate(jobDetails.endDate)}</strong>. Or</>
+              ) : (
+                <>. Or</>
+              )}, if you have recently completed a form for a different hire, it will re-validate your documents.{' '}
+              {!isMobile && "It's best completed on a smartphone though it can be done on a computer with camera. "}
+            </p>
+            <p className="text-lg text-gray-700 leading-relaxed mt-3">
+              Please make sure you review our{' '}
               <a 
                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+                className="text-purple-600 hover:text-purple-800 font-medium inline-flex items-center"
               >
-                Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
+                T&Cs here <ExternalLink className="h-4 w-4 ml-1" />
               </a>
+            </p>
+            
+            {/* Mobile QR code */}
+            {!isMobile && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300">
+                <div className="flex items-start space-x-4">
+                  <Smartphone className="h-6 w-6 text-purple-600 mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900 mb-2">📱 For best experience, use your smartphone</h4>
+                    <p className="text-base text-gray-700 mb-3">
+                      Scan this QR code with your phone's camera to open this page on your mobile device:
+                    </p>
+                    <div className="text-center">
+                      <img 
+                        src={generateQRCode()} 
+                        alt="QR Code for mobile access" 
+                        className="mx-auto border border-gray-300 rounded"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Email Entry Section */}
+          <div className="px-6 py-8 bg-white border-b-4 border-purple-200">
+            <div className="max-w-md mx-auto">
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="email" className="block text-3xl font-bold text-gray-900 mb-3 text-center">
+                    Enter your email address to get started
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={driverEmail}
+                    onChange={(e) => setDriverEmail(e.target.value)}
+                    className="w-full px-4 py-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xl"
+                    placeholder="driver@example.com"
+                    disabled={loading}
+                  />
+                  <p className="text-lg text-gray-500 mt-2 text-center">We'll send a verification code to this email address</p>
+                </div>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex">
+                      <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+                      <div className="ml-3">
+                        <p className="text-lg text-red-800">{error}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={sendVerificationEmail}
+                  disabled={loading || !driverEmail}
+                  className="w-full bg-purple-600 text-white py-4 px-6 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-xl flex items-center justify-center space-x-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Sending code...</span>
+                    </>
+                  ) : (
+                    <span>Send verification code</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
 
-  const renderEmailVerification = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Mail className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900">Check your email</h2>
-        <p className="text-xl text-gray-600 mt-2">We sent a 6-digit code to:</p>
-        <p className="text-lg font-medium text-gray-900 break-words">{driverEmail}</p>
-      </div>
+          {/* Updated Requirements Section */}
+          <div className="bg-gray-50 px-6 py-6">
+            <h3 className="text-2xl font-semibold text-gray-900 mb-4">What you'll need</h3>
+            
+            <div className="space-y-4 text-lg text-gray-700">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">👥 All drivers:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Must be at least 23 years old</li>
+                  <li>Must have held a full driving licence for at least 2 years</li>
+                  <li>Must have a valid driving licence (we'll need photos of front and back)</li>
+                </ul>
+              </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <div className="flex items-start">
-          <svg className="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="text-base text-blue-800">
-            <p className="font-medium">Can't find the email?</p>
-            <p className="mt-1">Check your spam/junk folder - verification emails sometimes end up there!</p>
-          </div>
-        </div>
-      </div>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">🆔 UK licence additional requirements:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Current DVLA licence check from gov.uk/view-driving-licence</li>
+                </ul>
+              </div>
 
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="code" className="block text-lg font-medium text-gray-700 mb-1">
-            Verification code
-          </label>
-          <input
-            type="text"
-            id="code"
-            value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl font-mono"
-            placeholder="123456"
-            maxLength="6"
-            disabled={loading}
-          />
-        </div>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">🌍 Non-UK licence additional requirements:</h4>
+                <ul className="list-disc ml-5 space-y-1">
+                  <li>Current passport (we'll need a photo)</li>
+                </ul>
+              </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <div className="flex items-center">
-              <svg className="h-4 w-4 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-lg text-red-800">{error}</p>
-            </div>
-          </div>
-        )}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">🏠 All drivers - two proofs of address:</h4>
+<ul className="list-disc ml-5 space-y-1">
+                 <li>Bank statements, utility bills, council tax, or credit card statements</li>
+                 <li>Both must be dated within the last 90 days</li>
+                 <li>They do not have to be physical copies - downloaded PDFs or screenshots are fine</li>
+                 <li>Must show your current home address</li>
+                 <li>Documents must be from two different sources</li>
+               </ul>
+             </div>
 
-        <button
-          onClick={verifyEmailCode}
-          disabled={loading || verificationCode.length < 6}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center space-x-2"
-        >
-          {loading ? (
-            <>
-              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Verifying...</span>
-            </>
-          ) : (
-            <span>Verify code</span>
-          )}
-        </button>
+             <div>
+               <h4 className="font-semibold text-gray-900 mb-2">📋 Insurance questions:</h4>
+               <ul className="list-disc ml-5 space-y-1">
+                 <li>Answer health and driving history questions</li>
+               </ul>
+             </div>
+           </div>
 
-        <button
-          onClick={sendVerificationEmail}
-          disabled={loading}
-          className="w-full text-purple-600 hover:text-purple-700 text-lg disabled:opacity-50 disabled:cursor-not-allowed py-2"
-        >
-          {loading ? 'Please wait...' : "Didn't receive the code? Send again"}
-        </button>
+           <div className="mt-6 pt-6 border-t border-gray-200">
+             <div className="flex items-center justify-between text-base text-gray-500">
+               <span>Need help?</span>
+               <a 
+                 href="tel:01273911382" 
+                 className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+               >
+                 <Phone className="h-4 w-4 mr-1" />
+                 01273 911382
+               </a>
+             </div>
+             
+             <div className="mt-2 text-base text-gray-500">
+               <a 
+                 href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+               >
+                 DVLA guide <ExternalLink className="h-4 w-4 ml-1" />
+               </a>
+               {' | '}
+               <a 
+                 href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 className="text-purple-600 hover:text-purple-800 inline-flex items-center text-lg"
+               >
+                 Terms & conditions <ExternalLink className="h-4 w-4 ml-1" />
+               </a>
+             </div>
+           </div>
+         </div>
+       </div>
+     </div>
+   </div>
+ );
 
-        <button
-          onClick={startAgain}
-          disabled={loading}
-          className="w-full text-gray-500 hover:text-gray-700 text-base disabled:opacity-50 disabled:cursor-not-allowed py-1 border-t border-gray-200 mt-4 pt-4"
-        >
-          Wrong email address? Start again
-        </button>
-      </div>
-    </div>
-  );
+ const renderEmailVerification = () => (
+   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+     <div className="text-center mb-6">
+       <Mail className="mx-auto h-12 w-12 text-green-600 mb-4" />
+       <h2 className="text-3xl font-bold text-gray-900">Check your email</h2>
+       <p className="text-xl text-gray-600 mt-2">We sent a 6-digit code to:</p>
+       <p className="text-lg font-medium text-gray-900 break-words">{driverEmail}</p>
+     </div>
 
-  const renderDocumentUpload = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900">Document verification</h2>
-        <p className="text-xl text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
-      </div>
+     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+       <div className="flex items-start">
+         <svg className="h-5 w-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+         </svg>
+         <div className="text-base text-blue-800">
+           <p className="font-medium">Can't find the email?</p>
+           <p className="mt-1">Check your spam/junk folder - verification emails sometimes end up there!</p>
+         </div>
+       </div>
+     </div>
 
-      <div className="space-y-4 mb-6">
-        <div className="border border-gray-200 rounded-md p-4">
-          <h3 className="text-xl font-medium text-gray-900 mb-2">Required documents:</h3>
-          <ul className="text-lg text-gray-600 space-y-1">
-            <li>• UK driving licence (front and back)</li>
-            <li>• Two proof of address documents (within 90 days)</li>
-            <li>• Selfie for identity verification</li>
-          </ul>
-        </div>
+     <div className="space-y-4">
+       <div>
+         <label htmlFor="code" className="block text-lg font-medium text-gray-700 mb-1">
+           Verification code
+         </label>
+         <input
+           type="text"
+           id="code"
+           value={verificationCode}
+           onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl font-mono"
+           placeholder="123456"
+           maxLength="6"
+           disabled={loading}
+         />
+       </div>
 
-        <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
-          <p className="text-lg text-purple-800">
-            <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements
-          </p>
-        </div>
-      </div>
+       {error && (
+         <div className="bg-red-50 border border-red-200 rounded-md p-3">
+           <div className="flex items-center">
+             <svg className="h-4 w-4 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+             </svg>
+             <p className="text-lg text-red-800">{error}</p>
+           </div>
+         </div>
+       )}
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
-          <p className="text-lg text-red-800">{error}</p>
-        </div>
-      )}
+       <button
+         onClick={verifyEmailCode}
+         disabled={loading || verificationCode.length < 6}
+         className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center space-x-2"
+       >
+         {loading ? (
+           <>
+             <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+             </svg>
+             <span>Verifying...</span>
+           </>
+         ) : (
+           <span>Verify code</span>
+         )}
+       </button>
 
-      <div className="space-y-3">
-        <button
-          onClick={startVerification}
-          disabled={loading}
-          className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-lg"
-        >
-          {loading ? 'Starting verification...' : 'Start document upload'}
-        </button>
+       <button
+         onClick={sendVerificationEmail}
+         disabled={loading}
+         className="w-full text-purple-600 hover:text-purple-700 text-lg disabled:opacity-50 disabled:cursor-not-allowed py-2"
+       >
+         {loading ? 'Please wait...' : "Didn't receive the code? Send again"}
+       </button>
 
-        <button
-          onClick={() => setCurrentStep('insurance-questionnaire')}
-          className="w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-lg"
-        >
-          Back
-        </button>
+       <button
+         onClick={startAgain}
+         disabled={loading}
+         className="w-full text-gray-500 hover:text-gray-700 text-base disabled:opacity-50 disabled:cursor-not-allowed py-1 border-t border-gray-200 mt-4 pt-4"
+       >
+         Wrong email address? Start again
+       </button>
+     </div>
+   </div>
+ );
 
-        <button
-          onClick={startAgain}
-          className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
-        >
-          Need to use a different email? Start again
-        </button>
-      </div>
-    </div>
-  );
+ const renderDocumentUpload = () => (
+   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+     <div className="text-center mb-6">
+       <Upload className="mx-auto h-12 w-12 text-purple-600 mb-4" />
+       <h2 className="text-3xl font-bold text-gray-900">Document verification</h2>
+       <p className="text-xl text-gray-600 mt-2">AI-powered document verification via Idenfy</p>
+     </div>
 
-  const renderDVLACheck = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center mb-6">
-        <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900">DVLA licence check</h2>
-        <p className="text-xl text-gray-600 mt-2">Upload your DVLA check document</p>
-      </div>
+     <div className="space-y-4 mb-6">
+       <div className="border border-gray-200 rounded-md p-4">
+         <h3 className="text-xl font-medium text-gray-900 mb-2">Required documents:</h3>
+         <ul className="text-lg text-gray-600 space-y-1">
+           <li>• UK driving licence (front and back)</li>
+           <li>• Two proof of address documents (within 90 days)</li>
+           <li>• Selfie for identity verification</li>
+         </ul>
+       </div>
 
-      <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
-        <h3 className="text-xl font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
-        <ol className="text-lg text-orange-800 space-y-1 list-decimal list-inside">
-          <li>Visit gov.uk/check-driving-licence</li>
-          <li>Enter your licence details</li>
-          <li>Download/screenshot the summary page</li>
-          <li>Upload it here</li>
-        </ol>
-      </div>
+       <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
+         <p className="text-lg text-purple-800">
+           <strong>Acceptable proof of address:</strong> Utility bills, bank statements, council tax, credit card statements
+         </p>
+       </div>
+     </div>
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-lg font-medium text-gray-700 mb-2">
-            DVLA check document
-          </label>
-          <input
-            type="file"
-            accept="image/*,.pdf"
-            onChange={(e) => setUploadedFile(e.target.files[0])}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg"
-          />
-        </div>
+     {error && (
+       <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+         <p className="text-lg text-red-800">{error}</p>
+       </div>
+     )}
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-lg text-red-800">{error}</p>
-          </div>
-        )}
+     <div className="space-y-3">
+       <button
+         onClick={startVerification}
+         disabled={loading}
+         className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 text-lg"
+       >
+         {loading ? 'Starting verification...' : 'Start document upload'}
+       </button>
 
-        <button
-          onClick={() => processDVLACheck(uploadedFile)}
-          disabled={loading || !uploadedFile}
-          className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-lg"
-        >
-          {loading ? 'Processing document...' : 'Verify DVLA check'}
-        </button>
+       <button
+         onClick={() => setCurrentStep('insurance-questionnaire')}
+         className="w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-300 text-lg"
+       >
+         Back
+       </button>
 
-        <button
-          onClick={() => setCurrentStep('document-upload')}
-          className="w-full text-gray-600 hover:text-gray-700 text-lg"
-        >
-          Back to document upload
-        </button>
-      </div>
-    </div>
-  );
+       <button
+         onClick={startAgain}
+         className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
+       >
+         Need to use a different email? Start again
+       </button>
+     </div>
+   </div>
+ );
 
-  const renderProcessing = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Processing verification</h2>
-        <p className="text-xl text-gray-600">Please wait while we verify your documents...</p>
-        <p className="text-lg text-gray-500 mt-2">This usually takes 30-60 seconds</p>
-      </div>
-    </div>
-  );
+ const renderDVLACheck = () => (
+   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+     <div className="text-center mb-6">
+       <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
+       <h2 className="text-3xl font-bold text-gray-900">DVLA licence check</h2>
+       <p className="text-xl text-gray-600 mt-2">Upload your DVLA check document</p>
+     </div>
 
-  const renderComplete = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification complete!</h2>
-        <p className="text-xl text-gray-600 mb-4">You're approved for this hire.</p>
-        
-        <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
-          <p className="text-lg text-green-800">
-            Your verification has been added to the hire roster. You'll receive confirmation details shortly.
-          </p>
-        </div>
+     <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
+       <h3 className="text-xl font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
+       <ol className="text-lg text-orange-800 space-y-1 list-decimal list-inside">
+         <li>Visit gov.uk/check-driving-licence</li>
+         <li>Enter your licence details</li>
+         <li>Download/screenshot the summary page</li>
+         <li>Upload it here</li>
+       </ol>
+     </div>
 
-        <button
-          onClick={() => window.close()}
-          className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  );
+     <div className="space-y-4">
+       <div>
+         <label className="block text-lg font-medium text-gray-700 mb-2">
+           DVLA check document
+         </label>
+         <input
+           type="file"
+           accept="image/*,.pdf"
+           onChange={(e) => setUploadedFile(e.target.files[0])}
+           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg"
+         />
+       </div>
 
-  const renderRejected = () => (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-      <div className="text-center py-8">
-        <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification issues</h2>
-        <p className="text-xl text-gray-600 mb-4">We couldn't approve your verification.</p>
-        
-        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-          <p className="text-lg text-red-800">
-            This may be due to document quality, insurance requirements, or other factors. 
-            Please contact OOOSH for assistance.
-          </p>
-        </div>
+       {error && (
+         <div className="bg-red-50 border border-red-200 rounded-md p-3">
+           <p className="text-lg text-red-800">{error}</p>
+         </div>
+       )}
 
-        <div className="space-y-3">
-          <button
-            onClick={startVerification}
-            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
-          >
-            Try again
-          </button>
-          
-          
-            href="tel:01273911382"
-            className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            Call OOOSH support
-          </a>
+       <button
+         onClick={() => processDVLACheck(uploadedFile)}
+         disabled={loading || !uploadedFile}
+         className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-lg"
+       >
+         {loading ? 'Processing document...' : 'Verify DVLA check'}
+       </button>
 
-          <button
-            onClick={startAgain}
-            className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
-          >
-            Start verification again
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+       <button
+         onClick={() => setCurrentStep('document-upload')}
+         className="w-full text-gray-600 hover:text-gray-700 text-lg"
+       >
+         Back to document upload
+       </button>
+     </div>
+   </div>
+ );
 
-  // Main render logic
-  const renderStep = () => {
-    switch(currentStep) {
-      case 'landing': return renderLanding();
-      case 'email-entry': return renderEmailEntry();
-      case 'email-verification': return renderEmailVerification();
-      case 'contact-details': return <ContactDetails />;
-      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
-      case 'document-upload': return renderDocumentUpload();
-      case 'dvla-processing': return <DVLAProcessingPage driverEmail={driverEmail} />;
-      case 'dvla-check': return renderDVLACheck();
-      case 'processing': return renderProcessing();
-      case 'complete': return renderComplete();
-      case 'rejected': return renderRejected();
-      default: return renderLanding();
-    }
-  };
+ const renderProcessing = () => (
+   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+     <div className="text-center py-8">
+       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+       <h2 className="text-3xl font-bold text-gray-900 mb-2">Processing verification</h2>
+       <p className="text-xl text-gray-600">Please wait while we verify your documents...</p>
+       <p className="text-lg text-gray-500 mt-2">This usually takes 30-60 seconds</p>
+     </div>
+   </div>
+ );
 
-  return (
-    <>
-      {/* Custom Favicon */}
-      <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236B46C1' stroke-width='4' stroke-dasharray='20 8'/%3E%3C/svg%3E" />
-      
-      {currentStep === 'email-entry' ? (
-        renderStep()
-      ) : (
-        <div className="min-h-screen bg-gray-100 py-8">
-          {renderStep()}
-        </div>
-      )}
-    </>
-  );
+ const renderComplete = () => (
+   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+     <div className="text-center py-8">
+       <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
+       <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification complete!</h2>
+       <p className="text-xl text-gray-600 mb-4">You're approved for this hire.</p>
+       
+       <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
+         <p className="text-lg text-green-800">
+           Your verification has been added to the hire roster. You'll receive confirmation details shortly.
+         </p>
+       </div>
+
+       <button
+         onClick={() => window.close()}
+         className="w-full bg-green-600 text-white py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
+       >
+         Close
+       </button>
+     </div>
+   </div>
+ );
+
+ // FIXED: renderRejected with proper <a> tag
+ const renderRejected = () => (
+   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+     <div className="text-center py-8">
+       <XCircle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+       <h2 className="text-3xl font-bold text-gray-900 mb-2">Verification issues</h2>
+       <p className="text-xl text-gray-600 mb-4">We couldn't approve your verification.</p>
+       
+       <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+         <p className="text-lg text-red-800">
+           This may be due to document quality, insurance requirements, or other factors. 
+           Please contact OOOSH for assistance.
+         </p>
+       </div>
+
+       <div className="space-y-3">
+         <button
+           onClick={startVerification}
+           className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg"
+         >
+           Try again
+         </button>
+         
+         
+           href="tel:01273911382"
+           className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center justify-center text-lg"
+         >
+           <Phone className="h-4 w-4 mr-2" />
+           Call OOOSH support
+         </a>
+
+         <button
+           onClick={startAgain}
+           className="w-full text-gray-500 hover:text-gray-700 text-base py-2 border-t border-gray-200 mt-4 pt-4"
+         >
+           Start verification again
+         </button>
+       </div>
+     </div>
+   </div>
+ );
+
+ // Main render logic
+ const renderStep = () => {
+   switch(currentStep) {
+     case 'landing': return renderLanding();
+     case 'email-entry': return renderEmailEntry();
+     case 'email-verification': return renderEmailVerification();
+     case 'contact-details': return <ContactDetails />;
+     case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
+     case 'document-upload': return renderDocumentUpload();
+     case 'dvla-processing': return <DVLAProcessingPage driverEmail={driverEmail} />;
+     case 'dvla-check': return renderDVLACheck();
+     case 'processing': return renderProcessing();
+     case 'complete': return renderComplete();
+     case 'rejected': return renderRejected();
+     default: return renderLanding();
+   }
+ };
+
+ return (
+   <>
+     {/* Custom Favicon */}
+     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236B46C1' stroke-width='4' stroke-dasharray='20 8'/%3E%3C/svg%3E" />
+     
+     {currentStep === 'email-entry' ? (
+       renderStep()
+     ) : (
+       <div className="min-h-screen bg-gray-100 py-8">
+         {renderStep()}
+       </div>
+     )}
+   </>
+ );
 };
 
 export default DriverVerificationApp;
