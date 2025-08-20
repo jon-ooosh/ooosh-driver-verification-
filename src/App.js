@@ -309,50 +309,58 @@ const DriverVerificationApp = () => {
     }
   };
 
-  const saveContactDetails = async () => {
-    if (!phoneNumber || phoneNumber.length < 9) {
-      setError('Please enter a valid phone number');
-      return;
-    }
+ const saveContactDetails = async () => {
+  if (!phoneNumber || phoneNumber.length < 9) {
+    setError('Please enter a valid phone number');
+    return;
+  }
 
-    setLoading(true);
-    setError('');
+  setLoading(true);
+  setError('');
+  
+  try {
+    const response = await fetch('/.netlify/functions/monday-integration', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'create-driver-board-a',
+        email: driverEmail,
+        driverData: {
+          phoneNumber: phoneNumber,
+          phoneCountry: countryCode
+        }
+      })
+    });
+
+    if (response.ok) {
+      console.log('Contact details saved successfully');
+    } else {
+      console.error('Failed to save contact details - continuing anyway');
+    }
     
-    try {
-      const response = await fetch('/.netlify/functions/monday-integration', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'create-driver-board-a',
-          email: driverEmail,
-          driverData: {
-            phoneNumber: phoneNumber,
-            phoneCountry: countryCode
-          }
-        })
-      });
-
-      if (response.ok) {
-        console.log('Contact details saved successfully');
-      } else {
-        console.error('Failed to save contact details - continuing anyway');
-      }
-      
-      if (driverStatus?.status === 'verified' && !needsInsuranceQuestionnaire()) {
-        setCurrentStep('document-upload');
-      } else {
-        setCurrentStep('insurance-questionnaire');
-      }
-      
-    } catch (err) {
-      console.error('Error saving contact details:', err);
+    // FIXED routing logic
+    if (driverStatus?.status === 'verified' || 
+        (driverStatus?.documents?.license?.valid && 
+         driverStatus?.documents?.poa1?.valid && 
+         driverStatus?.documents?.poa2?.valid && 
+         driverStatus?.documents?.dvlaCheck?.valid)) {
+      // All documents valid - skip to signature
+      setCurrentStep('complete'); // For now, mark as complete
+    } else if (!needsInsuranceQuestionnaire()) {
+      setCurrentStep('document-upload');
+    } else {
       setCurrentStep('insurance-questionnaire');
-    } finally {
-      setLoading(false);
     }
-  };
+    
+  } catch (err) {
+    console.error('Error saving contact details:', err);
+    setCurrentStep('insurance-questionnaire');
+  } finally {
+    setLoading(false);
+  }
+};  
 
   const needsInsuranceQuestionnaire = () => {
     return true; // Always require for new hires
