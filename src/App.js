@@ -340,19 +340,23 @@ const DriverVerificationApp = () => {
       console.error('Failed to save contact details - continuing anyway');
     }
     
-    // FIXED routing logic
-    if (driverStatus?.status === 'verified' || 
-        (driverStatus?.documents?.license?.valid && 
-         driverStatus?.documents?.poa1?.valid && 
-         driverStatus?.documents?.poa2?.valid && 
-         driverStatus?.documents?.dvlaCheck?.valid)) {
-      // All documents valid - skip to signature
-      setCurrentStep('complete'); // For now, mark as complete
-    } else if (!needsInsuranceQuestionnaire()) {
-      setCurrentStep('document-upload');
-    } else {
-      setCurrentStep('insurance-questionnaire');
-    }
+    // CURRENT CODE (problematic):
+// if (driverStatus?.status === 'verified' || 
+ //    (driverStatus?.documents?.license?.valid && 
+//      driverStatus?.documents?.poa1?.valid && 
+ //     driverStatus?.documents?.poa2?.valid && 
+ //     driverStatus?.documents?.dvlaCheck?.valid)) {
+  // All documents valid - skip to signature
+ //  setCurrentStep('complete'); // For now, mark as complete
+// } else if (!needsInsuranceQuestionnaire()) {
+  // setCurrentStep('document-upload');
+// } else {
+  // setCurrentStep('insurance-questionnaire');
+// }
+
+// REPLACE WITH:
+// ALWAYS go through insurance questionnaire for each hire
+setCurrentStep('insurance-questionnaire');
     
   } catch (err) {
     console.error('Error saving contact details:', err);
@@ -1437,11 +1441,21 @@ const DriverVerificationApp = () => {
               </div>
 
               <div>
-                <h4 className="font-semibold text-gray-900 mb-2">🆔 UK licence additional requirements:</h4>
-                <ul className="list-disc ml-5 space-y-1">
-                  <li>Current DVLA licence check from gov.uk/view-driving-licence</li>
-                </ul>
-              </div>
+  <h4 className="font-semibold text-gray-900 mb-2">🆔 UK licence additional requirements:</h4>
+  <ul className="list-disc ml-5 space-y-1">
+    <li>
+      Current DVLA licence check from{' '}
+      <a 
+        href="https://www.gov.uk/view-driving-licence" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-purple-600 hover:text-purple-800 underline"
+      >
+        gov.uk/view-driving-licence
+      </a>
+    </li>
+  </ul>
+</div>
 
               <div>
                 <h4 className="font-semibold text-gray-900 mb-2">🌍 Non-UK licence additional requirements:</h4>
