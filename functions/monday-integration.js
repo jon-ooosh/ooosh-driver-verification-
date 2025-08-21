@@ -54,6 +54,8 @@ exports.handler = async (event, context) => {
         return await findDriverBoardA(requestData);
       case 'upload-file-board-a':
         return await uploadFileBoardA(requestData);
+      case 'save-idenfy-documents':
+        return await saveIdenfyDocuments(requestData);
       
       // Board B (Driver Assignments) Functions
       case 'find-driver-board-b':
@@ -986,5 +988,151 @@ async function testTwoBoardSystem(data) {
         error: error.message 
       })
     };
+  }
+}
+
+// Add this to monday-integration.js
+async function saveIdenfyDocuments(requestData) {
+  console.log('📄 Saving Idenfy documents to Monday.com');
+  
+  try {
+    const {
+      mondayItemId,
+      documents,  // Array of document objects from Idenfy
+      documentDates  // Dates when documents were issued
+    } = requestData;
+
+    if (!mondayItemId || !documents) {
+      throw new Error('Monday item ID and documents are required');
+    }
+
+    // Calculate expiry dates (document date + 90 days)
+    const calculateExpiryDate = (docDate) => {
+      const date = new Date(docDate);
+      date.setDate(date.getDate() + 90);
+      return formatDateForMonday(date);
+    };
+
+    // Map Idenfy document types to Monday.com file columns
+    const documentColumnMap = {
+      'FRONT': 'files__1',        // License front
+      'BACK': 'files_2__1',        // License back  
+      'UTILITY_BILL_1': 'files_3__1',  // POA1
+      'UTILITY_BILL_2': 'files_4__1',  // POA2
+      'PASSPORT': 'files_5__1'     // Passport (if column exists)
+    };
+
+    // Upload each document
+    for (const doc of documents) {
+      const columnId = documentColumnMap[doc.type];
+      if (columnId && doc.imageBase64) {
+        await uploadDocumentToMonday(
+          mondayItemId,
+          columnId,
+          doc.imageBase64,
+          `${doc.type}_${mondayItemId}.jpg`
+        );
+      }
+    }
+
+    // Update expiry dates based on document dates
+    const updateValues = {};
+    
+    if (documentDates.poa1Date) {
+      updateValues.date8 = { date: calculateExpiryDate(documentDates.poa1Date) };
+    }
+    if (documentDates.poa2Date) {
+      updateValues.date32 = { date: calculateExpiryDate(documentDates.poa2Date) };
+    }
+    if (documentDates.dvlaDate) {
+      // Add DVLA expiry date column if you have one
+      // updateValues.dvla_expiry = { date: calculateExpiryDate(documentDates.dvlaDate) };
+    }
+
+    // Update the Monday item with expiry dates
+    const updateMutation = `
+      mutation {
+        change_multiple_column_values(
+          item_id: ${mondayItemId}
+          board_id: 841453886
+          column_values: ${JSON.stringify(JSON.stringify(updateValues))}
+        ) {
+          id
+        }
+      }
+    `;
+
+    await callMondayAPI(updateMutation);
+    console.log('✅ Idenfy documents and expiry dates saved');
+    
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        success: true,
+        message: 'Documents uploaded and expiry dates set'
+      })
+    };
+
+  } catch (error) {
+    console.error('❌ Save Idenfy documents error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        error: 'Failed to save Idenfy documents',
+        details: error.message 
+      })
+    };
+  }
+}
+
+// Helper function to upload document to specific column
+async function uploadDocumentToMonday(itemId, columnId, base64Data, filename) {
+  try {
+    const cleanBase64 = base64Data.replace(/^data:image\/[^;]+;base64,/, '');
+    const fileBuffer = Buffer.from(cleanBase64, 'base64');
+    
+    const mutation = `
+      mutation ($file: File!) {
+        add_file_to_column (
+          item_id: ${itemId}
+          column_id: "${columnId}"
+          file: $file
+        ) {
+          id
+        }
+      }
+    `;
+    
+    const FormData = require('form-data');
+    const form = new FormData();
+    
+    form.append('query', mutation);
+    form.append('variables[file]', fileBuffer, {
+      filename: filename,
+      contentType: 'image/jpeg'
+    });
+
+    const response = await fetch('https://api.monday.com/v2/file', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
+        ...form.getHeaders()
+      },
+      body: form
+    });
+
+    if (response.ok) {
+      console.log(`✅ Document uploaded to column ${columnId}`);
+      return { success: true };
+    } else {
+      console.error(`Failed to upload to column ${columnId}`);
+      return { success: false };
+    }
+
+  } catch (error) {
+    console.error('Document upload error:', error);
+    return { success: false, error: error.message };
   }
 }
