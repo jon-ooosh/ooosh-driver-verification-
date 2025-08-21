@@ -181,10 +181,16 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
   try {
     console.log('🔄 Processing enhanced verification for:', { email, jobId, scanRef });
 
-    // Check if this is Additional Steps re-upload first
-    const additionalStepsResult = await handleAdditionalStepsReupload(fullWebhookData, { email, jobId });
+    // Check if this is Additional Steps re-upload (only if NOT the initial verification)
+    // Initial verification will have additionalSteps but also primary documents
+    const hasOnlyAdditionalSteps = !data?.docFirstName && !data?.docLastName && 
+                                   fullWebhookData.additionalStepPdfUrls && 
+                                   !fullWebhookData.fileUrls?.FRONT;
     
-    if (additionalStepsResult.isAdditionalSteps) {
+    if (hasOnlyAdditionalSteps) {
+      const additionalStepsResult = await handleAdditionalStepsReupload(fullWebhookData, { email, jobId });
+      
+      if (additionalStepsResult.isAdditionalSteps) {
       console.log('🔄 Handling as Additional Steps re-upload');
       
       if (additionalStepsResult.success && additionalStepsResult.poaValidated) {
