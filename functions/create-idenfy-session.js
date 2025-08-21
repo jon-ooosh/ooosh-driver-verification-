@@ -1,5 +1,5 @@
 // File: functions/create-idenfy-session.js
-// CORRECTED VERSION - Proper Idenfy API format based on documentation
+// FIXED VERSION - Client ID includes email for proper webhook processing
 
 const fetch = require('node-fetch');
 
@@ -56,11 +56,13 @@ exports.handler = async (event, context) => {
     if (!process.env.IDENFY_API_KEY || !process.env.IDENFY_API_SECRET) {
       console.log('Idenfy credentials not configured, using mock response');
       
+      // FIXED: Include proper client ID with email
+      const encodedEmail = email.replace('@', '_at_').replace(/\./g, '_dot_');
       const mockResponse = {
         success: true,
         sessionToken: `mock_${verificationType}_${Date.now()}`,
         scanRef: 'MOCK_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-        clientId: email.replace('@', '_at_').replace('.', '_dot_'),
+        clientId: `ooosh_${jobId}_${encodedEmail}_${Date.now()}`,
         redirectUrl: `https://ooosh-driver-verification.netlify.app/?status=mock&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
         verificationType: verificationType,
         message: 'Mock Idenfy session created for development'
@@ -129,15 +131,21 @@ exports.handler = async (event, context) => {
   }
 };
 
-// CORRECTED: Supports all selective verification types
+// FIXED: Include email in client ID for webhook processing
 async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
     
     const IDENFY_BASE_URL = 'https://ivs.idenfy.com';
-    const clientId = `ooosh_${jobId}_${verificationType}_${Date.now()}`;
+    
+    // CRITICAL FIX: Include email in client ID so webhook can parse it
+    const encodedEmail = email.replace('@', '_at_').replace(/\./g, '_dot_');
+    const clientId = `ooosh_${jobId}_${encodedEmail}_${Date.now()}`;
+    
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+
+    console.log('🔑 Creating Idenfy session with client ID:', clientId);
 
     // Base configuration
     const requestBody = {
@@ -195,7 +203,8 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
         requestBody.documents = ['DRIVER_LICENSE'];
     }
 
-    console.log(`Idenfy session config for ${verificationType}:`, JSON.stringify({
+    console.log(`📋 Idenfy session config for ${verificationType}:`, JSON.stringify({
+      clientId: clientId,
       documents: requestBody.documents,
       additionalSteps: requestBody.additionalSteps,
       utilityBillMinCount: requestBody.utilityBillMinCount,
@@ -227,8 +236,9 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       success: true,
       sessionToken: result.authToken,
       scanRef: result.scanRef,
-      clientId: clientId,
-      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`
+      clientId: clientId,  // This now includes the email!
+      redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`,
+      documentsRequired: requestBody.documents
     };
 
   } catch (error) {
