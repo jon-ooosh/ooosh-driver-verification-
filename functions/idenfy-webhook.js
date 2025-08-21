@@ -231,13 +231,15 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
       console.log('✅ New driver created in Board A');
     }
 
-    // Step 3: Update Board A with Idenfy results
-    console.log('💾 Updating Board A with Idenfy results...');
-    const boardAUpdateResult = await updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData);
-    
-    if (!boardAUpdateResult.success) {
-      throw new Error(`Board A update failed: ${boardAUpdateResult.error}`);
-    }
+   // Step 3: Update Board A with Idenfy results
+console.log('💾 Updating Board A with Idenfy results...');
+const boardAUpdateResult = await updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData);
+
+await saveIdenfyDocumentsToMonday(email, fullWebhookData);
+
+if (!boardAUpdateResult.success) {
+  throw new Error(`Board A update failed: ${boardAUpdateResult.error}`);
+}
 
     console.log('✅ Board A updated successfully');
 
@@ -719,6 +721,161 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       
       lastUpdated: new Date().toISOString().split('T')[0]
     };
+
+    // ADD THIS: Save document files to Monday.com columns
+async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
+  try {
+    console.log('📎 Saving Idenfy documents to Monday.com columns...');
+    
+    // Get driver's Monday item ID
+    const driverResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'find-driver-board-a',
+        email: email
+      })
+    });
+    
+    const driverData = await driverResponse.json();
+    if (!driverData.success || !driverData.driver) {
+      throw new Error('Driver not found in Monday.com');
+    }
+    
+    const mondayItemId = driverData.driver.id;
+    
+    // Map Idenfy document URLs to Monday columns
+    const documentMappings = [
+      { 
+        idenfyField: 'FRONT',
+        mondayColumn: 'file_mktrypb7',  // License front
+        url: fullWebhookData.fileUrls?.FRONT
+      },
+      {
+        idenfyField: 'BACK', 
+        mondayColumn: 'file_mktr76g6',  // License back
+        url: fullWebhookData.fileUrls?.BACK
+      },
+      {
+        idenfyField: 'UTILITY_BILL',
+        mondayColumn: 'file_mktrf9jv',  // POA1
+        url: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+             fullWebhookData.fileUrls?.UTILITY_BILL
+      },
+      {
+        idenfyField: 'UTILITY_BILL_2',
+        mondayColumn: 'file_mktr3fdw',  // POA2
+        url: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL_2 || 
+             fullWebhookData.fileUrls?.UTILITY_BILL_2
+      },
+      {
+        idenfyField: 'PASSPORT',
+        mondayColumn: 'file_mktrwhn8',  // Shared with DVLA
+        url: fullWebhookData.fileUrls?.PASSPORT
+      }
+    ];
+    
+    // Download and upload each document
+    for (const mapping of documentMappings) {
+      if (mapping.url) {
+        console.log(`📥 Downloading ${mapping.idenfyField} from Idenfy...`);
+        
+        try {
+          // Download from Idenfy
+          const response = await fetch(mapping.url);
+          const buffer = await response.buffer();
+          const base64 = buffer.toString('base64');
+          
+          // Upload to Monday.com
+          console.log(`📤 Uploading ${mapping.idenfyField} to Monday column ${mapping.mondayColumn}...`);
+          
+          const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'upload-file-board-a',
+              email: email,
+              fileType: mapping.idenfyField.toLowerCase(),
+              fileData: base64,
+              filename: `${mapping.idenfyField}_${Date.now()}.jpg`,
+              columnId: mapping.mondayColumn
+            })
+          });
+          
+          if (uploadResponse.ok) {
+            console.log(`✅ ${mapping.idenfyField} uploaded successfully`);
+          } else {
+            console.error(`❌ Failed to upload ${mapping.idenfyField}`);
+          }
+          
+        } catch (error) {
+          console.error(`❌ Error processing ${mapping.idenfyField}:`, error);
+        }
+      }
+    }
+    
+    // Update document validity dates
+    await updateDocumentValidityDates(email, fullWebhookData);
+    
+    console.log('✅ Document upload process complete');
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Error saving documents to Monday:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ADD THIS: Update document validity dates
+async function updateDocumentValidityDates(email, webhookData) {
+  try {
+    console.log('📅 Updating document validity dates...');
+    
+    const today = new Date();
+    const addDays = (date, days) => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result.toISOString().split('T')[0];
+    };
+    
+    const updates = {
+      // Extract actual document dates from Idenfy data
+const poa1Date = webhookData.data?.utilityBillIssueDate || 
+                 webhookData.data?.docIssuedDate || 
+                 today.toISOString().split('T')[0];
+const poa2Date = webhookData.data?.utilityBillIssueDate2 || 
+                 webhookData.data?.docIssuedDate || 
+                 today.toISOString().split('T')[0];
+
+const updates = {
+  poa1ValidUntil: addDays(new Date(poa1Date), 90),  // Document date + 90
+  poa2ValidUntil: addDays(new Date(poa2Date), 90),   // Document date + 90
+  licenseNextCheckDue: addDays(today, 90),           // Today + 90 (correct) // date_mktsbgpy
+  lastUpdated: today.toISOString().split('T')[0]
+};
+         
+      // Last updated
+      lastUpdated: today.toISOString().split('T')[0]
+    };
+    
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: updates
+      })
+    });
+    
+    if (response.ok) {
+      console.log('✅ Document validity dates updated');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error updating validity dates:', error);
+  }
+}
 
     // Call monday-integration to update Board A
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
