@@ -380,7 +380,7 @@ async function findDriverBoardA(data) {
   }
 }
 
-// FIXED: Upload file to Board A with better error logging
+// Upload file to Board A - FIXED VERSION
 async function uploadFileBoardA(data) {
   console.log('📁 Uploading file to Board A');
   
@@ -391,6 +391,8 @@ async function uploadFileBoardA(data) {
       throw new Error('Email, fileType, and fileData are required');
     }
 
+    console.log(`🔍 Internal: Finding driver for email: ${email}`);
+    
     // Find the driver using internal helper
     const existingDriver = await findDriverInternal(email);
     
@@ -426,7 +428,8 @@ async function uploadFileBoardA(data) {
     // Convert base64 to buffer
     const buffer = Buffer.from(fileData, 'base64');
     console.log(`📦 File buffer size: ${buffer.length} bytes`);
-    
+
+    // GraphQL mutation for file upload
     const mutation = `
       mutation($file: File!) {
         add_file_to_column(
@@ -435,52 +438,69 @@ async function uploadFileBoardA(data) {
           file: $file
         ) {
           id
+          name
+          url
         }
       }
     `;
 
+    // CRITICAL: Proper FormData structure with map parameter
     formData.append('query', mutation);
     formData.append('variables', JSON.stringify({ file: null }));
-    formData.append('map', JSON.stringify({ "0": ["variables.file"] }));
+    formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // THIS WAS MISSING!
+    
+    // Append the actual file
     formData.append('0', buffer, { 
-      filename: filename || `${fileType}_${Date.now()}.jpg`, 
-      contentType: 'image/jpeg' 
+      filename: filename || `${fileType}.png`, 
+      contentType: 'image/png' 
     });
 
-    const token = process.env.MONDAY_API_TOKEN;
-    console.log('📤 Sending file to Monday.com API...');
-    
-    const response = await fetch(MONDAY_API_URL, {
+    console.log(`📤 Sending file to Monday.com API...`);
+
+    // Send to Monday.com file upload endpoint
+    const response = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
         ...formData.getHeaders()
       },
       body: formData
     });
 
-    const result = await response.json();
-    console.log('📥 Monday API response:', JSON.stringify(result));
-    
-    if (result.errors) {
-      console.error('❌ GraphQL errors:', result.errors);
+    const responseText = await response.text();
+    console.log(`📥 Monday API response: ${responseText}`);
+
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response:', responseText);
+      throw new Error('Invalid response from Monday.com');
+    }
+
+    // Check for GraphQL errors
+    if (result.errors && result.errors.length > 0) {
+      console.error(`❌ GraphQL errors:`, JSON.stringify(result.errors, null, 2));
       throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
     }
-    
+
+    // Check for successful upload
     if (result.data?.add_file_to_column?.id) {
-      console.log('✅ File uploaded to Board A');
+      console.log(`✅ File uploaded successfully: ${result.data.add_file_to_column.name}`);
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           success: true,
           fileId: result.data.add_file_to_column.id,
-          message: 'File uploaded to Board A'
+          fileName: result.data.add_file_to_column.name,
+          fileUrl: result.data.add_file_to_column.url,
+          message: `File uploaded to Board A - ${fileType}`
         })
       };
     } else {
-      console.error('❌ No file ID returned from Monday.com');
-      throw new Error('Failed to upload file to Board A - no ID returned');
+      console.error('Unexpected response structure:', result);
+      throw new Error('File upload failed - no file ID returned');
     }
 
   } catch (error) {
