@@ -1,6 +1,5 @@
 // File: functions/idenfy-webhook.js
-// COMPLETE VERSION with working file upload to Monday.com
-// Preserves all existing functionality + adds actual file upload
+// COMPLETE VERSION with all fixes for missing fields and file uploads
 
 const fetch = require('node-fetch');
 
@@ -285,11 +284,6 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
     return { success: false, error: error.message };
   }
 }
-
-// [ALL YOUR EXISTING FUNCTIONS REMAIN THE SAME FROM LINE 264-707]
-// Including: handleAdditionalStepsReupload, processAdditionalStepsReupload, processNewPoaWithOcr,
-// validatePoaSourceDiversity, updateMondayWithRevalidation, checkDriverExists, createDriverInBoardA,
-// analyzeIdenfyVerificationResult
 
 // Detect and handle Additional Steps (selective POA re-upload)
 async function handleAdditionalStepsReupload(webhookData, clientInfo) {
@@ -706,28 +700,51 @@ function analyzeIdenfyVerificationResult(status, data) {
   return result;
 }
 
-// UPDATED: Include all missing fields (nationality, licenseIssuedBy, etc.)
+// FIXED: Include all missing fields and always include email
 async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData) {
   try {
     console.log('💾 Updating Board A with Idenfy data...');
+    
+    // Log what we received from Idenfy for debugging
+    console.log('📊 Idenfy data fields:', Object.keys(fullWebhookData.data || {}));
 
     const updateData = {
+      // ALWAYS include email to avoid the "CRITICAL: Email missing" error
+      email: email,
+      
       // Basic info
       driverName: idenfyResult.fullName,
       dateOfBirth: idenfyResult.dateOfBirth,
       licenseNumber: idenfyResult.licenseNumber,
-      licenseValidTo: idenfyResult.licenseExpiry,
+      licenseValidTo: idenfyResult.licenseExpiry,  // This should work (docExpiry)
       licenseEnding: idenfyResult.licenseEnding,
       
-      // ADDED: Missing fields from Idenfy data
-      nationality: fullWebhookData.data?.docNationality || '',
-      licenseIssuedBy: fullWebhookData.data?.docIssuingCountry || '',
-      licenseValidFrom: fullWebhookData.data?.docIssuedDate || '',
-      datePassedTest: fullWebhookData.data?.docIssuedDate || '', // Using issued date as approximation
+      // Additional fields - check multiple possible field names
+      nationality: fullWebhookData.data?.docNationality || 
+                   fullWebhookData.data?.nationality || '',
       
-      // Addresses
-      licenseAddress: idenfyResult.licenseAddress,
-      homeAddress: fullWebhookData.data?.address || 
+      licenseIssuedBy: fullWebhookData.data?.docIssuingCountry || 
+                       fullWebhookData.data?.issuingCountry || '',
+      
+      // License valid from - Idenfy might not provide this
+      licenseValidFrom: fullWebhookData.data?.docIssuedDate || 
+                        fullWebhookData.data?.issuedDate || 
+                        fullWebhookData.data?.dateIssued || '',
+      
+      // Date passed test - usually not provided by Idenfy, using issued date as fallback
+      datePassedTest: fullWebhookData.data?.docIssuedDate || 
+                      fullWebhookData.data?.datePassedTest || '',
+      
+      // Addresses - check all possible fields
+      licenseAddress: fullWebhookData.data?.address || 
+                      fullWebhookData.data?.fullAddress || 
+                      fullWebhookData.data?.manualAddress || 
+                      idenfyResult.licenseAddress || '',
+      
+      // Home address - might be same as license address
+      homeAddress: fullWebhookData.data?.homeAddress || 
+                   fullWebhookData.data?.residentialAddress ||
+                   fullWebhookData.data?.address || 
                    fullWebhookData.data?.fullAddress || 
                    fullWebhookData.data?.manualAddress || '',
       
@@ -737,6 +754,13 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       
       lastUpdated: new Date().toISOString().split('T')[0]
     };
+
+    // Log what we're sending to Monday
+    console.log('📤 Sending to Monday:', {
+      email: updateData.email,
+      hasLicenseValidTo: !!updateData.licenseValidTo,
+      hasAddresses: !!updateData.licenseAddress
+    });
 
     // Call monday-integration to update Board A
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
@@ -765,7 +789,7 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
   }
 }
 
-// COMPLETELY REWRITTEN: Actually upload files to Monday.com
+// FIXED: Actually upload files to Monday.com
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📎 Saving Idenfy documents to Monday.com columns...');
@@ -871,7 +895,7 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   }
 }
 
-// PRESERVED: Your existing date calculation logic
+// FIXED: Update document validity dates with email included
 async function updateDocumentValidityDates(email, webhookData) {
   try {
     console.log('📅 Updating document validity dates...');
@@ -892,11 +916,24 @@ async function updateDocumentValidityDates(email, webhookData) {
                      today.toISOString().split('T')[0];
 
     const updates = {
-      poa1ValidUntil: addDays(new Date(poa1Date), 90),  // Document date + 90
-      poa2ValidUntil: addDays(new Date(poa2Date), 90),  // Document date + 90
-      licenseNextCheckDue: addDays(today, 90),          // Today + 90
+      // Include email to avoid the error
+      email: email,
+      
+      // Validity dates
+      poa1ValidUntil: addDays(new Date(poa1Date), 90),
+      poa2ValidUntil: addDays(new Date(poa2Date), 90),
+      dvlaValidUntil: addDays(today, 90),  // DVLA check valid for 90 days
+      licenseNextCheckDue: addDays(today, 90),
+      
       lastUpdated: today.toISOString().split('T')[0]
     };
+    
+    console.log('📅 Setting validity dates:', {
+      poa1: updates.poa1ValidUntil,
+      poa2: updates.poa2ValidUntil,
+      dvla: updates.dvlaValidUntil,
+      nextCheck: updates.licenseNextCheckDue
+    });
     
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
       method: 'POST',
@@ -910,6 +947,9 @@ async function updateDocumentValidityDates(email, webhookData) {
     
     if (response.ok) {
       console.log('✅ Document validity dates updated');
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Failed to update validity dates:', errorText);
     }
     
   } catch (error) {
