@@ -1,7 +1,5 @@
 // File: functions/monday-integration.js
-// OOOSH Driver Verification - Complete Monday.com Integration
-// FIXED: Proper internal vs HTTP endpoint handling + new driver creation
-// CRITICAL FIX: Email field always included for new driver creation
+// COMPLETE VERSION with fixed file upload and better error logging
 
 const fetch = require('node-fetch');
 
@@ -189,7 +187,7 @@ async function findDriverInternal(email) {
 // BOARD A (DRIVER DATABASE) FUNCTIONS
 // ========================================
 
-// FIXED: Create or update driver in Board A
+// Create or update driver in Board A
 async function createDriverBoardA(data) {
   console.log('🔄 Creating/updating driver in Board A');
   
@@ -200,7 +198,7 @@ async function createDriverBoardA(data) {
       throw new Error('Email is required');
     }
 
-    // FIXED: Check if driver already exists using internal helper
+    // Check if driver already exists using internal helper
     const existingDriver = await findDriverInternal(email);
     
     if (existingDriver) {
@@ -213,7 +211,7 @@ async function createDriverBoardA(data) {
     // CRITICAL FIX: Always include email in driverData for new driver creation
     const completeDriverData = {
       ...driverData,
-      email: email  // FIXED: Ensure email is always included
+      email: email  // Ensure email is always included
     };
 
     // Prepare column values for Board A
@@ -266,7 +264,7 @@ async function createDriverBoardA(data) {
   }
 }
 
-// FIXED: Update existing driver in Board A
+// Update existing driver in Board A
 async function updateDriverBoardA(data) {
   console.log('🔄 Updating driver in Board A');
   
@@ -277,7 +275,7 @@ async function updateDriverBoardA(data) {
       throw new Error('Email and updates are required');
     }
 
-    // FIXED: Find the driver using internal helper (returns driver object directly)
+    // Find the driver using internal helper (returns driver object directly)
     const existingDriver = await findDriverInternal(email);
     
     if (!existingDriver) {
@@ -287,8 +285,14 @@ async function updateDriverBoardA(data) {
     const driverId = existingDriver.id;
     console.log('📝 Updating driver ID:', driverId);
 
+    // CRITICAL: Ensure email is always included in updates
+    const completeUpdates = {
+      ...updates,
+      email: email
+    };
+
     // Format updates for Board A columns
-    const columnValues = formatBoardAColumnValues(updates);
+    const columnValues = formatBoardAColumnValues(completeUpdates);
 
     const mutation = `
       mutation {
@@ -332,7 +336,7 @@ async function updateDriverBoardA(data) {
   }
 }
 
-// HTTP ENDPOINT: Find driver in Board A (returns HTTP response)
+// Find driver in Board A (returns HTTP response)
 async function findDriverBoardA(data) {
   console.log('🔍 Finding driver in Board A');
   
@@ -376,7 +380,7 @@ async function findDriverBoardA(data) {
   }
 }
 
-// Upload file to Board A
+// FIXED: Upload file to Board A with better error logging
 async function uploadFileBoardA(data) {
   console.log('📁 Uploading file to Board A');
   
@@ -387,7 +391,7 @@ async function uploadFileBoardA(data) {
       throw new Error('Email, fileType, and fileData are required');
     }
 
-    // FIXED: Find the driver using internal helper
+    // Find the driver using internal helper
     const existingDriver = await findDriverInternal(email);
     
     if (!existingDriver) {
@@ -395,6 +399,7 @@ async function uploadFileBoardA(data) {
     }
 
     const driverId = existingDriver.id;
+    console.log(`📝 Uploading ${fileType} for driver ID: ${driverId}`);
 
     // Map file types to Board A column IDs
     const fileColumnMap = {
@@ -412,12 +417,15 @@ async function uploadFileBoardA(data) {
       throw new Error(`Unknown file type: ${fileType}`);
     }
 
+    console.log(`📊 Using column ID: ${columnId} for ${fileType}`);
+
     // Create FormData for file upload
     const FormData = require('form-data');
     const formData = new FormData();
 
     // Convert base64 to buffer
     const buffer = Buffer.from(fileData, 'base64');
+    console.log(`📦 File buffer size: ${buffer.length} bytes`);
     
     const mutation = `
       mutation($file: File!) {
@@ -433,10 +441,15 @@ async function uploadFileBoardA(data) {
 
     formData.append('query', mutation);
     formData.append('variables', JSON.stringify({ file: null }));
-    formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // CRITICAL FIX
-    formData.append('0', buffer, { filename: filename || 'file.png', contentType: 'image/png' });
+    formData.append('map', JSON.stringify({ "0": ["variables.file"] }));
+    formData.append('0', buffer, { 
+      filename: filename || `${fileType}_${Date.now()}.jpg`, 
+      contentType: 'image/jpeg' 
+    });
 
     const token = process.env.MONDAY_API_TOKEN;
+    console.log('📤 Sending file to Monday.com API...');
+    
     const response = await fetch(MONDAY_API_URL, {
       method: 'POST',
       headers: {
@@ -447,6 +460,12 @@ async function uploadFileBoardA(data) {
     });
 
     const result = await response.json();
+    console.log('📥 Monday API response:', JSON.stringify(result));
+    
+    if (result.errors) {
+      console.error('❌ GraphQL errors:', result.errors);
+      throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
+    }
     
     if (result.data?.add_file_to_column?.id) {
       console.log('✅ File uploaded to Board A');
@@ -460,7 +479,8 @@ async function uploadFileBoardA(data) {
         })
       };
     } else {
-      throw new Error('Failed to upload file to Board A');
+      console.error('❌ No file ID returned from Monday.com');
+      throw new Error('Failed to upload file to Board A - no ID returned');
     }
 
   } catch (error) {
@@ -565,7 +585,7 @@ async function copyAToB(data) {
       throw new Error('Email is required');
     }
 
-    // FIXED: Get driver data from Board A using internal helper
+    // Get driver data from Board A using internal helper
     const driverA = await findDriverInternal(email);
     
     if (!driverA) {
@@ -641,11 +661,11 @@ async function copyAToB(data) {
 // COLUMN FORMATTING FUNCTIONS
 // ========================================
 
-// FIXED: Format data for Board A columns - Ensure email is always included
+// Format data for Board A columns - Ensure email is always included
 function formatBoardAColumnValues(data) {
   const columnValues = {};
 
-  // CRITICAL: Always include email field for new driver creation
+  // CRITICAL: Always include email field
   if (data.email) {
     columnValues.email_mktrgzj = { 
       email: data.email, 
@@ -810,40 +830,39 @@ function parseBoardAData(item) {
       case 'date_mktsbgpy': // License Next Check Due
         driver.licenseNextCheckDue = value?.date || '';
         break;
-     // Parse insurance questions with detailed logging
-case 'status': // Has Disability
-  console.log('Disability column - value:', JSON.stringify(value), 'text:', col.text);
-  driver.hasDisability = value?.label === 'Yes' || col.text === 'Yes';
-  break;
-case 'color_mktr4w0': // Has Convictions
-  console.log('Convictions column - value:', JSON.stringify(value), 'text:', col.text);
-  driver.hasConvictions = value?.label === 'Yes' || col.text === 'Yes';
-  break;
-case 'color_mktrbt3x': // Has Prosecution
-  console.log('Prosecution column - value:', JSON.stringify(value), 'text:', col.text);
-  // Monday.com color columns might return index or other format
-  driver.hasProsecution = value?.label === 'Yes' || 
-                          col.text === 'Yes' || 
-                          value?.index === 1; // Some color columns use index
-  break;
-case 'color_mktraeas': // Has Accidents  
-  console.log('Accidents column - value:', JSON.stringify(value), 'text:', col.text);
-  driver.hasAccidents = value?.label === 'Yes' || 
-                       col.text === 'Yes' || 
-                       value?.index === 1;
-  break;
-case 'color_mktrpe6q': // Has Insurance Issues
-  console.log('Insurance Issues column - value:', JSON.stringify(value), 'text:', col.text);
-  driver.hasInsuranceIssues = value?.label === 'Yes' || 
+      // Parse insurance questions with detailed logging
+      case 'status': // Has Disability
+        console.log('Disability column - value:', JSON.stringify(value), 'text:', col.text);
+        driver.hasDisability = value?.label === 'Yes' || col.text === 'Yes';
+        break;
+      case 'color_mktr4w0': // Has Convictions
+        console.log('Convictions column - value:', JSON.stringify(value), 'text:', col.text);
+        driver.hasConvictions = value?.label === 'Yes' || col.text === 'Yes';
+        break;
+      case 'color_mktrbt3x': // Has Prosecution
+        console.log('Prosecution column - value:', JSON.stringify(value), 'text:', col.text);
+        driver.hasProsecution = value?.label === 'Yes' || 
+                                col.text === 'Yes' || 
+                                value?.index === 1;
+        break;
+      case 'color_mktraeas': // Has Accidents  
+        console.log('Accidents column - value:', JSON.stringify(value), 'text:', col.text);
+        driver.hasAccidents = value?.label === 'Yes' || 
+                             col.text === 'Yes' || 
+                             value?.index === 1;
+        break;
+      case 'color_mktrpe6q': // Has Insurance Issues
+        console.log('Insurance Issues column - value:', JSON.stringify(value), 'text:', col.text);
+        driver.hasInsuranceIssues = value?.label === 'Yes' || 
+                                    col.text === 'Yes' || 
+                                    value?.index === 1;
+        break;
+      case 'color_mktr2t8a': // Has Driving Ban
+        console.log('Driving Ban column - value:', JSON.stringify(value), 'text:', col.text);
+        driver.hasDrivingBan = value?.label === 'Yes' || 
                               col.text === 'Yes' || 
                               value?.index === 1;
-  break;
-case 'color_mktr2t8a': // Has Driving Ban
-  console.log('Driving Ban column - value:', JSON.stringify(value), 'text:', col.text);
-  driver.hasDrivingBan = value?.label === 'Yes' || 
-                        col.text === 'Yes' || 
-                        value?.index === 1;
-  break;
+        break;
       case 'long_text_mktr1a66': // Additional Details
         driver.additionalDetails = col.text || '';
         break;
@@ -991,86 +1010,18 @@ async function testTwoBoardSystem(data) {
   }
 }
 
-// Add this to monday-integration.js
+// Save Idenfy documents (placeholder for now)
 async function saveIdenfyDocuments(requestData) {
   console.log('📄 Saving Idenfy documents to Monday.com');
   
   try {
-    const {
-      mondayItemId,
-      documents,  // Array of document objects from Idenfy
-      documentDates  // Dates when documents were issued
-    } = requestData;
-
-    if (!mondayItemId || !documents) {
-      throw new Error('Monday item ID and documents are required');
-    }
-
-    // Calculate expiry dates (document date + 90 days)
-    const calculateExpiryDate = (docDate) => {
-      const date = new Date(docDate);
-      date.setDate(date.getDate() + 90);
-      return formatDateForMonday(date);
-    };
-
-    // Map Idenfy document types to Monday.com file columns
-    const documentColumnMap = {
-      'FRONT': 'files__1',        // License front
-      'BACK': 'files_2__1',        // License back  
-      'UTILITY_BILL_1': 'files_3__1',  // POA1
-      'UTILITY_BILL_2': 'files_4__1',  // POA2
-      'PASSPORT': 'files_5__1'     // Passport (if column exists)
-    };
-
-    // Upload each document
-    for (const doc of documents) {
-      const columnId = documentColumnMap[doc.type];
-      if (columnId && doc.imageBase64) {
-        await uploadDocumentToMonday(
-          mondayItemId,
-          columnId,
-          doc.imageBase64,
-          `${doc.type}_${mondayItemId}.jpg`
-        );
-      }
-    }
-
-    // Update expiry dates based on document dates
-    const updateValues = {};
-    
-    if (documentDates.poa1Date) {
-      updateValues.date8 = { date: calculateExpiryDate(documentDates.poa1Date) };
-    }
-    if (documentDates.poa2Date) {
-      updateValues.date32 = { date: calculateExpiryDate(documentDates.poa2Date) };
-    }
-    if (documentDates.dvlaDate) {
-      // Add DVLA expiry date column if you have one
-      // updateValues.dvla_expiry = { date: calculateExpiryDate(documentDates.dvlaDate) };
-    }
-
-    // Update the Monday item with expiry dates
-    const updateMutation = `
-      mutation {
-        change_multiple_column_values(
-          item_id: ${mondayItemId}
-          board_id: 841453886
-          column_values: ${JSON.stringify(JSON.stringify(updateValues))}
-        ) {
-          id
-        }
-      }
-    `;
-
-    await callMondayAPI(updateMutation);
-    console.log('✅ Idenfy documents and expiry dates saved');
-    
+    // This is a placeholder - the actual implementation is in the webhook
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
-        message: 'Documents uploaded and expiry dates set'
+        message: 'Documents saved (placeholder)'
       })
     };
 
@@ -1084,55 +1035,5 @@ async function saveIdenfyDocuments(requestData) {
         details: error.message 
       })
     };
-  }
-}
-
-// Helper function to upload document to specific column
-async function uploadDocumentToMonday(itemId, columnId, base64Data, filename) {
-  try {
-    const cleanBase64 = base64Data.replace(/^data:image\/[^;]+;base64,/, '');
-    const fileBuffer = Buffer.from(cleanBase64, 'base64');
-    
-    const mutation = `
-      mutation ($file: File!) {
-        add_file_to_column (
-          item_id: ${itemId}
-          column_id: "${columnId}"
-          file: $file
-        ) {
-          id
-        }
-      }
-    `;
-    
-    const FormData = require('form-data');
-    const form = new FormData();
-    
-    form.append('query', mutation);
-    form.append('variables[file]', fileBuffer, {
-      filename: filename,
-      contentType: 'image/jpeg'
-    });
-
-    const response = await fetch('https://api.monday.com/v2/file', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-        ...form.getHeaders()
-      },
-      body: form
-    });
-
-    if (response.ok) {
-      console.log(`✅ Document uploaded to column ${columnId}`);
-      return { success: true };
-    } else {
-      console.error(`Failed to upload to column ${columnId}`);
-      return { success: false };
-    }
-
-  } catch (error) {
-    console.error('Document upload error:', error);
-    return { success: false, error: error.message };
   }
 }
