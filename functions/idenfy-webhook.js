@@ -187,34 +187,35 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
                                    fullWebhookData.additionalStepPdfUrls && 
                                    !fullWebhookData.fileUrls?.FRONT;
     
-    if (hasOnlyAdditionalSteps) {
+       if (hasOnlyAdditionalSteps) {
       const additionalStepsResult = await handleAdditionalStepsReupload(fullWebhookData, { email, jobId });
       
       if (additionalStepsResult.isAdditionalSteps) {
-      console.log('🔄 Handling as Additional Steps re-upload');
-      
-      if (additionalStepsResult.success && additionalStepsResult.poaValidated) {
-        // POA re-validation successful - continue normal workflow
-        console.log('✅ POA re-validation successful, continuing to DVLA processing');
-        return {
-          success: true,
-          boardAUpdated: true,
-          nextStep: 'dvla_processing',
-          additionalStepsProcessed: true,
-          reason: 'POA re-validation successful'
-        };
-      } else {
-        // POA re-validation failed - send to manual review
-        console.log('❌ POA re-validation failed, flagging for manual review');
-        return {
-          success: true,
-          boardAUpdated: true,
-          nextStep: 'manual_review',
-          additionalStepsProcessed: true,
-          reason: additionalStepsResult.reason || 'POA re-validation required'
-        };
+        console.log('🔄 Handling as Additional Steps re-upload');
+        
+        if (additionalStepsResult.success && additionalStepsResult.poaValidated) {
+          // POA re-validation successful - continue normal workflow
+          console.log('✅ POA re-validation successful, continuing to DVLA processing');
+          return {
+            success: true,
+            boardAUpdated: true,
+            nextStep: 'dvla_processing',
+            additionalStepsProcessed: true,
+            reason: 'POA re-validation successful'
+          };
+        } else {
+          // POA re-validation failed - send to manual review
+          console.log('❌ POA re-validation failed, flagging for manual review');
+          return {
+            success: true,
+            boardAUpdated: true,
+            nextStep: 'manual_review',
+            additionalStepsProcessed: true,
+            reason: additionalStepsResult.reason || 'POA re-validation required'
+          };
+        }
       }
-    }
+    }  
 
     // Continue with normal verification processing...
     console.log('📋 Processing as normal verification result');
