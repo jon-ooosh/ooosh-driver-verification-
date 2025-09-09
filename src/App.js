@@ -423,44 +423,45 @@ setCurrentStep('insurance-questionnaire');
   }
 };
       
-     const handleInsuranceComplete = async (insuranceFormData) => {
-    console.log('Insurance questionnaire completed:', insuranceFormData);
-    setLoading(true);
-    
-    try {
-      const response = await fetch('/.netlify/functions/monday-integration', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'create-driver-board-a',
-          email: driverEmail,
-          driverData: {
-            hasDisability: insuranceFormData.hasDisability === 'yes',
-            hasConvictions: insuranceFormData.hasConvictions === 'yes',
-            hasProsecution: insuranceFormData.hasProsecution === 'yes',
-            hasAccidents: insuranceFormData.hasAccidents === 'yes',
-            hasInsuranceIssues: insuranceFormData.hasInsuranceIssues === 'yes',
-            hasDrivingBan: insuranceFormData.hasDrivingBan === 'yes',
-            additionalDetails: insuranceFormData.additionalDetails || ''
-          }
-        })
-      });
+  const handleInsuranceComplete = async (insuranceFormData) => {
+  console.log('Insurance questionnaire completed:', insuranceFormData);
+  setLoading(true);
+  
+  try {
+    const response = await fetch('/.netlify/functions/monday-integration', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'update-driver-board-a', // Changed from create to update
+        email: driverEmail,
+        updates: { // Changed from driverData to updates
+          datePassedTest: insuranceFormData.datePassedTest, // ADD THIS LINE
+          hasDisability: insuranceFormData.hasDisability === 'yes',
+          hasConvictions: insuranceFormData.hasConvictions === 'yes',
+          hasProsecution: insuranceFormData.hasProsecution === 'yes',
+          hasAccidents: insuranceFormData.hasAccidents === 'yes',
+          hasInsuranceIssues: insuranceFormData.hasInsuranceIssues === 'yes',
+          hasDrivingBan: insuranceFormData.hasDrivingBan === 'yes',
+          additionalDetails: insuranceFormData.additionalDetails || ''
+        }
+      })
+    });
 
-      if (response.ok) {
-        console.log('Insurance data saved to Monday.com Board A successfully');
-      } else {
-        console.error('Failed to save insurance data to Monday.com Board A');
-      }
-      
-    } catch (err) {
-      console.error('Error saving insurance data to Monday.com:', err);
+    if (response.ok) {
+      console.log('Insurance data saved to Monday.com Board A successfully');
+    } else {
+      console.error('Failed to save insurance data to Monday.com Board A');
     }
     
-    setCurrentStep('document-upload');
-    setLoading(false);
-  };
+  } catch (err) {
+    console.error('Error saving insurance data to Monday.com:', err);
+  }
+  
+  setCurrentStep('document-upload');
+  setLoading(false);
+};
 
   const startVerification = () => {
     generateIdenfyToken();
