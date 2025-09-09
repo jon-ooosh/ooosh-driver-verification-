@@ -700,108 +700,122 @@ function analyzeIdenfyVerificationResult(status, data) {
   return result;
 }
 
-// REPLACE THIS FUNCTION ONLY (around line 708-769):
+//updateBoardAWithIdenfyResults function
+
 async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData) {
   try {
     console.log('💾 Updating Board A with Idenfy data...');
     console.log('📊 Idenfy data fields:', Object.keys(fullWebhookData.data || {}));
 
-    // Extract all possible data from webhook
     const idenfyData = fullWebhookData.data || {};
     
+    // Check for provisional license only (no date checking)
+    if (idenfyData.driverLicenseCategory) {
+      const categories = idenfyData.driverLicenseCategory.toUpperCase();
+      
+      if (categories.includes('PROVISIONAL') || 
+          categories.includes('LEARNER') ||
+          !categories.includes('B')) {
+        
+        console.log('❌ PROVISIONAL LICENSE DETECTED - Rejecting verification');
+        
+        const rejectionUpdate = {
+          email: email,
+          overallStatus: 'Stuck',
+          additionalDetails: 'REJECTED: Provisional license detected. Full license required.',
+          lastUpdated: new Date().toISOString().split('T')[0]
+        };
+        
+        const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-driver-board-a',
+            email: email,
+            updates: rejectionUpdate
+          })
+        });
+        
+        return { 
+          success: false, 
+          error: 'Provisional license not accepted',
+          provisional: true 
+        };
+      }
+    }
+    
+    // Build update data with all available fields
     const updateData = {
       // CRITICAL: Always include email
       email: email,
       
-      // Names - try multiple approaches
+      // Names
       driverName: idenfyResult.fullName || 
                   idenfyData.fullName || 
-                  `${idenfyData.docFirstName || ''} ${idenfyData.docLastName || ''}`.trim() ||
-                  `${idenfyData.firstName || ''} ${idenfyData.lastName || ''}`.trim(),
+                  `${idenfyData.docFirstName || ''} ${idenfyData.docLastName || ''}`.trim(),
       
       // Personal Info
-      dateOfBirth: idenfyResult.dateOfBirth || idenfyData.docDob || idenfyData.dob,
+      dateOfBirth: idenfyData.docDob,
       
-      // Phone - Check all possible field names (Idenfy might not provide this)
-      phoneNumber: idenfyData.phone || 
-                   idenfyData.phoneNumber || 
-                   idenfyData.docPhone || 
-                   idenfyData.mobilePhone || '',
-      
-      // Nationality - Try ALL possible field names
+      // Nationality
       nationality: idenfyData.docNationality || 
-                   idenfyData.nationality || 
                    idenfyData.selectedCountry || 
-                   idenfyData.orgNationality ||
                    idenfyData.docIssuingCountry || '',
       
       // License Information
-      licenseNumber: idenfyResult.licenseNumber || idenfyData.docNumber,
-      licenseValidTo: idenfyResult.licenseExpiry || idenfyData.docExpiry,
+      licenseNumber: idenfyData.docNumber,
+      licenseValidTo: idenfyData.docExpiry,
       licenseEnding: idenfyResult.licenseEnding,
       
-      // License Issued By - Multiple attempts
+      // License Valid From (issue date - NOT the same as date passed test)
+      licenseValidFrom: idenfyData.docDateOfIssue || '',
+      
+      // Authority/Issuer
       licenseIssuedBy: idenfyData.authority || 
-                       idenfyData.docAuthority || 
-                       idenfyData.orgAuthority ||
-                       idenfyData.issuingAuthority || 
                        (idenfyData.docIssuingCountry === 'GB' ? 'DVLA' : 
                         idenfyData.docIssuingCountry || ''),
       
-      // License Valid From (Idenfy might not provide)
-      licenseValidFrom: idenfyData.docDateOfIssue || 
-                        idenfyData.docIssuedDate || 
-                        idenfyData.issuedDate || 
-                        idenfyData.dateOfIssue || '',
-      
-      // Date Passed Test (rarely provided by Idenfy)
-      datePassedTest: idenfyData.datePassedTest || 
-                      idenfyData.docDatePassedTest || '',
-      
-      // Home Address - Try ALL possible fields
+      // Addresses
       homeAddress: idenfyData.address || 
                    idenfyData.manualAddress || 
-                   idenfyData.docAddress || 
-                   idenfyData.orgAddress ||
-                   idenfyData.docTemporaryAddress || 
-                   idenfyData.fullAddress || '',
+                   idenfyData.docAddress || '',
       
-      // License Address (might be same as home)
-      licenseAddress: idenfyResult.licenseAddress || 
-                      idenfyData.address || 
+      licenseAddress: idenfyData.address || 
                       idenfyData.manualAddress || 
                       idenfyData.docAddress || '',
       
-      // Status fields
-      overallStatus: idenfyResult.approved ? 'Working on it' : 
-                    idenfyResult.suspected ? 'Stuck' : 'Stuck',
+      // Status
+      overallStatus: idenfyResult.approved ? 'Working on it' : 'Stuck',
       
       lastUpdated: new Date().toISOString().split('T')[0]
     };
+    
+    // Store POA address data if present (for cross-validation)
+    if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
+      console.log('📍 POA Address data found:', fullWebhookData.additionalData.UTILITY_BILL.address);
+    }
 
-    // Remove empty fields to avoid overwriting with blanks
+    // Remove empty fields (except email)
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '' && key !== 'email') {
         delete updateData[key];
       }
     });
 
-    // Log what we're sending for debugging
-    console.log('📤 Sending to Monday.com:', {
+    // Log what we're sending
+    console.log('📤 Updating Monday.com with:', {
       email: updateData.email,
-      hasPhone: !!updateData.phoneNumber,
+      hasLicenseValidFrom: !!updateData.licenseValidFrom,
+      hasAuthority: !!updateData.licenseIssuedBy,
       hasNationality: !!updateData.nationality,
-      hasLicenseIssuedBy: !!updateData.licenseIssuedBy,
       hasHomeAddress: !!updateData.homeAddress,
       fieldsIncluded: Object.keys(updateData)
     });
 
-    // Call monday-integration to update Board A
+    // Update Monday.com
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'update-driver-board-a',
         email: email,
@@ -812,7 +826,7 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Monday update failed:', errorText);
-      throw new Error(`Board A update failed: ${response.status} - ${errorText}`);
+      throw new Error(`Board A update failed: ${response.status}`);
     }
 
     const result = await response.json();
@@ -825,7 +839,8 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
   }
 }
 
-// FIXED: Actually upload files to Monday.com
+// COMPLETE FUNCTION - Replace the entire saveIdenfyDocumentsToMonday function in idenfy-webhook.js
+
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📎 Saving Idenfy documents to Monday.com columns...');
@@ -849,81 +864,134 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     const mondayItemId = driverData.driver.id;
     console.log('📋 Found driver with Monday ID:', mondayItemId);
     
-    // Map Idenfy document URLs to Monday columns with correct file types
+    // Map Idenfy document URLs to Monday columns
     const documentMappings = [
       { 
         idenfyField: 'FRONT',
-        fileType: 'license_front',  // Maps to file_mktrypb7 in monday-integration
+        fileType: 'license_front',
         url: fullWebhookData.fileUrls?.FRONT
       },
       {
         idenfyField: 'BACK', 
-        fileType: 'license_back',   // Maps to file_mktr76g6
+        fileType: 'license_back',
         url: fullWebhookData.fileUrls?.BACK
       },
       {
         idenfyField: 'UTILITY_BILL',
-        fileType: 'poa1',           // Maps to file_mktrf9jv
+        fileType: 'poa1',
         url: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
              fullWebhookData.fileUrls?.UTILITY_BILL
       },
       {
         idenfyField: 'POA2',
-        fileType: 'poa2',           // Maps to file_mktr3fdw
+        fileType: 'poa2',
         url: fullWebhookData.additionalStepPdfUrls?.POA2 || 
              fullWebhookData.fileUrls?.POA2
-      },
-      {
-        idenfyField: 'PASSPORT',
-        fileType: 'passport',       // Maps to file_mktr56t0
-        url: fullWebhookData.fileUrls?.PASSPORT
       }
     ];
     
     // Process each document
+    const uploadResults = [];
     for (const mapping of documentMappings) {
-      if (mapping.url) {
-        console.log(`📤 Uploading ${mapping.idenfyField} to Monday.com...`);
-        
-        try {
-          // Download the file from Idenfy
-          const fileResponse = await fetch(mapping.url);
-          if (!fileResponse.ok) {
-            console.error(`❌ Failed to download ${mapping.idenfyField} from Idenfy`);
-            continue;
-          }
-          
-          const fileBuffer = await fileResponse.buffer();
-          const base64Data = fileBuffer.toString('base64');
-          
-          // Upload to Monday.com via monday-integration
-          const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'upload-file-board-a',
-              email: email,
-              fileType: mapping.fileType,
-              fileData: base64Data,
-              filename: `${mapping.idenfyField}_${Date.now()}.jpg`
-            })
-          });
-          
-          if (uploadResponse.ok) {
-            console.log(`✅ ${mapping.idenfyField} uploaded successfully`);
-          } else {
-            const error = await uploadResponse.text();
-            console.error(`❌ Failed to upload ${mapping.idenfyField}: ${error}`);
-          }
-          
-        } catch (error) {
-          console.error(`❌ Error processing ${mapping.idenfyField}:`, error);
-        }
+      if (!mapping.url) {
+        console.log(`⏭️ Skipping ${mapping.idenfyField} - no URL provided`);
+        continue;
       }
+      
+      console.log(`📤 Processing ${mapping.idenfyField} from URL: ${mapping.url.substring(0, 50)}...`);
+      
+      try {
+        // Download the file from Idenfy
+        console.log(`⬇️ Downloading ${mapping.idenfyField} from Idenfy...`);
+        const fileResponse = await fetch(mapping.url);
+        
+        if (!fileResponse.ok) {
+          console.error(`❌ Failed to download ${mapping.idenfyField}: HTTP ${fileResponse.status}`);
+          uploadResults.push({ 
+            field: mapping.idenfyField, 
+            success: false, 
+            error: `Download failed: HTTP ${fileResponse.status}` 
+          });
+          continue;
+        }
+        
+        // FIXED: Proper way to get buffer from node-fetch
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64Data = buffer.toString('base64');
+        
+        console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
+        
+        // Determine file extension from content type or URL
+        const contentType = fileResponse.headers.get('content-type');
+        let extension = 'jpg'; // default
+        if (contentType) {
+          if (contentType.includes('pdf')) extension = 'pdf';
+          else if (contentType.includes('png')) extension = 'png';
+          else if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg';
+        } else if (mapping.url.toLowerCase().includes('.pdf')) {
+          extension = 'pdf';
+        }
+        
+        // Upload to Monday.com via monday-integration
+        console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}...`);
+        const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'upload-file-board-a',
+            email: email,
+            fileType: mapping.fileType,
+            fileData: base64Data,
+            filename: `${mapping.fileType}_${Date.now()}.${extension}`
+          })
+        });
+        
+        const uploadResult = await uploadResponse.json();
+        
+        if (uploadResponse.ok && uploadResult.success) {
+          console.log(`✅ ${mapping.idenfyField} uploaded successfully`);
+          uploadResults.push({ 
+            field: mapping.idenfyField, 
+            success: true,
+            fileId: uploadResult.fileId 
+          });
+        } else {
+          console.error(`❌ Failed to upload ${mapping.idenfyField} to Monday:`, uploadResult.error);
+          uploadResults.push({ 
+            field: mapping.idenfyField, 
+            success: false, 
+            error: uploadResult.error 
+          });
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error processing ${mapping.idenfyField}:`, error.message);
+        uploadResults.push({ 
+          field: mapping.idenfyField, 
+          success: false, 
+          error: error.message 
+        });
+      }
+      
+      // Small delay between uploads to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    console.log('✅ Document upload process complete');
-    return { success: true };
+    // Log summary
+    const successCount = uploadResults.filter(r => r.success).length;
+    const failCount = uploadResults.filter(r => !r.success).length;
+    
+    console.log(`📊 Document upload summary: ${successCount} succeeded, ${failCount} failed`);
+    if (failCount > 0) {
+      console.log('Failed uploads:', uploadResults.filter(r => !r.success));
+    }
+    
+    return { 
+      success: true, 
+      uploadResults: uploadResults,
+      summary: `${successCount}/${uploadResults.length} documents uploaded`
+    };
     
   } catch (error) {
     console.error('❌ Error saving documents to Monday:', error);
