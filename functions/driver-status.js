@@ -101,6 +101,7 @@ async function getDriverStatusFromBoardA(email) {
     
     // FIXED: Build insurance data from driver fields
     const insuranceData = {
+      datePassedTest: driver.datePassedTest || '',
       hasDisability: driver.hasDisability || false,
       hasConvictions: driver.hasConvictions || false,
       hasProsecution: driver.hasProsecution || false,
