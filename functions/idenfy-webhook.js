@@ -795,8 +795,13 @@ licenseAddress: idenfyData.address ||
     // Extract POA address data if present (for cross-validation)
 let poaAddress = '';
 if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
-  poaAddress = fullWebhookData.additionalData.UTILITY_BILL.address.value || '';
+  const addressData = fullWebhookData.additionalData.UTILITY_BILL.address;
+  poaAddress = addressData.value || addressData || '';
   console.log('📍 POA Address extracted:', poaAddress);
+} else if (fullWebhookData.additionalData?.POA2?.address) {
+  const addressData = fullWebhookData.additionalData.POA2.address;
+  poaAddress = addressData.value || addressData || '';
+  console.log('📍 POA2 Address extracted:', poaAddress);
 }
 
     // Remove empty fields (except email)
