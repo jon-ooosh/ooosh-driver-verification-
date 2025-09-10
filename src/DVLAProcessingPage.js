@@ -82,7 +82,7 @@ const DVLAProcessingPage = () => {
       });
 
       // Process with AWS Textract
-      const processingResponse = await fetch('/.netlify/functions/test-claude-ocr', {
+      const processingResponse = await fetch('/.netlify/functions/document-processor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
