@@ -775,14 +775,16 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
                        (idenfyData.docIssuingCountry === 'GB' ? 'DVLA' : 
                         idenfyData.docIssuingCountry || ''),
       
-      // Addresses
-      homeAddress: idenfyData.address || 
-                   idenfyData.manualAddress || 
-                   idenfyData.docAddress || '',
-      
-      licenseAddress: idenfyData.address || 
-                      idenfyData.manualAddress || 
-                      idenfyData.docAddress || '',
+     // Addresses - prioritize POA address if available
+homeAddress: poaAddress || 
+             idenfyData.address || 
+             idenfyData.manualAddress || 
+             idenfyData.docAddress || '',
+
+licenseAddress: idenfyData.address || 
+                idenfyData.manualAddress || 
+                idenfyData.docAddress || 
+                poaAddress || '',
       
       // Status
       overallStatus: idenfyResult.approved ? 'Working on it' : 'Stuck',
@@ -790,10 +792,12 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       lastUpdated: new Date().toISOString().split('T')[0]
     };
     
-    // Store POA address data if present (for cross-validation)
-    if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
-      console.log('📍 POA Address data found:', fullWebhookData.additionalData.UTILITY_BILL.address);
-    }
+    // Extract POA address data if present (for cross-validation)
+let poaAddress = '';
+if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
+  poaAddress = fullWebhookData.additionalData.UTILITY_BILL.address.value || '';
+  console.log('📍 POA Address extracted:', poaAddress);
+}
 
     // Remove empty fields (except email)
     Object.keys(updateData).forEach(key => {
