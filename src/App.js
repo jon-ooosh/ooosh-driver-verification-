@@ -57,7 +57,35 @@ const DriverVerificationApp = () => {
       }
     }, 0);
   };
+const calculateExpiryDate = (daysToAdd) => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysToAdd);
+  return date.toISOString().split('T')[0];
+};
 
+const updateDriverData = async (updates) => {
+  try {
+    const response = await fetch('/.netlify/functions/monday-integration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: driverEmail, // Make sure driverEmail is in scope
+        updates: updates
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update driver data');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating driver data:', error);
+    throw error;
+  }
+};
+  
   // Detect mobile device
   useEffect(() => {
     const checkMobile = () => {
@@ -625,7 +653,7 @@ setCurrentStep('insurance-questionnaire');
     }
   };
 
-  // Add this function near your other handlers (around line 600-700)
+  // DVLA Upload
 const handleDVLAUpload = async (dvlaFile) => {
   try {
     setLoading(true);
@@ -645,7 +673,7 @@ const handleDVLAUpload = async (dvlaFile) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         testType: 'dvla',
-        imageData: fileData.split(',')[1], // Remove data URL prefix
+        imageData: fileData.split(',')[1],
         documentType: 'dvla',
         licenseAddress: driverStatus?.licenseAddress,
         fileType: dvlaFile.type.includes('pdf') ? 'pdf' : 'image'
@@ -660,7 +688,7 @@ const handleDVLAUpload = async (dvlaFile) => {
       // Update Monday.com with DVLA results
       await updateDriverData({
         dvlaProcessingResult: JSON.stringify(result.result),
-        dvlaValidUntil: calculateExpiryDate(90), // 90 days validity
+        dvlaValidUntil: calculateExpiryDate(90),
         overallStatus: result.result.decision === 'APPROVED' ? 'Done' : 'Stuck'
       });
       
