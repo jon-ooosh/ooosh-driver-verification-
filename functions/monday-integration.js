@@ -780,6 +780,7 @@ function parseBoardAData(item) {
     nationality: '',
     licenseNumber: '',
     licenseIssuedBy: '',
+    datePassedTest: '',
     licenseValidTo: '',
     licenseEnding: '',
     homeAddress: '',
@@ -825,6 +826,9 @@ function parseBoardAData(item) {
         break;
       case 'text_mktrz69': // License Issued By
         driver.licenseIssuedBy = col.text || '';
+        break;
+        case 'date_mktr93jq': // Date Passed Test 
+        driver.datePassedTest = value?.date || '';
         break;
       case 'date_mktrwk94': // License Valid To
         driver.licenseValidTo = value?.date || '';
