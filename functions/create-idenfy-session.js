@@ -184,12 +184,12 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
         break;
 
       case 'poa_both':
-        // Both POAs expired
-        requestBody.documents = []; // Empty array
-        requestBody.additionalSteps = ['UTILITY_BILL']; // Array of strings
-        requestBody.utilityBillMinCount = 2; // Request 2 POAs
-        requestBody.skipFaceMatching = true; // No selfie
-        break;
+  // POA-only re-upload using Additional Steps
+  requestBody.documents = []; // No primary documents
+  requestBody.additionalSteps = ['UTILITY_BILL'];
+  requestBody.additionalStepsMinCount = 2; // Need 2 POAs
+  // Don't include skipFaceMatching when using additionalSteps alone
+  break;
 
       case 'passport_only':
         // Passport for non-UK drivers
