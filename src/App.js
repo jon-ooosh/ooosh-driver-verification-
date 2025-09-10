@@ -705,16 +705,7 @@ const handleDVLAUpload = async (dvlaFile) => {
     setLoading(false);
   }
 };
-
-// Update the DVLAProcessingPage component call to pass the handler
-{currentStep === 'dvla-processing' && (
-  <DVLAProcessingPage 
-    driverEmail={driverEmail}
-    onComplete={() => setCurrentStep('complete')}
-    onDVLAUpload={handleDVLAUpload} // Add this prop
-  />
-)}
-  
+ 
   const processDVLACheck = async (file) => {
     if (!file) {
       setError('Please select a DVLA check document');
@@ -2043,7 +2034,7 @@ const renderRejected = () => (
      case 'contact-details': return <ContactDetails />;
      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
      case 'document-upload': return renderDocumentUpload();
-     case 'dvla-processing': return <DVLAProcessingPage driverEmail={driverEmail} />;
+     case 'dvla-processing': return <DVLAProcessingPage driverEmail={driverEmail} onComplete={() => setCurrentStep('complete')} onDVLAUpload={handleDVLAUpload} />;
      case 'dvla-check': return renderDVLACheck();
      case 'processing': return renderProcessing();
      case 'complete': return renderComplete();
