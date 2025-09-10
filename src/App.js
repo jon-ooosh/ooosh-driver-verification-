@@ -668,7 +668,7 @@ const handleDVLAUpload = async (dvlaFile) => {
     });
     
     // Process with AWS Textract
-    const response = await fetch('/.netlify/functions/test-claude-ocr', {
+    const response = await fetch('/.netlify/functions/document-processor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -766,7 +766,7 @@ const handleDVLAUpload = async (dvlaFile) => {
         validTo: "2032-08-01"
       };
     } catch (err) {
-      console.error('Claude extraction error:', err);
+      console.error('AWS  extraction error:', err);
       throw new Error('Failed to extract data from document');
     }
   };
