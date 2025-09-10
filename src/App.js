@@ -625,6 +625,68 @@ setCurrentStep('insurance-questionnaire');
     }
   };
 
+  // Add this function near your other handlers (around line 600-700)
+const handleDVLAUpload = async (dvlaFile) => {
+  try {
+    setLoading(true);
+    console.log('📄 Processing DVLA document...');
+    
+    // Convert file to base64
+    const fileData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(dvlaFile);
+    });
+    
+    // Process with AWS Textract
+    const response = await fetch('/.netlify/functions/test-claude-ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        testType: 'dvla',
+        imageData: fileData.split(',')[1], // Remove data URL prefix
+        documentType: 'dvla',
+        licenseAddress: driverStatus?.licenseAddress,
+        fileType: dvlaFile.type.includes('pdf') ? 'pdf' : 'image'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log('✅ DVLA processing successful:', result);
+      
+      // Update Monday.com with DVLA results
+      await updateDriverData({
+        dvlaProcessingResult: JSON.stringify(result.result),
+        dvlaValidUntil: calculateExpiryDate(90), // 90 days validity
+        overallStatus: result.result.decision === 'APPROVED' ? 'Done' : 'Stuck'
+      });
+      
+      // Route to completion
+      setCurrentStep('complete');
+    } else {
+      throw new Error(result.error || 'DVLA processing failed');
+    }
+    
+  } catch (error) {
+    console.error('❌ DVLA upload error:', error);
+    setError(`Failed to process DVLA document: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Update the DVLAProcessingPage component call to pass the handler
+{currentStep === 'dvla-processing' && (
+  <DVLAProcessingPage 
+    driverEmail={driverEmail}
+    onComplete={() => setCurrentStep('complete')}
+    onDVLAUpload={handleDVLAUpload} // Add this prop
+  />
+)}
+  
   const processDVLACheck = async (file) => {
     if (!file) {
       setError('Please select a DVLA check document');
