@@ -369,9 +369,8 @@ const handleFileUpload = async (fileType, file) => {
     alt="Ooosh Tours Ltd" 
     className="mx-auto h-12 w-auto mb-4"
   />
-  <h2 className="text-4xl font-bold text-gray-900">DVLA Document Upload</h2>
-  <p className="text-xl text-gray-600 mt-2">Upload your DVLA driving license check document</p>
-</div>
+  <h2 className="text-4xl font-bold text-gray-900">Upload your DVLA driving license check document</h2>
+  </div>
     
 {/* Progress Tracker */}
 <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
@@ -404,9 +403,10 @@ const handleFileUpload = async (fileType, file) => {
         rel="noopener noreferrer"
       className="text-purple-600 hover:text-purple-800 font-semibold text-lg inline-flex items-center"
     >
-        https://www.viewdrivingrecord.service.gov.uk/driving-record/licence-number</a></li>
+        www.viewdrivingrecord.service.gov.uk</a></li>
      <li>Generate a check code</li>
     <li>Download or save the PDF (click the "Print or save driving summary")</li>
+    <li>Document must be dated within last 30 days</li>
   </ol>
   <div className="mt-4 pt-4 border-t border-purple-300">
     <a 
