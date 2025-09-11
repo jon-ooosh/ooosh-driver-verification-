@@ -96,7 +96,7 @@ const handleFileUpload = async (fileType, file) => {
       console.log('📄 Converting PDF to image...');
       
       // Check if PDF.js is loaded
-      if (!window.window.pdfjsLib) {
+      if (!window.pdfjsLib) {
         throw new Error('PDF.js library not loaded yet. Please try again.');
       }
       
@@ -155,9 +155,7 @@ const handleFileUpload = async (fileType, file) => {
       return; // Stop processing
        // Clear any previous errors if validation passed
     setError('');
-    }
-  }
-      
+        
       // Display and validate DVLA results
   if (fileType === 'dvla' && processingResult.result) {
     const dvlaData = processingResult.result;
@@ -391,9 +389,7 @@ const handleFileUpload = async (fileType, file) => {
     </div>
   </div>
 </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex">
-                     
+                            
   <div className="bg-purple-50 border-2 border-purple-200 rounded-md p-4 mb-6">
   <h3 className="text-2xl font-medium text-purple-900 mb-3">How to get your DVLA check</h3>
   <ol className="text-lg text-purple-800 space-y-2 list-decimal list-inside">
@@ -425,8 +421,7 @@ const handleFileUpload = async (fileType, file) => {
     </p>
   </div>
 </div>
-         </div>
-
+       
         <DVLAUploadComponent 
           onFileUpload={(file) => handleFileUpload('dvla', file)}
           loading={loading}
