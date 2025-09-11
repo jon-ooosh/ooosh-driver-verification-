@@ -872,40 +872,6 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     const mondayItemId = driverData.driver.id;
     console.log('📋 Found driver with Monday ID:', mondayItemId);
 
-    // Check if it's a PDF
-const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46;
-
-if (isPDF && (mapping.idenfyField === 'UTILITY_BILL' || mapping.idenfyField === 'POA2')) {
-  console.log(`⚠️ ${mapping.idenfyField} is a PDF - skipping Monday upload but recording OCR`);
-  
-  // Still process with OCR to get the data
-  const ocrResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'poa',
-      imageData: base64Data,
-      documentType: mapping.idenfyField
-    })
-  });
-  
-  if (ocrResponse.ok) {
-    const ocrResult = await ocrResponse.json();
-    console.log(`📄 OCR results for ${mapping.idenfyField}:`, ocrResult.result);
-    
-    // Store OCR results in Monday.com text fields instead
-    // We'll add this in the field mapping fix below
-  }
-  
-  uploadResults.push({
-    field: mapping.idenfyField,
-    success: false,
-    error: 'PDF format - manual upload required',
-    ocrProcessed: true
-  });
-  continue;
-}
-
     // Map Idenfy document URLs to Monday columns
     const documentMappings = [
       { 
