@@ -4,8 +4,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  FileText, Upload, CheckCircle, AlertCircle, 
-  Eye, ChevronRight, Loader
+  FileText, Upload, CheckCircle, AlertCircle, ChevronRight, Loader
 } from 'lucide-react';
 
 const DVLAProcessingPage = () => {
@@ -154,6 +153,8 @@ const handleFileUpload = async (fileType, file) => {
       setError('❌ Invalid DVLA document. Please upload a valid DVLA check from gov.uk/view-driving-licence');
       setLoading(false);
       return; // Stop processing
+       // Clear any previous errors if validation passed
+    setError('');
     }
   }
       
