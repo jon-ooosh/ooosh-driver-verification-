@@ -7,7 +7,6 @@ import {
   Shield, FileText, Upload, CheckCircle, AlertCircle, 
   Eye, ChevronRight, Loader
 } from 'lucide-react';
-const pdfjsLib = window.pdfjsLib || {};
 
 const DVLAProcessingPage = () => {
   const [loading, setLoading] = useState(false);
@@ -21,7 +20,7 @@ const DVLAProcessingPage = () => {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
     script.onload = () => {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+      window.window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     };
     document.head.appendChild(script);
@@ -92,7 +91,7 @@ const handleFileUpload = async (fileType, file) => {
       console.log('📄 Converting PDF to image...');
       
       // Check if PDF.js is loaded
-      if (!window.pdfjsLib) {
+      if (!window.window.pdfjsLib) {
         throw new Error('PDF.js library not loaded yet. Please try again.');
       }
       
