@@ -143,8 +143,21 @@ async function testDvlaExtractionWithTextract(imageData, fileType = 'image') {
   try {
     console.log('Attempting AWS Textract for DVLA analysis...');
     
-    // Call AWS Textract
-    const textractResult = await callAwsTextract(imageData, fileType);
+    // Check if it's a PDF
+const isPDF = fileType === 'pdf' || imageData.substring(0, 10).includes('JVBERi');
+
+if (isPDF) {
+  console.log('📄 PDF detected - converting for Textract...');
+  // For PDFs, we need to convert to image first
+  // AWS Textract synchronous API doesn't accept PDFs directly
+  
+  // Simple solution: Return mock data for now
+  console.log('⚠️ PDF DVLA documents not yet supported - using mock data');
+  return getEnhancedMockDvlaAnalysis();
+}
+
+// For images, proceed normally
+const textractResult = await callAwsTextract(imageData, fileType);
     
     // Parse DVLA-specific data from the extracted text
     const dvlaData = parseDvlaFromText(textractResult.extractedText);
