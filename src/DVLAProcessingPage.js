@@ -88,34 +88,35 @@ const handleFileUpload = async (fileType, file) => {
 
     let imageData;
     
-    // Check if it's a PDF that needs conversion
     if (file.type === 'application/pdf') {
       console.log('📄 Converting PDF to image...');
       
-      // Convert PDF to image using PDF.js
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1); // Get first page
+      // Check if PDF.js is loaded
+      if (!window.pdfjsLib) {
+        throw new Error('PDF.js library not loaded yet. Please try again.');
+      }
       
-      // Create canvas to render PDF
-      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
+      const arrayBuffer = await file.arrayBuffer();
+      // Use window.pdfjsLib, not _ or pdfjsLib
+      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      
+      const viewport = page.getViewport({ scale: 2.0 });
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       
-      // Render PDF page to canvas
       await page.render({
         canvasContext: context,
         viewport: viewport
       }).promise;
       
-      // Convert canvas to base64 image
       imageData = canvas.toDataURL('image/png');
       console.log('✅ PDF converted to image');
       
     } else {
-      // For images, just read as data URL
+      // Handle regular images
       imageData = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -123,7 +124,7 @@ const handleFileUpload = async (fileType, file) => {
         reader.readAsDataURL(file);
       });
     }
-
+    
     // Now send the image (not PDF) to document processor
     const processingResponse = await fetch('/.netlify/functions/document-processor', {
       method: 'POST',
