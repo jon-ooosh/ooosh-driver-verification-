@@ -20,7 +20,7 @@ const DVLAProcessingPage = () => {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
     script.onload = () => {
-      window.window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     };
     document.head.appendChild(script);
@@ -142,6 +142,25 @@ const handleFileUpload = async (fileType, file) => {
     if (processingResult.success) {
       console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
       
+      // Display and validate DVLA results
+  if (fileType === 'dvla' && processingResult.result) {
+    const dvlaData = processingResult.result;
+    
+    // Check license ending matches Idenfy data
+    if (driverData?.licenseEnding && dvlaData.licenseEnding) {
+      if (driverData.licenseEnding !== dvlaData.licenseEnding) {
+        setError('⚠️ License number mismatch - manual review required');
+      }
+    }
+    
+    // Show results to user
+    console.log('DVLA Check Results:', {
+      name: dvlaData.driverName,
+      licenseEnding: dvlaData.licenseEnding,
+      points: dvlaData.totalPoints,
+      insuranceDecision: dvlaData.insuranceDecision
+    });
+  }
         // Store results
         setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
 
