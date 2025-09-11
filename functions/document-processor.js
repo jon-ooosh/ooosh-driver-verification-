@@ -177,7 +177,7 @@ async function callAwsTextract(imageData, fileType) {
   }
   
   // Ensure clean base64 (remove data URL prefix if present)
-const cleanBase64 = imageData.replace(/^data:.*?base64,/, '');
+const cleanBase64 = imageData.replace(/^data:.*?base64,/, ''); 
   
   // Use DetectDocumentText for better PDF compatibility
   const requestBody = JSON.stringify({
