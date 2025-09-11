@@ -147,6 +147,15 @@ const handleFileUpload = async (fileType, file) => {
     
     if (processingResult.success) {
       console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
+
+      // Check if DVLA validation actually passed
+  if (fileType === 'dvla' && processingResult.result) {
+    if (!processingResult.result.isValid) {
+      setError('❌ Invalid DVLA document. Please upload a valid DVLA check from gov.uk/view-driving-licence');
+      setLoading(false);
+      return; // Stop processing
+    }
+  }
       
       // Display and validate DVLA results
   if (fileType === 'dvla' && processingResult.result) {
@@ -385,9 +394,36 @@ const handleFileUpload = async (fileType, file) => {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex">
             <Eye className="h-5 w-5 text-blue-400 mt-0.5" />
-           <div className="bg-purple-50 border-2 border-purple-200 rounded-md p-4 mb-6">
-  <h3 className="text-2xl font-medium text-purple-900 mb-2">What we need</h3>
-  <p className="text-lg text-purple-800">Your DVLA check document must be less than 30 days old</p>
+          
+  <div className="bg-purple-50 border-2 border-purple-200 rounded-md p-4 mb-6">
+  <h3 className="text-2xl font-medium text-purple-900 mb-3">How to get your DVLA check</h3>
+  <ol className="text-lg text-purple-800 space-y-2 list-decimal list-inside">
+    <li>Visit <a 
+      href="https://www.viewdrivingrecord.service.gov.uk/driving-record/licence-number" 
+        target="_blank"
+        rel="noopener noreferrer"
+      className="text-purple-600 hover:text-purple-800 font-semibold text-lg inline-flex items-center"
+    >
+        https://www.viewdrivingrecord.service.gov.uk/driving-record/licence-number</a></li>
+     <li>Generate a check code</li>
+    <li>Download or save the PDF (click the "Print or save driving summary")</li>
+  </ol>
+  <div className="mt-4 pt-4 border-t border-purple-300">
+    <a 
+      href="https://www.oooshtours.co.uk/how-to-get-a-dvla-check-code" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="text-purple-600 hover:text-purple-800 font-semibold text-lg inline-flex items-center"
+    >
+      📖 Need help? View our step-by-step guide
+      <ChevronRight className="h-4 w-4 ml-1" />
+    </a>
+  </div>
+  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-300 rounded">
+    <p className="text-sm text-yellow-800">
+      ⚠️ <strong>Important:</strong> Upload the full PDF showing the green/orange header and check code, not just the code itself
+    </p>
+  </div>
 </div>
           </div>
         </div>
