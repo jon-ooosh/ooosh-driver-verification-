@@ -393,8 +393,7 @@ const handleFileUpload = async (fileType, file) => {
 </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex">
-            <Eye className="h-5 w-5 text-blue-400 mt-0.5" />
-          
+                     
   <div className="bg-purple-50 border-2 border-purple-200 rounded-md p-4 mb-6">
   <h3 className="text-2xl font-medium text-purple-900 mb-3">How to get your DVLA check</h3>
   <ol className="text-lg text-purple-800 space-y-2 list-decimal list-inside">
@@ -426,8 +425,7 @@ const handleFileUpload = async (fileType, file) => {
     </p>
   </div>
 </div>
-          </div>
-        </div>
+         </div>
 
         <DVLAUploadComponent 
           onFileUpload={(file) => handleFileUpload('dvla', file)}
