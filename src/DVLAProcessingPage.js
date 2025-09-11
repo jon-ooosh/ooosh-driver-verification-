@@ -17,6 +17,12 @@ const DVLAProcessingPage = () => {
   const [finalDecision, setFinalDecision] = useState(null);
 
   useEffect(() => {
+  const fontLink = document.createElement('link');
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap';
+  fontLink.rel = 'stylesheet';
+  document.head.appendChild(fontLink);
+  document.body.style.fontFamily = "'Montserrat', sans-serif";
+  document.body.style.backgroundColor = '#f7f7f7';
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
     script.onload = () => {
@@ -24,7 +30,7 @@ const DVLAProcessingPage = () => {
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     };
     document.head.appendChild(script);
-  }, []);
+    }, []);
 
   // Get driver email from URL params (passed from webhook)
   const urlParams = new URLSearchParams(window.location.search);
@@ -350,18 +356,39 @@ const handleFileUpload = async (fileType, file) => {
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
         <div className="text-center mb-6">
-          <Shield className="mx-auto h-12 w-12 text-purple-600 mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">DVLA Document Upload</h1>
-          <p className="text-base text-gray-600 mt-2">Upload your DVLA driving license check document</p>
-        </div>
-
+  <img src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
+    alt="Ooosh Tours Ltd" 
+    className="mx-auto h-12 w-auto mb-4"
+  />
+  <h2 className="text-4xl font-bold text-gray-900">DVLA Document Upload</h2>
+  <p className="text-xl text-gray-600 mt-2">Upload your DVLA driving license check document</p>
+</div>
+    
+{/* Progress Tracker */}
+<div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
+  <h3 className="text-2xl font-medium text-purple-900 mb-3">Verification Progress</h3>
+  <div className="space-y-2">
+    <div className="flex items-center">
+      <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+      <span className="text-lg text-green-700">Documents uploaded</span>
+    </div>
+    <div className="flex items-center">
+      <div className="h-5 w-5 border-2 border-purple-500 rounded-full mr-3 bg-purple-100"></div>
+      <span className="text-lg text-purple-700 font-medium">DVLA check</span>
+    </div>
+    <div className="flex items-center">
+      <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+      <span className="text-lg text-gray-600">Confirmation signature</span>
+    </div>
+  </div>
+</div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex">
             <Eye className="h-5 w-5 text-blue-400 mt-0.5" />
-            <div className="ml-3">
-              <h3 className="text-base font-medium text-blue-900">What we need</h3>
-              <p className="text-sm text-blue-800 mt-1">Your DVLA check document must be less than 30 days old and show your current license status</p>
-            </div>
+           <div className="bg-purple-50 border-2 border-purple-200 rounded-md p-4 mb-6">
+  <h3 className="text-2xl font-medium text-purple-900 mb-2">What we need</h3>
+  <p className="text-lg text-purple-800">Your DVLA check document must be less than 30 days old</p>
+</div>
           </div>
         </div>
 
