@@ -7,6 +7,7 @@ import {
   Shield, FileText, Upload, CheckCircle, AlertCircle, 
   Eye, ChevronRight, Loader
 } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist/webpack';
 
 const DVLAProcessingPage = () => {
   const [loading, setLoading] = useState(false);
@@ -68,37 +69,69 @@ const DVLAProcessingPage = () => {
     }
   }, [driverEmail, loadDriverData]);
 
-  const handleFileUpload = async (fileType, file) => {
-    try {
-      setLoading(true);
-      console.log(`📁 Uploading ${fileType} file:`, file.name);
+ 
+// handleFileUpload function, updated to process PDFs
+const handleFileUpload = async (fileType, file) => {
+  try {
+    setLoading(true);
+    console.log(`📁 Uploading ${fileType} file:`, file.name);
 
-      // Convert file to base64 for processing
-      const fileData = await new Promise((resolve, reject) => {
+    let imageData;
+    
+    // Check if it's a PDF that needs conversion
+    if (file.type === 'application/pdf') {
+      console.log('📄 Converting PDF to image...');
+      
+      // Convert PDF to image using PDF.js
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1); // Get first page
+      
+      // Create canvas to render PDF
+      const viewport = page.getViewport({ scale: 2.0 }); // Higher scale for better quality
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      // Render PDF page to canvas
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+      
+      // Convert canvas to base64 image
+      imageData = canvas.toDataURL('image/png');
+      console.log('✅ PDF converted to image');
+      
+    } else {
+      // For images, just read as data URL
+      imageData = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+    }
 
-      // Process with AWS Textract
-      const processingResponse = await fetch('/.netlify/functions/document-processor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          testType: fileType === 'dvla' ? 'dvla' : 'poa',
-          imageData: fileData.split(',')[1], // Remove data URL prefix
-          documentType: fileType === 'dvla' ? 'dvla' : 'utility_bill',
-          licenseAddress: driverData?.licenseAddress,
-          fileType: file.type.includes('pdf') ? 'pdf' : 'image'
-        })
-      });
+    // Now send the image (not PDF) to document processor
+    const processingResponse = await fetch('/.netlify/functions/document-processor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        testType: fileType === 'dvla' ? 'dvla' : 'poa',
+        imageData: imageData.split(',')[1], // Remove data URL prefix
+        documentType: fileType === 'dvla' ? 'dvla' : 'utility_bill',
+        licenseAddress: driverData?.licenseAddress,
+        fileType: 'image' // Always send as image now
+      })
+    });
 
-      const processingResult = await processingResponse.json();
+    const processingResult = await processingResponse.json();
+    
+    if (processingResult.success) {
+      console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
       
-      if (processingResult.success) {
-        console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
-        
         // Store results
         setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
 
@@ -119,13 +152,12 @@ const DVLAProcessingPage = () => {
         throw new Error(processingResult.error || `${fileType.toUpperCase()} processing failed`);
       }
     } catch (error) {
-      console.error(`${fileType.toUpperCase()} upload error:`, error);
-      setError(`Failed to process ${fileType.toUpperCase()} document: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    console.error(`${fileType.toUpperCase()} upload error:`, error);
+    setError(`Failed to process ${fileType.toUpperCase()} document: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
   const performPOAValidation = async () => {
     try {
       setLoading(true);
