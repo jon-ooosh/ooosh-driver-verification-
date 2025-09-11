@@ -622,10 +622,10 @@ setCurrentStep('insurance-questionnaire');
           } else if (driverStatus?.status === 'review_required') {
             setCurrentStep('processing');
           } else {
-            const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
-            if (needsDVLA) {
-              setCurrentStep('dvla-check');
-            } else {
+           const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
+        if (needsDVLA) {
+          setCurrentStep('dvla-processing');  // Route to NEW page
+        } else {
               setCurrentStep('document-upload');
             }
           }
