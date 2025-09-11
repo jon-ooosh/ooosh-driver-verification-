@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Shield, FileText, Upload, CheckCircle, AlertCircle, 
+  FileText, Upload, CheckCircle, AlertCircle, 
   Eye, ChevronRight, Loader
 } from 'lucide-react';
 
