@@ -7,10 +7,7 @@ import {
   Shield, FileText, Upload, CheckCircle, AlertCircle, 
   Eye, ChevronRight, Loader
 } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Add this line to set up the worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+const pdfjsLib = window.pdfjsLib || {};
 
 const DVLAProcessingPage = () => {
   const [loading, setLoading] = useState(false);
@@ -19,6 +16,16 @@ const DVLAProcessingPage = () => {
   const [currentStep, setCurrentStep] = useState('loading');
   const [processingResults, setProcessingResults] = useState({});
   const [finalDecision, setFinalDecision] = useState(null);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    };
+    document.head.appendChild(script);
+  }, []);
 
   // Get driver email from URL params (passed from webhook)
   const urlParams = new URLSearchParams(window.location.search);
