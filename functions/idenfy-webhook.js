@@ -708,6 +708,18 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
     console.log('📊 Idenfy data fields:', Object.keys(fullWebhookData.data || {}));
 
     const idenfyData = fullWebhookData.data || {};
+
+      // Extract POA address data if present (for cross-validation)
+let poaAddress = '';
+if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
+  const addressData = fullWebhookData.additionalData.UTILITY_BILL.address;
+  poaAddress = addressData.value || addressData || '';
+  console.log('📍 POA Address extracted:', poaAddress);
+} else if (fullWebhookData.additionalData?.POA2?.address) {
+  const addressData = fullWebhookData.additionalData.POA2.address;
+  poaAddress = addressData.value || addressData || '';
+  console.log('📍 POA2 Address extracted:', poaAddress);
+}
     
     // Check for provisional license only (no date checking)
     if (idenfyData.driverLicenseCategory) {
@@ -792,19 +804,7 @@ licenseAddress: idenfyData.address ||
       lastUpdated: new Date().toISOString().split('T')[0]
     };
     
-    // Extract POA address data if present (for cross-validation)
-let poaAddress = '';
-if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
-  const addressData = fullWebhookData.additionalData.UTILITY_BILL.address;
-  poaAddress = addressData.value || addressData || '';
-  console.log('📍 POA Address extracted:', poaAddress);
-} else if (fullWebhookData.additionalData?.POA2?.address) {
-  const addressData = fullWebhookData.additionalData.POA2.address;
-  poaAddress = addressData.value || addressData || '';
-  console.log('📍 POA2 Address extracted:', poaAddress);
-}
-
-    // Remove empty fields (except email)
+      // Remove empty fields (except email)
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '' && key !== 'email') {
         delete updateData[key];
@@ -849,7 +849,6 @@ if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
 }
 
 // COMPLETE FUNCTION - Replace the entire saveIdenfyDocumentsToMonday function in idenfy-webhook.js
-
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📎 Saving Idenfy documents to Monday.com columns...');
