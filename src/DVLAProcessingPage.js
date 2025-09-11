@@ -153,8 +153,10 @@ const handleFileUpload = async (fileType, file) => {
       setError('❌ Invalid DVLA document. Please upload a valid DVLA check from gov.uk/view-driving-licence');
       setLoading(false);
       return; // Stop processing
+    }
        // Clear any previous errors if validation passed
     setError('');
+  }
         
       // Display and validate DVLA results
   if (fileType === 'dvla' && processingResult.result) {
