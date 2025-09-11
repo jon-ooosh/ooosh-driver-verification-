@@ -7,7 +7,10 @@ import {
   Shield, FileText, Upload, CheckCircle, AlertCircle, 
   Eye, ChevronRight, Loader
 } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist/webpack';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Add this line to set up the worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const DVLAProcessingPage = () => {
   const [loading, setLoading] = useState(false);
