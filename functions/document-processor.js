@@ -276,8 +276,18 @@ function extractLicenseEnding(text) {
 }
 
 // Parse DVLA-specific information from extracted text
-function parseDvlaFromText(text) {
+  function parseDvlaFromText(text) {
   console.log('🔍 Parsing DVLA data from extracted text...');
+  
+  // Check if this looks like a DVLA document
+  const isDvlaDocument = text.toLowerCase().includes('check code') || 
+                         text.toLowerCase().includes('driving licence') ||
+                         text.toLowerCase().includes('gov.uk') ||
+                         text.includes('XXXXXXXX');
+  
+  if (!isDvlaDocument) {
+    console.log('⚠️ Document does not appear to be a DVLA check');
+  }
   
   const dvlaData = {
     licenseNumber: null,
@@ -450,32 +460,68 @@ function parseDvlaDate(dateStr) {
 function validateDvlaData(dvlaData) {
   console.log('🔍 Validating DVLA data...');
   
-  if (!dvlaData.driverName) {
-    dvlaData.issues.push('⚠️ Driver name not found');
-    dvlaData.confidence = 'low';
-  }
-  
+  // CRITICAL: Must have check code to be valid DVLA document
   if (!dvlaData.checkCode) {
-    dvlaData.issues.push('⚠️ DVLA check code not found');
+    dvlaData.issues.push('❌ DVLA check code not found - not a valid DVLA document');
+    dvlaData.isValid = false;
+    dvlaData.confidence = 'failed';
   }
   
-  // Check if check is recent (within 30 days)
-  if (dvlaData.dateGenerated) {
+  // Must have license ending (the XXXXXXXX pattern)
+  if (!dvlaData.licenseEnding) {
+    dvlaData.issues.push('❌ License number not found - not a valid DVLA document');
+    dvlaData.isValid = false;
+    dvlaData.confidence = 'failed';
+  }
+  
+  // Must have driver name that's not a company
+  if (!dvlaData.driverName || 
+      dvlaData.driverName.includes('BANK') || 
+      dvlaData.driverName.includes('LTD') ||
+      dvlaData.driverName.includes('PLC') ||
+      dvlaData.driverName.includes('COUNCIL')) {
+    dvlaData.issues.push('❌ Valid driver name not found');
+    dvlaData.isValid = false;
+    dvlaData.confidence = 'failed';
+  }
+  
+  // Check if date is present and recent
+  if (!dvlaData.dateGenerated) {
+    dvlaData.issues.push('❌ DVLA check date not found');
+    dvlaData.isValid = false;
+  } else {
     const checkAge = calculateDaysFromDate(dvlaData.dateGenerated);
     dvlaData.ageInDays = checkAge;
     
     if (checkAge > 30) {
       dvlaData.issues.push('⚠️ DVLA check is older than 30 days');
+      dvlaData.isValid = false;
     }
   }
   
-  dvlaData.isValid = dvlaData.driverName && dvlaData.checkCode && (dvlaData.ageInDays <= 30);
+  // FINAL VALIDATION: Must have ALL critical fields
+  dvlaData.isValid = !!(dvlaData.checkCode && 
+                        dvlaData.licenseEnding && 
+                        dvlaData.driverName && 
+                        !dvlaData.driverName.includes('BANK') &&
+                        dvlaData.dateGenerated && 
+                        dvlaData.ageInDays <= 30);
   
-  // Calculate insurance decision
-  dvlaData.insuranceDecision = calculateInsuranceDecision(dvlaData);
+  if (!dvlaData.isValid) {
+    dvlaData.insuranceDecision = {
+      approved: false,
+      manualReview: true,
+      reasons: ['Document validation failed - not a valid DVLA check'],
+      riskLevel: 'invalid'
+    };
+  } else {
+    // Only calculate insurance decision if document is valid
+    dvlaData.insuranceDecision = calculateInsuranceDecision(dvlaData);
+  }
+  
   dvlaData.extractionSuccess = dvlaData.isValid;
   
-  console.log(`🚗 DVLA validation complete: ${dvlaData.issues.length} issues, ${dvlaData.totalPoints} points`);
+  console.log(`🚗 DVLA validation complete: Valid=${dvlaData.isValid}, Issues=${dvlaData.issues.length}, Points=${dvlaData.totalPoints}`);
   return dvlaData;
 }
 
