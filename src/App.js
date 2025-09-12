@@ -601,6 +601,26 @@ const DriverVerificationApp = () => {
       
       // Check driver status
       await checkDriverStatus();
+
+      // Force refresh driver status to get nationality
+const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+if (response.ok) {
+  const freshData = await response.json();
+  setDriverStatus(freshData);
+  
+  // Check UK driver with fresh data
+  const isUKDriver = freshData?.nationality === 'GB' || 
+                    freshData?.nationality === 'United Kingdom' ||
+                    freshData?.licenseIssuedBy === 'DVLA' ||
+                    freshData?.licenseIssuedBy?.includes('GB');
+  
+  if (isUKDriver) {
+    console.log('🇬🇧 UK driver detected - forcing DVLA redirect');
+    const dvlaUrl = `${window.location.origin}/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`;
+    window.location.href = dvlaUrl;
+    return;
+  }
+}
       
       // Check if this is a UK driver based on nationality or license issuer
       const isUKDriver = driverStatus?.nationality === 'GB' || 
