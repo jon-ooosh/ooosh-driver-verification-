@@ -1,6 +1,6 @@
 // File: src/App.js
 // ooosh Tours Driver Verification - COMPLETE FIXED VERSION
-// All issues resolved: phone cursor, insurance data, document dates, UI improvements
+// All issues resolved: phone cursor, insurance data, document dates, UI improvements, routing fixes
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, User } from 'lucide-react';
@@ -57,34 +57,35 @@ const DriverVerificationApp = () => {
       }
     }, 0);
   };
-const calculateExpiryDate = (daysToAdd) => {
-  const date = new Date();
-  date.setDate(date.getDate() + daysToAdd);
-  return date.toISOString().split('T')[0];
-};
+  
+  const calculateExpiryDate = (daysToAdd) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysToAdd);
+    return date.toISOString().split('T')[0];
+  };
 
-const updateDriverData = async (updates) => {
-  try {
-    const response = await fetch('/.netlify/functions/monday-integration', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'update-driver-board-a',
-        email: driverEmail, // Make sure driverEmail is in scope
-        updates: updates
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to update driver data');
+  const updateDriverData = async (updates) => {
+    try {
+      const response = await fetch('/.netlify/functions/monday-integration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-driver-board-a',
+          email: driverEmail, // Make sure driverEmail is in scope
+          updates: updates
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update driver data');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating driver data:', error);
+      throw error;
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error updating driver data:', error);
-    throw error;
-  }
-};
+  };
   
   // Detect mobile device
   useEffect(() => {
@@ -116,20 +117,31 @@ const updateDriverData = async (updates) => {
     };
   }, []);
 
-  // Extract job ID from URL on load
+  // UPDATED: Extract job ID from URL on load with DVLA processing support
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const jobParam = urlParams.get('job');
-    
     const emailParam = urlParams.get('email');
     const stepParam = urlParams.get('step');
+    const ukParam = urlParams.get('uk');
     
+    console.log('📍 URL Parameters on load:', {
+      job: jobParam,
+      email: emailParam,
+      step: stepParam,
+      uk: ukParam
+    });
+    
+    // Handle direct navigation to DVLA processing page
     if (stepParam === 'dvla-processing' && emailParam) {
+      console.log('🎯 Direct navigation to DVLA processing page');
       setDriverEmail(decodeURIComponent(emailParam));
+      if (jobParam) setJobId(jobParam);
       setCurrentStep('dvla-processing');
-      return;
+      return; // Stop processing other parameters
     }
     
+    // Handle normal job flow
     if (jobParam) {
       setJobId(jobParam);
       validateJobAndFetchDetails(jobParam);
@@ -368,23 +380,8 @@ const updateDriverData = async (updates) => {
       console.error('Failed to save contact details - continuing anyway');
     }
     
-    // CURRENT CODE (problematic):
-// if (driverStatus?.status === 'verified' || 
- //    (driverStatus?.documents?.license?.valid && 
-//      driverStatus?.documents?.poa1?.valid && 
- //     driverStatus?.documents?.poa2?.valid && 
- //     driverStatus?.documents?.dvlaCheck?.valid)) {
-  // All documents valid - skip to signature
- //  setCurrentStep('complete'); // For now, mark as complete
-// } else if (!needsInsuranceQuestionnaire()) {
-  // setCurrentStep('document-upload');
-// } else {
-  // setCurrentStep('insurance-questionnaire');
-// }
-
-// REPLACE WITH:
-// ALWAYS go through insurance questionnaire for each hire
-setCurrentStep('insurance-questionnaire');
+    // ALWAYS go through insurance questionnaire for each hire
+    setCurrentStep('insurance-questionnaire');
     
   } catch (err) {
     console.error('Error saving contact details:', err);
@@ -397,19 +394,6 @@ setCurrentStep('insurance-questionnaire');
   const needsInsuranceQuestionnaire = () => {
     return true; // Always require for new hires
   };
-
-  // Removed this as defined elsewhere
- // const isDocumentValid = (expiryDateString) => {
- //   if (!expiryDateString) return false;
- //   
- //   const today = new Date();
-  //  today.setHours(0, 0, 0, 0);
-  //  
- //   const expiryDate = new Date(expiryDateString);
-  //  expiryDate.setHours(0, 0, 0, 0);
- //   
- //   return expiryDate >= today;
-//  };
 
  const checkDriverStatus = async () => {
   try {
@@ -604,6 +588,7 @@ setCurrentStep('insurance-questionnaire');
     }
   };
 
+  // UPDATED: Enhanced verification complete handler with UK driver routing
   const handleVerificationComplete = async (status, jobIdParam, sessionId) => {
     console.log('Handling verification complete:', { status, jobId: jobIdParam, sessionId });
     
@@ -611,23 +596,47 @@ setCurrentStep('insurance-questionnaire');
     setError('');
     
     try {
+      // Wait for webhook to process
+      console.log('⏳ Waiting for webhook to process...');
       await new Promise(resolve => setTimeout(resolve, 3000));
       
+      // Check driver status
       await checkDriverStatus();
+      
+      // Check if this is a UK driver based on nationality or license issuer
+      const isUKDriver = driverStatus?.nationality === 'GB' || 
+                        driverStatus?.nationality === 'United Kingdom' ||
+                        driverStatus?.licenseIssuedBy === 'DVLA' ||
+                        driverStatus?.licenseIssuedBy?.includes('GB');
+      
+      console.log('🔍 Driver status check:', {
+        nationality: driverStatus?.nationality,
+        licenseIssuedBy: driverStatus?.licenseIssuedBy,
+        isUKDriver: isUKDriver,
+        status: status
+      });
       
       switch (status) {
         case 'success':
-          if (driverStatus?.status === 'verified') {
+          if (isUKDriver) {
+            // UK driver needs DVLA check - FORCE REDIRECT
+            console.log('🇬🇧 UK driver detected - routing to DVLA processing page');
+            
+            const dvlaUrl = `${window.location.origin}/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`;
+            console.log('📍 Redirecting to:', dvlaUrl);
+            
+            // Force redirect to DVLA page
+            window.location.href = dvlaUrl;
+            return; // Stop further processing
+            
+          } else if (driverStatus?.status === 'verified') {
+            // Non-UK driver, fully verified
             setCurrentStep('complete');
           } else if (driverStatus?.status === 'review_required') {
             setCurrentStep('processing');
+            setError('Your documents are being reviewed. We\'ll contact you shortly.');
           } else {
-           const needsDVLA = !driverStatus?.documents?.dvlaCheck?.valid;
-        if (needsDVLA) {
-          setCurrentStep('dvla-processing');  // Route to NEW page
-        } else {
-              setCurrentStep('document-upload');
-            }
+            setCurrentStep('document-upload');
           }
           break;
           
@@ -638,7 +647,14 @@ setCurrentStep('insurance-questionnaire');
           break;
           
         case 'mock':
-          setCurrentStep('complete');
+          // Test mode - check if UK driver
+          if (isUKDriver) {
+            const dvlaUrl = `${window.location.origin}/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`;
+            window.location.href = dvlaUrl;
+            return;
+          } else {
+            setCurrentStep('complete');
+          }
           break;
           
         default:
@@ -1894,61 +1910,6 @@ const InsuranceQuestionnaire = () => {
    </div>
  );
 
- const renderDVLACheck = () => (
-   <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-     <div className="text-center mb-6">
-       <Camera className="mx-auto h-12 w-12 text-orange-600 mb-4" />
-       <h2 className="text-3xl font-bold text-gray-900">DVLA licence check</h2>
-       <p className="text-xl text-gray-600 mt-2">Upload your DVLA check document</p>
-     </div>
-
-     <div className="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
-       <h3 className="text-xl font-medium text-orange-900 mb-2">How to get your DVLA check:</h3>
-       <ol className="text-lg text-orange-800 space-y-1 list-decimal list-inside">
-         <li>Visit gov.uk/check-driving-licence</li>
-         <li>Enter your licence details</li>
-         <li>Download/screenshot the summary page</li>
-         <li>Upload it here</li>
-       </ol>
-     </div>
-
-     <div className="space-y-4">
-       <div>
-         <label className="block text-lg font-medium text-gray-700 mb-2">
-           DVLA check document
-         </label>
-         <input
-           type="file"
-           accept="image/*,.pdf"
-           onChange={(e) => setUploadedFile(e.target.files[0])}
-           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-lg"
-         />
-       </div>
-
-       {error && (
-         <div className="bg-red-50 border border-red-200 rounded-md p-3">
-           <p className="text-lg text-red-800">{error}</p>
-         </div>
-       )}
-
-       <button
-         onClick={() => processDVLACheck(uploadedFile)}
-         disabled={loading || !uploadedFile}
-         className="w-full bg-orange-600 text-white py-3 px-4 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 text-lg"
-       >
-         {loading ? 'Processing document...' : 'Verify DVLA check'}
-       </button>
-
-       <button
-         onClick={() => setCurrentStep('document-upload')}
-         className="w-full text-gray-600 hover:text-gray-700 text-lg"
-       >
-         Back to document upload
-       </button>
-     </div>
-   </div>
- );
-
  const renderProcessing = () => (
    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
      <div className="text-center py-8">
@@ -2025,7 +1986,7 @@ const renderRejected = () => (
   </div>
 );
 
- // Main render logic
+ // UPDATED: Main render logic with proper DVLA processing
  const renderStep = () => {
    switch(currentStep) {
      case 'landing': return renderLanding();
@@ -2034,8 +1995,19 @@ const renderRejected = () => (
      case 'contact-details': return <ContactDetails />;
      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
      case 'document-upload': return renderDocumentUpload();
-     case 'dvla-processing': return <DVLAProcessingPage driverEmail={driverEmail} onComplete={() => setCurrentStep('complete')} onDVLAUpload={handleDVLAUpload} />;
-     case 'dvla-check': return renderDVLACheck();
+     
+     // NEW DVLA PROCESSING PAGE (purple theme) - NO MORE OLD DVLA CHECK
+     case 'dvla-processing': 
+       return (
+         <DVLAProcessingPage 
+           driverEmail={driverEmail} 
+           onComplete={() => setCurrentStep('complete')} 
+           onDVLAUpload={handleDVLAUpload}
+         />
+       );
+     
+     // REMOVED: case 'dvla-check': return renderDVLACheck();
+     
      case 'processing': return renderProcessing();
      case 'complete': return renderComplete();
      case 'rejected': return renderRejected();
