@@ -3,7 +3,7 @@
 // All issues resolved: phone cursor, insurance data, document dates, UI improvements, routing fixes
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, Camera, ExternalLink, Smartphone, User } from 'lucide-react';
+import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, ExternalLink, Smartphone, User } from 'lucide-react';
 import DVLAProcessingPage from './DVLAProcessingPage';
 
 const DriverVerificationApp = () => {
@@ -17,7 +17,6 @@ const DriverVerificationApp = () => {
   const [driverStatus, setDriverStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [uploadedFile, setUploadedFile] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
 
   // Scroll position maintenance
@@ -722,78 +721,6 @@ const handleDVLAUpload = async (dvlaFile) => {
   }
 };
  
-  const processDVLACheck = async (file) => {
-    if (!file) {
-      setError('Please select a DVLA check document');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      console.log('Processing DVLA check document:', file.name);
-      
-      const base64 = await fileToBase64(file);
-      
-      const dvlaData = await extractDVLAData(base64);
-      console.log('Extracted DVLA data:', dvlaData);
-      
-      if (validateDVLAData(dvlaData)) {
-        setDriverStatus(prev => ({
-          ...prev,
-          documents: {
-            ...prev.documents,
-            dvlaCheck: { valid: true, lastCheck: new Date().toISOString().split('T')[0] }
-          }
-        }));
-        
-        setCurrentStep('document-upload');
-        setError('');
-      } else {
-        setError('Could not validate DVLA check document. Please ensure the document is clear and try again.');
-      }
-    } catch (err) {
-      console.error('DVLA processing error:', err);
-      setError('Failed to process DVLA check document. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = error => reject(error);
-    });
-  };
-
-  const extractDVLAData = async (base64Image) => {
-    try {
-      console.log('Extracting DVLA data from image...');
-      
-      return {
-        driverName: "John Doe",
-        licenceNumber: "XXXXXX066JD9LA",
-        checkCode: "Kd m3 ch Nn",
-        dateGenerated: new Date().toISOString().split('T')[0],
-        drivingStatus: "Current full licence",
-        endorsements: "1 Offence, 3 Points",
-        validTo: "2032-08-01"
-      };
-    } catch (err) {
-      console.error('AWS  extraction error:', err);
-      throw new Error('Failed to extract data from document');
-    }
-  };
-
-  const validateDVLAData = (dvlaData) => {
-    if (!dvlaData.driverName || !dvlaData.licenceNumber || !dvlaData.checkCode) {
-      return false;
-    }
-    return true;
-  };
-
   const generateQRCode = () => {
     const currentUrl = window.location.href;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentUrl)}`;
