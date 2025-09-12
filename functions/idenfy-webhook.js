@@ -848,7 +848,8 @@ licenseAddress: idenfyData.address ||
   }
 }
 
-// COMPLETE FUNCTION - Replace the entire saveIdenfyDocumentsToMonday function in idenfy-webhook.js
+// Updated saveIdenfyDocumentsToMonday function in idenfy-webhook.js - HANDLES PDFs DIRECTLY WITHOUT CONVERSION
+
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📎 Saving Idenfy documents to Monday.com columns...');
@@ -910,68 +911,48 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
       
       try {
         // Download the file from Idenfy
-console.log(`⬇️ Downloading ${mapping.idenfyField} from Idenfy...`);
-const fileResponse = await fetch(mapping.url);
+        console.log(`⬇️ Downloading ${mapping.idenfyField} from Idenfy...`);
+        const fileResponse = await fetch(mapping.url);
 
-if (!fileResponse.ok) {
-  console.error(`❌ Failed to download ${mapping.idenfyField}: HTTP ${fileResponse.status}`);
-  uploadResults.push({ 
-    field: mapping.idenfyField, 
-    success: false, 
-    error: `Download failed: HTTP ${fileResponse.status}` 
-  });
-  continue;
-}
+        if (!fileResponse.ok) {
+          console.error(`❌ Failed to download ${mapping.idenfyField}: HTTP ${fileResponse.status}`);
+          uploadResults.push({ 
+            field: mapping.idenfyField, 
+            success: false, 
+            error: `Download failed: HTTP ${fileResponse.status}` 
+          });
+          continue;
+        }
 
-// Get buffer from response
-const arrayBuffer = await fileResponse.arrayBuffer();
-const buffer = Buffer.from(arrayBuffer);
-const base64Data = buffer.toString('base64');
-
-// Check if it's a PDF that needs conversion
-const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46; // %PDF
-
-let finalImageData = base64Data;
-if (isPDF) {
-  console.log(`📄 PDF detected for ${mapping.idenfyField}, converting to image...`);
-  
-  // Call document processor to convert PDF to image
-  const conversionResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'pdf-to-image',
-      imageData: base64Data,
-      returnImage: true
-    })
-  });
-  
-  if (conversionResponse.ok) {
-    const conversionResult = await conversionResponse.json();
-    if (conversionResult.imageData) {
-      finalImageData = conversionResult.imageData;
-      console.log(`✅ PDF converted to image for ${mapping.idenfyField}`);
-    }
-  } else {
-    console.log(`⚠️ PDF conversion failed for ${mapping.idenfyField}, uploading original`);
-  }
-}
+        // Get buffer from response
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64Data = buffer.toString('base64');
         
         console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
         
-        // Determine file extension from content type or URL
-        const contentType = fileResponse.headers.get('content-type');
+        // Determine file extension and content type from response or URL
+        const contentType = fileResponse.headers.get('content-type') || '';
         let extension = 'jpg'; // default
-        if (contentType) {
-          if (contentType.includes('pdf')) extension = 'pdf';
-          else if (contentType.includes('png')) extension = 'png';
-          else if (contentType.includes('jpeg') || contentType.includes('jpg')) extension = 'jpg';
-        } else if (mapping.url.toLowerCase().includes('.pdf')) {
+        let mimeType = 'image/jpeg';
+        
+        // Check if it's a PDF
+        const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46; // %PDF magic bytes
+        
+        if (isPDF || contentType.includes('pdf') || mapping.url.toLowerCase().includes('.pdf')) {
           extension = 'pdf';
+          mimeType = 'application/pdf';
+          console.log(`📄 PDF detected for ${mapping.idenfyField} - uploading as PDF`);
+        } else if (contentType.includes('png')) {
+          extension = 'png';
+          mimeType = 'image/png';
+        } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+          extension = 'jpg';
+          mimeType = 'image/jpeg';
         }
         
-        // Upload to Monday.com via monday-integration
-        console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}...`);
+        // Upload to Monday.com via monday-integration (no conversion needed)
+        console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
         const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -980,18 +961,20 @@ if (isPDF) {
             email: email,
             fileType: mapping.fileType,
             fileData: base64Data,
-            filename: `${mapping.fileType}_${Date.now()}.${extension}`
+            filename: `${mapping.fileType}_${Date.now()}.${extension}`,
+            contentType: mimeType  // Pass the correct content type
           })
         });
         
         const uploadResult = await uploadResponse.json();
         
         if (uploadResponse.ok && uploadResult.success) {
-          console.log(`✅ ${mapping.idenfyField} uploaded successfully`);
+          console.log(`✅ ${mapping.idenfyField} uploaded successfully as ${extension.toUpperCase()}`);
           uploadResults.push({ 
             field: mapping.idenfyField, 
             success: true,
-            fileId: uploadResult.fileId 
+            fileId: uploadResult.fileId,
+            format: extension.toUpperCase()
           });
         } else {
           console.error(`❌ Failed to upload ${mapping.idenfyField} to Monday:`, uploadResult.error);
