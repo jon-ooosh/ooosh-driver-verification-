@@ -380,12 +380,14 @@ async function findDriverBoardA(data) {
   }
 }
 
-// Upload file to Board A - FIXED VERSION
+// Updated uploadFileBoardA function in monday-integration.js
+// Lines 386-443 replacement - HANDLES PDFs WITH PROPER CONTENT TYPE
+
 async function uploadFileBoardA(data) {
   console.log('📁 Uploading file to Board A');
   
   try {
-    const { email, fileType, fileData, filename } = data;
+    const { email, fileType, fileData, filename, contentType } = data;
     
     if (!email || !fileType || !fileData) {
       throw new Error('Email, fileType, and fileData are required');
@@ -429,6 +431,33 @@ async function uploadFileBoardA(data) {
     const buffer = Buffer.from(fileData, 'base64');
     console.log(`📦 File buffer size: ${buffer.length} bytes`);
 
+    // Detect file type from buffer or use provided contentType
+    let detectedContentType = contentType || 'image/jpeg';
+    let fileExtension = 'jpg';
+    
+    // Check for PDF magic bytes
+    if (buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46) {
+      detectedContentType = 'application/pdf';
+      fileExtension = 'pdf';
+      console.log('📄 PDF detected from magic bytes');
+    } 
+    // Check for PNG magic bytes
+    else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+      detectedContentType = 'image/png';
+      fileExtension = 'png';
+      console.log('🖼️ PNG detected from magic bytes');
+    }
+    // Check for JPEG magic bytes
+    else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+      detectedContentType = 'image/jpeg';
+      fileExtension = 'jpg';
+      console.log('🖼️ JPEG detected from magic bytes');
+    }
+    
+    // Use filename if provided, otherwise generate one
+    const finalFilename = filename || `${fileType}_${Date.now()}.${fileExtension}`;
+    console.log(`📝 Uploading as: ${finalFilename} (${detectedContentType})`);
+
     // GraphQL mutation for file upload
     const mutation = `
       mutation($file: File!) {
@@ -447,15 +476,15 @@ async function uploadFileBoardA(data) {
     // CRITICAL: Proper FormData structure with map parameter
     formData.append('query', mutation);
     formData.append('variables', JSON.stringify({ file: null }));
-    formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // THIS WAS MISSING!
+    formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // CRITICAL FOR FILE MAPPING!
     
-    // Append the actual file
+    // Append the actual file with detected content type
     formData.append('0', buffer, { 
-      filename: filename || `${fileType}.png`, 
-      contentType: 'image/png' 
+      filename: finalFilename,
+      contentType: detectedContentType
     });
 
-    console.log(`📤 Sending file to Monday.com API...`);
+    console.log(`📤 Sending ${fileExtension.toUpperCase()} file to Monday.com API...`);
 
     // Send to Monday.com file upload endpoint
     const response = await fetch('https://api.monday.com/v2/file', {
@@ -468,25 +497,27 @@ async function uploadFileBoardA(data) {
     });
 
     const responseText = await response.text();
-    console.log(`📥 Monday API response: ${responseText}`);
+    console.log(`📥 Monday API response status: ${response.status}`);
 
     let result;
     try {
       result = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse response:', responseText);
+      console.error('Failed to parse response:', responseText.substring(0, 200));
       throw new Error('Invalid response from Monday.com');
     }
 
     // Check for GraphQL errors
     if (result.errors && result.errors.length > 0) {
       console.error(`❌ GraphQL errors:`, JSON.stringify(result.errors, null, 2));
-      throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
+      throw new Error(`GraphQL error: ${result.errors[0].message || JSON.stringify(result.errors)}`);
     }
 
     // Check for successful upload
     if (result.data?.add_file_to_column?.id) {
       console.log(`✅ File uploaded successfully: ${result.data.add_file_to_column.name}`);
+      console.log(`📎 File URL: ${result.data.add_file_to_column.url}`);
+      
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -495,22 +526,24 @@ async function uploadFileBoardA(data) {
           fileId: result.data.add_file_to_column.id,
           fileName: result.data.add_file_to_column.name,
           fileUrl: result.data.add_file_to_column.url,
-          message: `File uploaded to Board A - ${fileType}`
+          fileType: fileExtension.toUpperCase(),
+          message: `${fileExtension.toUpperCase()} file uploaded to Board A - ${fileType}`
         })
       };
     } else {
-      console.error('Unexpected response structure:', result);
+      console.error('Unexpected response structure:', JSON.stringify(result).substring(0, 500));
       throw new Error('File upload failed - no file ID returned');
     }
 
   } catch (error) {
-    console.error('Upload file Board A error:', error);
+    console.error('❌ Upload file error:', error.message);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        success: false, 
-        error: error.message 
+        success: false,
+        error: error.message,
+        details: 'File upload to Board A failed'
       })
     };
   }
