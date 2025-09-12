@@ -165,7 +165,7 @@ const handleFileUpload = async (fileType, file) => {
     // Check license ending matches Idenfy data
     if (driverData?.licenseEnding && dvlaData.licenseEnding) {
       if (driverData.licenseEnding !== dvlaData.licenseEnding) {
-        setError('⚠️ License number mismatch - manual review required');
+        setError('⚠️ Licence number mismatch - manual review required');
       }
     }
     
@@ -370,7 +370,7 @@ const handleFileUpload = async (fileType, file) => {
     alt="Ooosh Tours Ltd" 
     className="mx-auto h-12 w-auto mb-4"
   />
-  <h2 className="text-4xl font-bold text-gray-900">Upload your DVLA driving license check document</h2>
+  <h2 className="text-4xl font-bold text-gray-900">Upload your DVLA check</h2>
   </div>
     
 {/* Progress Tracker */}
@@ -635,7 +635,7 @@ const VerificationComplete = ({ decision, driverData, isUKDriver }) => {
           {isUKDriver && decision.dvlaValidation && (
             <>
               <div className="flex justify-between">
-                <span className="text-gray-600">License Points:</span>
+                <span className="text-gray-600">Licence Points:</span>
                 <span className="font-medium">{decision.dvlaValidation.points || 0}</span>
               </div>
               <div className="flex justify-between">
