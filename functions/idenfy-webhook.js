@@ -709,6 +709,20 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
 
     const idenfyData = fullWebhookData.data || {};
 
+    // Get existing driver data to preserve datePassedTest
+    const existingDriverResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'find-driver-board-a',
+        email: email
+      })
+    });
+
+     const existingDriverData = await existingDriverResponse.json();
+    const preservedDatePassedTest = existingDriverData.driver?.datePassedTest || '';
+    console.log('📅 Preserved datePassedTest:', preservedDatePassedTest);
+
       // Extract POA address data if present (for cross-validation)
 let poaAddress = '';
 if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
@@ -779,8 +793,8 @@ if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
       licenseValidTo: idenfyData.docExpiry,
       licenseEnding: idenfyResult.licenseEnding,
       
-      // License Valid From (issue date - NOT the same as date passed test)
-      licenseValidFrom: idenfyData.docDateOfIssue || '',
+     // License Valid From - use preserved datePassedTest from insurance questionnaire
+      licenseValidFrom: preservedDatePassedTest || idenfyData.docDateOfIssue || '',
       
       // Authority/Issuer
       licenseIssuedBy: idenfyData.authority || 
@@ -929,28 +943,38 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
         const buffer = Buffer.from(arrayBuffer);
         const base64Data = buffer.toString('base64');
         
-        console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
-        
-        // Determine file extension and content type from response or URL
-        const contentType = fileResponse.headers.get('content-type') || '';
-        let extension = 'jpg'; // default
-        let mimeType = 'image/jpeg';
-        
-        // Check if it's a PDF
-        const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46; // %PDF magic bytes
-        
-        if (isPDF || contentType.includes('pdf') || mapping.url.toLowerCase().includes('.pdf')) {
-          extension = 'pdf';
-          mimeType = 'application/pdf';
-          console.log(`📄 PDF detected for ${mapping.idenfyField} - uploading as PDF`);
-        } else if (contentType.includes('png')) {
-          extension = 'png';
-          mimeType = 'image/png';
-        } else if (contentType.includes('jpeg') || contentType.includes('jpg')) {
-          extension = 'jpg';
-          mimeType = 'image/jpeg';
-        }
-        
+      console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
+
+// Check actual file content using magic bytes
+const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46; // %PDF
+const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
+
+let extension = 'jpg'; // default
+let mimeType = 'image/jpeg';
+
+if (isPDF) {
+  extension = 'pdf';
+  mimeType = 'application/pdf';
+  console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
+} else if (isPNG) {
+  extension = 'png';
+  mimeType = 'image/png';
+  console.log(`🖼️ Verified PNG format for ${mapping.idenfyField}`);
+} else if (isJPEG) {
+  extension = 'jpg';
+  mimeType = 'image/jpeg';
+  console.log(`📸 Verified JPEG format for ${mapping.idenfyField}`);
+} else {
+  console.log(`⚠️ Unknown format for ${mapping.idenfyField}, checking headers...`);
+  // Fallback to content-type header
+  const contentType = fileResponse.headers.get('content-type') || '';
+  if (contentType.includes('pdf')) {
+    extension = 'pdf';
+    mimeType = 'application/pdf';
+  }
+}
+             
         // Upload to Monday.com via monday-integration (no conversion needed)
         console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
         const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
