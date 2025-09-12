@@ -850,18 +850,75 @@ function extractAccountNumber(text) {
 async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress, fileType) {
   console.log('🔄 Testing DUAL POA cross-validation workflow');
   
-  const poa1Analysis = getMockPoaData('POA1');
-  const poa2Analysis = getMockPoaData('POA2');
-  const crossValidation = performPoaCrossValidation(poa1Analysis, poa2Analysis);
+  try {
+    // Extract text from both documents
+    const text1Result = await callAwsTextract(imageData1, fileType);
+    const text2Result = await callAwsTextract(imageData2, fileType);
+    
+    // Check for duplicate documents
+    const hash1 = calculateDocumentHash(text1Result.extractedText);
+    const hash2 = calculateDocumentHash(text2Result.extractedText);
+    
+    if (hash1 === hash2) {
+      console.log('❌ Same document uploaded twice!');
+      return {
+        testType: 'dual-poa',
+        success: false,
+        error: 'Same document uploaded twice',
+        isDuplicate: true,
+        crossValidation: {
+          approved: false,
+          issues: ['Identical documents detected'],
+          checks: {
+            bothExtracted: true,
+            differentProviders: false,
+            differentDocuments: false
+          }
+        }
+      };
+    }
+    
+    // Extract POA data from each
+    const poa1 = {
+      providerName: extractProviderName(text1Result.extractedText),
+      documentDate: extractPoaDate(text1Result.extractedText),
+      address: extractAddress(text1Result.extractedText)
+    };
+    
+    const poa2 = {
+      providerName: extractProviderName(text2Result.extractedText),
+      documentDate: extractPoaDate(text2Result.extractedText),
+      address: extractAddress(text2Result.extractedText)
+    };
+    
+    // Perform cross-validation
+    const crossValidation = performPoaCrossValidation(poa1, poa2);
+    
+    return {
+      testType: 'dual-poa',
+      poa1: poa1,
+      poa2: poa2,
+      crossValidation: crossValidation,
+      overallValid: crossValidation.approved,
+      ocrProvider: 'AWS Textract'
+    };
+    
+  } catch (error) {
+    console.error('Dual POA error:', error);
+    return getMockPoaData('dual-poa-error');
+  }
+}
+
+function calculateDocumentHash(text) {
+  const crypto = require('crypto');
+  // Normalize text: remove dates, lowercase, remove spaces
+  const normalized = text
+    .toLowerCase()
+    .replace(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/g, '') // Remove dates
+    .replace(/\s+/g, '') // Remove spaces
+    .substring(0, 1000); // Use first 1000 chars for comparison
   
-  return {
-    testType: 'dual-poa',
-    poa1: poa1Analysis,
-    poa2: poa2Analysis,
-    crossValidation: crossValidation,
-    overallValid: crossValidation.approved,
-    ocrProvider: 'Mock Data'
-  };
+  return crypto.createHash('md5').update(normalized).digest('hex');
 }
 
 function performPoaCrossValidation(poa1, poa2) {
