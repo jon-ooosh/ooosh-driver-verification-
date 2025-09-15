@@ -7,8 +7,6 @@ import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, Exter
 import DVLAProcessingPage from './DVLAProcessingPage';
 import POAValidationPage from './POAValidationPage';
 import PassportUploadPage from './PassportUploadPage';
-import POAValidationPage from './POAValidationPage';
-import PassportUploadPage from './PassportUploadPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -1942,8 +1940,7 @@ case 'passport-upload':
 
 // NEW DVLA PROCESSING PAGE (purple theme) - NO MORE OLD DVLA CHECK  
 case 'dvla-processing':
-     case 'dvla-processing': 
-       return (
+      return (
          <DVLAProcessingPage 
            driverEmail={driverEmail} 
            onComplete={() => setCurrentStep('complete')} 
