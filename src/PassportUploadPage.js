@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, CheckCircle, XCircle, Loader, BookOpen } from 'lucide-react';
+import { Upload, XCircle, Loader, BookOpen } from 'lucide-react';
 
 const PassportUploadPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(false);
