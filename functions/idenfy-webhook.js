@@ -946,7 +946,7 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
       console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
 
 // Check actual file content using magic bytes
-const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46; // %PDF
+const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
 const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
 const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
 const isWEBP = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
