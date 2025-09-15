@@ -7,6 +7,8 @@ import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, Exter
 import DVLAProcessingPage from './DVLAProcessingPage';
 import POAValidationPage from './POAValidationPage';
 import PassportUploadPage from './PassportUploadPage';
+import POAValidationPage from './POAValidationPage';
+import PassportUploadPage from './PassportUploadPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -635,7 +637,7 @@ const DriverVerificationApp = () => {
           } else if (freshData?.status === 'verified') {
             setCurrentStep('complete');
           } else {
-            setCurrentStep('document-upload');
+            setCurrentStep('poa-validation');
           }
           break;
           
@@ -1930,10 +1932,9 @@ const renderRejected = () => (
     />
   );
 
-// Passport upload for non-UK drivers
 case 'passport-upload':
   return (
-    <PassportUploadPage
+    <PassportUploadPage 
       driverEmail={driverEmail}
       jobId={jobId}
     />
