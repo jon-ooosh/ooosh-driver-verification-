@@ -170,7 +170,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     } finally {
       setLoading(false);
     }
-  }, [driverEmail]);
+  }, [driverEmail, proceedToNext]);
 
   const proceedToNext = useCallback((data) => {
     const checkData = data || driverData;
