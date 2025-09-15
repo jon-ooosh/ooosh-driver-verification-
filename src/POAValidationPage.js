@@ -1,6 +1,3 @@
-// File: src/POAValidationPage.js
-// POA duplicate checking and date extraction page
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader } from 'lucide-react';
 
@@ -110,30 +107,29 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       const poa1Date = result.result?.poa1?.documentDate || null;
       const poa2Date = result.result?.poa2?.documentDate || null;
       
-      // Calculate validity dates (90 days from document date, or 30 days from today as fallback)
+      // Use actual document date OR fallback to 30 days from today
       const today = new Date();
-      const defaultValidityDays = 30;
-      const normalValidityDays = 90;
+      const fallbackValidityDays = 30;
       
       let poa1ValidUntil, poa2ValidUntil;
       
       if (poa1Date) {
-        const date1 = new Date(poa1Date);
-        date1.setDate(date1.getDate() + normalValidityDays);
-        poa1ValidUntil = date1.toISOString().split('T')[0];
+        // Use the actual document date as the validity date
+        poa1ValidUntil = poa1Date;
       } else {
+        // Fallback: 30 days from today
         const fallbackDate = new Date(today);
-        fallbackDate.setDate(fallbackDate.getDate() + defaultValidityDays);
+        fallbackDate.setDate(fallbackDate.getDate() + fallbackValidityDays);
         poa1ValidUntil = fallbackDate.toISOString().split('T')[0];
       }
       
       if (poa2Date) {
-        const date2 = new Date(poa2Date);
-        date2.setDate(date2.getDate() + normalValidityDays);
-        poa2ValidUntil = date2.toISOString().split('T')[0];
+        // Use the actual document date as the validity date
+        poa2ValidUntil = poa2Date;
       } else {
+        // Fallback: 30 days from today
         const fallbackDate = new Date(today);
-        fallbackDate.setDate(fallbackDate.getDate() + defaultValidityDays);
+        fallbackDate.setDate(fallbackDate.getDate() + fallbackValidityDays);
         poa2ValidUntil = fallbackDate.toISOString().split('T')[0];
       }
       
