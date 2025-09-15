@@ -588,72 +588,50 @@ const DriverVerificationApp = () => {
   };
 
   // UPDATED: Enhanced verification complete handler with UK driver routing
-  const handleVerificationComplete = async (status, jobIdParam, sessionId) => {
-    console.log('Handling verification complete:', { status, jobId: jobIdParam, sessionId });
-    
-    setCurrentStep('processing');
-    setError('');
-    
-    try {
-      // Wait for webhook to process
-      console.log('⏳ Waiting for webhook to process...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Check driver status
-      await checkDriverStatus();
-
-      // Force refresh driver status to get nationality
-const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
-if (response.ok) {
-  const freshData = await response.json();
-  setDriverStatus(freshData);
+ const handleVerificationComplete = async (status, jobIdParam, sessionId) => {
+  console.log('Handling verification complete:', { status, jobId: jobIdParam, sessionId });
   
-  // Check UK driver with fresh data
-  const isUKDriver = freshData?.nationality === 'GB' || 
-                    freshData?.nationality === 'United Kingdom' ||
-                    freshData?.licenseIssuedBy === 'DVLA' ||
-                    freshData?.licenseIssuedBy?.includes('GB');
+  setCurrentStep('processing');
+  setError('');
   
-  if (isUKDriver) {
-    console.log('🇬🇧 UK driver detected - forcing DVLA redirect');
-    const dvlaUrl = `${window.location.origin}/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`;
-    window.location.href = dvlaUrl;
-    return;
-  }
-}
+  try {
+    // Wait for webhook to process
+    console.log('⏳ Waiting for webhook to process...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Check driver status
+    await checkDriverStatus();
+    
+    // Force a fresh check with proper UK detection
+    const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+    if (response.ok) {
+      const freshData = await response.json();
+      console.log('🔍 DEBUG: Fresh driver data:', freshData);
       
-      // Check if this is a UK driver based on nationality or license issuer
-      const isUKDriver = driverStatus?.nationality === 'GB' || 
-                        driverStatus?.nationality === 'United Kingdom' ||
-                        driverStatus?.licenseIssuedBy === 'DVLA' ||
-                        driverStatus?.licenseIssuedBy?.includes('GB');
+      // Update state with fresh data
+      setDriverStatus(freshData);
       
-      console.log('🔍 Driver status check:', {
-        nationality: driverStatus?.nationality,
-        licenseIssuedBy: driverStatus?.licenseIssuedBy,
-        isUKDriver: isUKDriver,
-        status: status
+      // Check multiple fields for UK
+      const isUKDriver = freshData?.nationality === 'GB' || 
+                        freshData?.nationality === 'United Kingdom' ||
+                        freshData?.licenseIssuedBy === 'DVLA' ||
+                        freshData?.licenseIssuedBy?.includes('GB') ||
+                        freshData?.licenseIssuedBy?.includes('UK');
+      
+      console.log('🔍 DEBUG: UK check result:', isUKDriver, {
+        nationality: freshData?.nationality,
+        licenseIssuedBy: freshData?.licenseIssuedBy
       });
       
+      // Handle routing based on status and UK driver
       switch (status) {
         case 'success':
           if (isUKDriver) {
-            // UK driver needs DVLA check - FORCE REDIRECT
-            console.log('🇬🇧 UK driver detected - routing to DVLA processing page');
-            
-            const dvlaUrl = `${window.location.origin}/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`;
-            console.log('📍 Redirecting to:', dvlaUrl);
-            
-            // Force redirect to DVLA page
-            window.location.href = dvlaUrl;
-            return; // Stop further processing
-            
-          } else if (driverStatus?.status === 'verified') {
-            // Non-UK driver, fully verified
+            console.log('🇬🇧 FORCING UK redirect NOW!');
+            window.location.replace(`/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`);
+            return;
+          } else if (freshData?.status === 'verified') {
             setCurrentStep('complete');
-          } else if (driverStatus?.status === 'review_required') {
-            setCurrentStep('processing');
-            setError('Your documents are being reviewed. We\'ll contact you shortly.');
           } else {
             setCurrentStep('document-upload');
           }
@@ -666,10 +644,8 @@ if (response.ok) {
           break;
           
         case 'mock':
-          // Test mode - check if UK driver
           if (isUKDriver) {
-            const dvlaUrl = `${window.location.origin}/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`;
-            window.location.href = dvlaUrl;
+            window.location.replace(`/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`);
             return;
           } else {
             setCurrentStep('complete');
@@ -680,13 +656,14 @@ if (response.ok) {
           console.log('Unknown verification status:', status);
           setCurrentStep('document-upload');
       }
-      
-    } catch (err) {
-      console.error('Error handling verification complete:', err);
-      setError('Failed to process verification result. Please refresh and try again.');
-      setCurrentStep('document-upload');
     }
-  };
+    
+  } catch (err) {
+    console.error('Error handling verification complete:', err);
+    setError('Failed to process verification result. Please refresh and try again.');
+    setCurrentStep('document-upload');
+  }
+};
 
   // DVLA Upload
 const handleDVLAUpload = async (dvlaFile) => {
