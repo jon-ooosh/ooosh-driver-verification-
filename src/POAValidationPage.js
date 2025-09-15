@@ -2,414 +2,398 @@
 // POA duplicate checking and date extraction page
 
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Loader, FileText, Calendar } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { FileText, CheckCircle, XCircle, AlertCircle, Loader, Upload, Calendar, MapPin, Home } from 'lucide-react';
 
-const POAValidationPage = ({ driverEmail, jobId }) => {
-  const [loading, setLoading] = useState(true);
-  const [validationResult, setValidationResult] = useState(null);
+const POAValidationPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [driverData, setDriverData] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
+  const [validationStatus, setValidationStatus] = useState('checking');
+  const [poaDocuments, setPOADocuments] = useState([]);
+  const [duplicateDetected, setDuplicateDetected] = useState(false);
+  const [validityDates, setValidityDates] = useState({ poa1: null, poa2: null });
+  const [nationality, setNationality] = useState(null);
+  const [skippingValidation, setSkippingValidation] = useState(false); // FIXED: Added missing state variable
+  
+  // Get email and jobId from location state
+  const { email, jobId } = location.state || {};
 
   useEffect(() => {
+    if (!email || !jobId) {
+      console.error('Missing email or jobId');
+      navigate('/');
+      return;
+    }
+    
+    // Start validation process
     validatePOADocuments();
-  }, []);
+  }, [email, jobId]);
 
   const validatePOADocuments = async () => {
+    setLoading(true);
+    setError('');
+    
     try {
-      setLoading(true);
-      console.log('🔍 Starting POA validation for:', driverEmail);
-      
-      // Wait for webhook to have processed and stored POA URLs
-      let poaData = null;
-      let attempts = 0;
-      const maxAttempts = 5;
-      
-      while (attempts < maxAttempts) {
-        console.log(`⏳ Checking for POA documents (attempt ${attempts + 1}/${maxAttempts})...`);
-        
-        // Fetch driver status to get POA URLs from Monday
-        const statusResponse = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
-        
-        if (statusResponse.ok) {
-          const status = await statusResponse.json();
-          console.log('📊 Driver status retrieved:', {
-            hasPOA1: !!status.poa1Url,
-            hasPOA2: !!status.poa2Url,
-            nationality: status.nationality,
-            licenseIssuedBy: status.licenseIssuedBy
-          });
-          
-          // Check if we have both POA URLs
-          if (status.poa1Url && status.poa2Url) {
-            poaData = status;
-            setDriverData(status);
-            break;
-          }
-        }
-        
-        // Wait with exponential backoff
-        const delay = Math.min(2000 * Math.pow(1.5, attempts), 10000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        attempts++;
-      }
-      
-      if (!poaData || !poaData.poa1Url || !poaData.poa2Url) {
-        console.log('⚠️ POA documents not available yet');
-        setError('POA documents are still being processed. Please wait a moment...');
-        setLoading(false);
-        
-        // Auto-retry after 5 seconds
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          validatePOADocuments();
-        }, 5000);
-        return;
-      }
-      
-      console.log('🔬 Validating POA documents for duplicates...');
-      
-      // Call document-processor to validate POAs
-      const validationResponse = await fetch('/.netlify/functions/document-processor', {
+      // Step 1: Fetch driver data to check existing POA validity
+      const driverResponse = await fetch('/.netlify/functions/monday-integration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'dual-poa',
-          imageData: poaData.poa1Url,  // Can be URL or base64
-          imageData2: poaData.poa2Url,
-          licenseAddress: poaData.licenseAddress || poaData.homeAddress,
-          email: driverEmail
+          action: 'getDriver',
+          email: email
         })
       });
+
+      if (!driverResponse.ok) {
+        throw new Error('Failed to fetch driver data');
+      }
+
+      const driverData = await driverResponse.json();
+      console.log('Driver data:', driverData);
       
-      if (!validationResponse.ok) {
-        throw new Error('POA validation service error');
+      // Extract nationality for routing decision later
+      setNationality(driverData.driver?.nationalityGroup);
+      
+      // Check if POAs are still valid
+      const poa1ValidUntil = driverData.driver?.poa1ValidUntil;
+      const poa2ValidUntil = driverData.driver?.poa2ValidUntil;
+      
+      if (poa1ValidUntil && poa2ValidUntil) {
+        const now = new Date();
+        const poa1Valid = new Date(poa1ValidUntil) > now;
+        const poa2Valid = new Date(poa2ValidUntil) > now;
+        
+        if (poa1Valid && poa2Valid) {
+          console.log('POAs still valid, skipping validation');
+          setSkippingValidation(true); // FIXED: Now using the defined state
+          setValidationStatus('valid');
+          
+          // Wait 5 seconds to ensure webhook has processed
+          setTimeout(() => {
+            routeToNextStep();
+          }, 5000);
+          return;
+        }
       }
       
-      const result = await validationResponse.json();
-      console.log('✅ POA validation complete:', result);
-      
-      // Extract dates from POA documents
-      const poa1Date = result.result?.poa1?.documentDate || null;
-      const poa2Date = result.result?.poa2?.documentDate || null;
-      
-      // Calculate validity dates (90 days from document date, or 30 days from today as fallback)
-      const today = new Date();
-      const defaultValidityDays = 30;
-      const normalValidityDays = 90;
-      
-      let poa1ValidUntil, poa2ValidUntil;
-      
-      if (poa1Date) {
-        const date1 = new Date(poa1Date);
-        date1.setDate(date1.getDate() + normalValidityDays);
-        poa1ValidUntil = date1.toISOString().split('T')[0];
-      } else {
-        const fallbackDate = new Date(today);
-        fallbackDate.setDate(fallbackDate.getDate() + defaultValidityDays);
-        poa1ValidUntil = fallbackDate.toISOString().split('T')[0];
-      }
-      
-      if (poa2Date) {
-        const date2 = new Date(poa2Date);
-        date2.setDate(date2.getDate() + normalValidityDays);
-        poa2ValidUntil = date2.toISOString().split('T')[0];
-      } else {
-        const fallbackDate = new Date(today);
-        fallbackDate.setDate(fallbackDate.getDate() + defaultValidityDays);
-        poa2ValidUntil = fallbackDate.toISOString().split('T')[0];
-      }
-      
-      // Update Monday.com with POA validity dates
-      console.log('📅 Updating POA validity dates in Monday.com...');
-      await fetch('/.netlify/functions/monday-integration', {
+      // Step 2: Fetch POA documents from the recent Idenfy session
+      const poaResponse = await fetch('/.netlify/functions/get-poa-documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'update-driver-board-a',
-          email: driverEmail,
-          updates: {
-           poa1ValidUntil: poa1ValidUntil,  // Maps to date_mktr1keg
-      poa2ValidUntil: poa2ValidUntil,  // Maps to date_mktra1a6
-      additionalDetails: `POA1: ${poa1Date || 'Date not found'}, POA2: ${poa2Date || 'Date not found'}`,
-      overallStatus: result.result?.crossValidation?.approved ? 'POA Validated' : 'POA Review Required'
-    }
-  })
-});
-      
-      setValidationResult({
-        ...result,
-        poa1ValidUntil,
-        poa2ValidUntil
+          email: email,
+          jobId: jobId
+        })
       });
+
+      if (!poaResponse.ok) {
+        throw new Error('Failed to fetch POA documents');
+      }
+
+      const poaData = await poaResponse.json();
+      setPOADocuments(poaData.documents || []);
       
-      // Auto-proceed after 3 seconds if validation passed
-      if (result.result?.crossValidation?.approved) {
+      // Step 3: Check for duplicate documents
+      if (poaData.documents && poaData.documents.length >= 2) {
+        const isDuplicate = await checkForDuplicates(poaData.documents[0], poaData.documents[1]);
+        
+        if (isDuplicate) {
+          setDuplicateDetected(true);
+          setValidationStatus('duplicate');
+          setError('Same document uploaded twice. Please upload two different proof of address documents.');
+          return;
+        }
+      }
+      
+      // Step 4: Extract dates and validate diversity
+      const validation = await validateDocumentDiversity(poaData.documents);
+      
+      if (validation.success) {
+        // Store validity dates in Monday.com
+        await updatePOAValidity(validation.dates);
+        setValidityDates(validation.dates);
+        setValidationStatus('valid');
+        
+        // Route to next step after a short delay
         setTimeout(() => {
-          proceedToNext();
-        }, 3000);
+          routeToNextStep();
+        }, 2000);
+      } else {
+        setValidationStatus('invalid');
+        setError(validation.error || 'POA validation failed');
       }
       
     } catch (err) {
-      console.error('❌ POA validation error:', err);
+      console.error('POA validation error:', err);
       setError(err.message || 'Failed to validate POA documents');
+      setValidationStatus('error');
     } finally {
       setLoading(false);
     }
   };
 
-  const proceedToNext = () => {
-    // Check if UK driver based on webhook data
-    const isUKDriver = 
-      driverData?.nationality === 'GB' || 
-      driverData?.nationality === 'UK' ||
-      driverData?.nationality === 'United Kingdom' ||
-      driverData?.licenseIssuedBy === 'DVLA' ||
-      driverData?.licenseIssuedBy?.includes('UK') ||
-      driverData?.licenseIssuedBy?.includes('United Kingdom');
-    
-    console.log('🚦 Routing decision:', { 
-      isUKDriver, 
-      nationality: driverData?.nationality,
-      issuedBy: driverData?.licenseIssuedBy 
-    });
-    
-    if (isUKDriver) {
-      // UK driver - go to DVLA check
-      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-    } else {
-      // Non-UK driver - verification complete
-      window.location.href = `/?step=complete&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+  const checkForDuplicates = async (doc1, doc2) => {
+    // Use AWS Textract or similar to compare documents
+    try {
+      const response = await fetch('/.netlify/functions/compare-documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document1: doc1.url,
+          document2: doc2.url
+        })
+      });
+      
+      const result = await response.json();
+      return result.isDuplicate;
+    } catch (err) {
+      console.error('Error comparing documents:', err);
+      return false;
     }
   };
 
-  const retryValidation = () => {
-    setError('');
-    setValidationResult(null);
-    validatePOADocuments();
+  const validateDocumentDiversity = async (documents) => {
+    if (!documents || documents.length < 2) {
+      return { success: false, error: 'Two POA documents required' };
+    }
+    
+    try {
+      // Extract text and dates from documents using OCR
+      const response = await fetch('/.netlify/functions/extract-poa-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documents: documents.map(d => d.url)
+        })
+      });
+      
+      const extractedData = await response.json();
+      
+      // Check if documents are from different sources
+      const sourceDiversity = extractedData.source1 !== extractedData.source2;
+      
+      if (!sourceDiversity) {
+        return { 
+          success: false, 
+          error: 'Documents must be from different providers (e.g., one bank statement and one utility bill)' 
+        };
+      }
+      
+      // Calculate validity dates (90 days from document date, or 30 days fallback)
+      const dates = {
+        poa1: calculateValidityDate(extractedData.date1),
+        poa2: calculateValidityDate(extractedData.date2)
+      };
+      
+      return { success: true, dates };
+      
+    } catch (err) {
+      console.error('Error validating document diversity:', err);
+      return { success: false, error: 'Failed to validate documents' };
+    }
   };
 
-  // Loading state
-  if (loading) {
+  const calculateValidityDate = (documentDate) => {
+    if (!documentDate) {
+      // Fallback: 30 days from today
+      const date = new Date();
+      date.setDate(date.getDate() + 30);
+      return date.toISOString().split('T')[0];
+    }
+    
+    // 90 days from document date
+    const date = new Date(documentDate);
+    date.setDate(date.getDate() + 90);
+    return date.toISOString().split('T')[0];
+  };
+
+  const updatePOAValidity = async (dates) => {
+    try {
+      await fetch('/.netlify/functions/monday-integration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updatePOADates',
+          email: email,
+          poa1ValidUntil: dates.poa1,
+          poa2ValidUntil: dates.poa2
+        })
+      });
+    } catch (err) {
+      console.error('Error updating POA validity dates:', err);
+    }
+  };
+
+  const routeToNextStep = () => {
+    // Route based on nationality
+    if (nationality === 'UK') {
+      navigate('/dvla-processing', { state: { email, jobId } });
+    } else {
+      navigate('/passport-upload', { state: { email, jobId } });
+    }
+  };
+
+  const handlePOAReupload = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Trigger Idenfy session for POA-only re-upload
+      const response = await fetch('/.netlify/functions/idenfy-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email,
+          sessionType: 'poa-reupload',
+          additionalSteps: ['PROOF_OF_ADDRESS']
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create re-upload session');
+      }
+      
+      const { authToken, redirectUrl } = await response.json();
+      
+      // Redirect to Idenfy for POA re-upload
+      window.location.href = redirectUrl;
+      
+    } catch (err) {
+      console.error('POA re-upload error:', err);
+      setError('Failed to start re-upload process');
+      setLoading(false);
+    }
+  };
+
+  // Render different states
+  if (loading || validationStatus === 'checking') {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
-        <div className="text-center">
-          <Loader className="h-12 w-12 text-purple-600 animate-spin mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Validating Proof of Address
-          </h2>
-          <p className="text-gray-600">
-            Checking your address documents...
-          </p>
-          <div className="mt-6 space-y-2 text-sm text-gray-500">
-            <div className="flex items-center justify-center space-x-2">
-              <FileText className="h-4 w-4" />
-              <span>Checking for duplicate documents</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2">
-              <Calendar className="h-4 w-4" />
-              <span>Extracting document dates</span>
-            </div>
-          </div>
-          {retryCount > 0 && (
-            <p className="mt-4 text-sm text-yellow-600">
-              Retry attempt {retryCount}...
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center">
+            <Loader className="mx-auto h-12 w-12 text-purple-600 animate-spin mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              {skippingValidation ? 'Verifying Previous Documents' : 'Validating Address Documents'}
+            </h2>
+            <p className="text-gray-600">
+              {skippingValidation 
+                ? 'Your proof of address documents are still valid. Preparing next step...'
+                : 'Checking your proof of address documents...'}
             </p>
-          )}
+          </div>
         </div>
       </div>
     );
   }
 
-  // Skipping validation display (POAs still valid)
-  if (skippingValidation) {
+  if (validationStatus === 'duplicate') {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
-        <div className="text-center">
-          <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Address Documents Still Valid
-          </h2>
-          <p className="text-gray-600 mb-4">
-            Your proof of address documents are still valid. No re-validation needed.
-          </p>
-          <div className="bg-green-50 rounded-lg p-4 mb-4">
-            <p className="text-sm text-green-800">
-              POA 1 valid until: {driverData?.poa1ValidUntil}
-            </p>
-            <p className="text-sm text-green-800">
-              POA 2 valid until: {driverData?.poa2ValidUntil}
-            </p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center">
+            <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Duplicate Document Detected</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <AlertCircle className="h-5 w-5 text-yellow-600 inline mr-2" />
+              <span className="text-sm text-yellow-800">
+                You need two different proof of address documents (e.g., a bank statement AND a utility bill)
+              </span>
+            </div>
+            
+            <button
+              onClick={handlePOAReupload}
+              disabled={loading}
+              className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <Upload className="h-5 w-5" />
+              <span>Upload Different Documents</span>
+            </button>
           </div>
-          <p className="text-sm text-gray-500">
-            Proceeding to next step...
-          </p>
         </div>
       </div>
     );
   }
 
-  // Error state (temporary - will auto-retry)
-  if (error && !validationResult) {
+  if (validationStatus === 'valid') {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Processing Documents
-          </h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={retryValidation}
-            className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700"
-          >
-            Check Again
-          </button>
-          <p className="text-sm text-gray-500 mt-3">
-            Will retry automatically in a few seconds...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Results display
-  const isDuplicate = validationResult?.result?.isDuplicate;
-  const isApproved = validationResult?.result?.crossValidation?.approved;
-  const validation = validationResult?.result?.crossValidation || {};
-  const poa1 = validationResult?.result?.poa1 || {};
-  const poa2 = validationResult?.result?.poa2 || {};
-
-  return (
-    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-8">
-      <div className="text-center mb-6">
-        {isDuplicate ? (
-          <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-        ) : isApproved ? (
-          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-        ) : (
-          <AlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-        )}
-        
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          {isDuplicate ? 'Duplicate Documents Detected' : 
-           isApproved ? 'Address Documents Validated' : 
-           'Manual Review Required'}
-        </h2>
-      </div>
-
-      <div className="bg-gray-50 rounded-lg p-6 mb-6">
-        <h3 className="font-semibold text-lg mb-4">Validation Results</h3>
-        
-        <div className="space-y-3">
-          {/* Duplicate check */}
-          <div className="flex items-start">
-            <div className="flex-shrink-0 mr-3">
-              {!isDuplicate ? 
-                <CheckCircle className="h-5 w-5 text-green-500" /> : 
-                <XCircle className="h-5 w-5 text-red-500" />
-              }
-            </div>
-            <div>
-              <p className="font-medium">Document Uniqueness</p>
-              <p className="text-sm text-gray-600">
-                {!isDuplicate ? 
-                  '✓ Two different documents provided' :
-                  '✗ Same document uploaded twice - please provide two different proof of address documents'
-                }
-              </p>
-            </div>
-          </div>
-
-          {/* Document dates */}
-          {!isDuplicate && (
-            <>
-              <div className="flex items-start">
-                <div className="flex-shrink-0 mr-3">
-                  <Calendar className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Document 1</p>
-                  <p className="text-sm text-gray-600">
-                    {poa1.providerName || 'Unknown Provider'} - 
-                    {poa1.documentDate ? ` Dated: ${poa1.documentDate}` : ' Date not found'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Valid until: {validationResult?.poa1ValidUntil}
-                  </p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center">
+            <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Address Verified</h2>
+            <p className="text-gray-600 mb-6">
+              Your proof of address documents have been validated successfully
+            </p>
+            
+            {validityDates.poa1 && validityDates.poa2 && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <div className="text-sm text-green-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="flex items-center">
+                      <Home className="h-4 w-4 mr-2" />
+                      Document 1 valid until:
+                    </span>
+                    <span className="font-medium">
+                      {new Date(validityDates.poa1).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      Document 2 valid until:
+                    </span>
+                    <span className="font-medium">
+                      {new Date(validityDates.poa2).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex items-start">
-                <div className="flex-shrink-0 mr-3">
-                  <Calendar className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="font-medium">Document 2</p>
-                  <p className="text-sm text-gray-600">
-                    {poa2.providerName || 'Unknown Provider'} - 
-                    {poa2.documentDate ? ` Dated: ${poa2.documentDate}` : ' Date not found'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Valid until: {validationResult?.poa2ValidUntil}
-                  </p>
-                </div>
-              </div>
-            </>
-          )}
+            )}
+            
+            <p className="text-sm text-gray-500">
+              Redirecting to {nationality === 'UK' ? 'DVLA verification' : 'passport upload'}...
+            </p>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Address display if extracted */}
-      {(poa1.address || poa2.address) && !isDuplicate && (
-        <div className="bg-blue-50 rounded-lg p-4 mb-6">
-          <p className="font-medium text-blue-900 mb-1">Verified Address:</p>
-          <p className="text-blue-800">{poa1.address || poa2.address}</p>
+  if (validationStatus === 'error' || validationStatus === 'invalid') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+          <div className="text-center">
+            <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Validation Failed</h2>
+            <p className="text-gray-600 mb-6">{error || 'Unable to validate your documents'}</p>
+            
+            <div className="space-y-3">
+              <button
+                onClick={validatePOADocuments}
+                className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                Try Again
+              </button>
+              
+              <button
+                onClick={() => navigate('/contact-support', { state: { email, issue: 'poa-validation' } })}
+                className="w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              >
+                Contact Support
+              </button>
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="flex flex-col space-y-3">
-        {isDuplicate ? (
-          <>
-            <p className="text-red-600 font-medium mb-2">
-              Please go back to Idenfy and upload two different proof of address documents
-            </p>
-            <button
-              onClick={() => window.location.href = `/?step=document-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`}
-              className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700"
-            >
-              Return to Document Upload
-            </button>
-          </>
-        ) : isApproved ? (
-          <>
-            <button
-              onClick={proceedToNext}
-              className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700"
-            >
-              Continue to {driverData?.nationality === 'GB' ? 'DVLA Check' : 'Complete Verification'}
-            </button>
-            <p className="text-sm text-gray-500 text-center">
-              Proceeding automatically in a moment...
-            </p>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={proceedToNext}
-              className="w-full bg-yellow-500 text-white py-3 px-4 rounded-md hover:bg-yellow-600"
-            >
-              Continue (Manual Review Required)
-            </button>
-            <p className="text-sm text-orange-600 text-center mt-2">
-              Your application will be flagged for manual review
-            </p>
-          </>
-        )}
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 };
 
 export default POAValidationPage;
