@@ -980,8 +980,7 @@ if (isPDF) {
   extension = 'jpg';
   mimeType = 'image/jpeg';
 }
-      }
-             
+                   
         // Upload to Monday.com via monday-integration (no conversion needed)
         console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
         const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
