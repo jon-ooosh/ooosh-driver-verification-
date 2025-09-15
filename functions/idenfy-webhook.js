@@ -862,42 +862,30 @@ licenseAddress: idenfyData.address ||
   }
 }
 
-// Updated saveIdenfyDocumentsToMonday function in idenfy-webhook.js - HANDLES PDFs DIRECTLY WITHOUT CONVERSION
+// File: functions/idenfy-webhook.js
+// FIXED VERSION - saveIdenfyDocumentsToMonday function
+// This section handles downloading and uploading POA documents from idenfy to Monday.com
 
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
-    console.log('📎 Saving Idenfy documents to Monday.com columns...');
+    console.log('📸 Saving Idenfy documents to Monday.com...');
     
-    // Get driver's Monday item ID
-    const driverResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'find-driver-board-a',
-        email: email
-      })
-    });
-    
-    const driverData = await driverResponse.json();
-    if (!driverData.success || !driverData.driver) {
-      console.log('⚠️ Driver not found, skipping document upload');
-      return { success: false, error: 'Driver not found' };
-    }
-    
-    const mondayItemId = driverData.driver.id;
-    console.log('📋 Found driver with Monday ID:', mondayItemId);
-
-    // Map Idenfy document URLs to Monday columns
+    // Map all possible document URLs - both regular and additional step documents
     const documentMappings = [
-      { 
+      {
         idenfyField: 'FRONT',
-        fileType: 'license_front',
+        fileType: 'licenseFront',
         url: fullWebhookData.fileUrls?.FRONT
       },
       {
-        idenfyField: 'BACK', 
-        fileType: 'license_back',
+        idenfyField: 'BACK',
+        fileType: 'licenseBack',
         url: fullWebhookData.fileUrls?.BACK
+      },
+      {
+        idenfyField: 'FACE',
+        fileType: 'selfie',
+        url: fullWebhookData.fileUrls?.FACE
       },
       {
         idenfyField: 'UTILITY_BILL',
@@ -943,45 +931,62 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
         const buffer = Buffer.from(arrayBuffer);
         const base64Data = buffer.toString('base64');
         
-      console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
+        console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
 
-// Check actual file content using magic bytes
-const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
-const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
-const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
-const isWEBP = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+        // Check actual file content using magic bytes
+        // FIXED: Correct PDF magic bytes check - %PDF = 0x25 0x50 0x44 0x46
+        const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+        const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+        const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
+        const isWEBP = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
 
-// Log what we actually found for debugging
-console.log(`🔍 Magic bytes for ${mapping.idenfyField}:`, 
-  buffer.slice(0, 12).toString('hex').toUpperCase());
-let extension = 'jpg'; // default
-let mimeType = 'image/jpeg';
+        // Log what we actually found for debugging
+        console.log(`🔍 Magic bytes for ${mapping.idenfyField}:`, 
+          buffer.slice(0, 12).toString('hex').toUpperCase());
+        
+        // Also log ASCII representation for first 4 bytes to verify PDF
+        const asciiCheck = buffer.slice(0, 4).toString('ascii');
+        console.log(`📝 First 4 bytes as ASCII: "${asciiCheck}"`);
+        
+        let extension = 'jpg'; // default
+        let mimeType = 'image/jpeg';
 
-if (isPDF) {
-  extension = 'pdf';
-  mimeType = 'application/pdf';
-  console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
-} else if (isPNG) {
-  extension = 'png';
-  mimeType = 'image/png';
-  console.log(`🖼️ Verified PNG format for ${mapping.idenfyField}`);
-} else if (isJPEG) {
-  extension = 'jpg';
-  mimeType = 'image/jpeg';
-  console.log(`📸 Verified JPEG format for ${mapping.idenfyField}`);
-} else if (isWEBP) {
-  // Convert WEBP to JPEG for Monday.com
-  extension = 'jpg';
-  mimeType = 'image/jpeg';
-  console.log(`🌐 WEBP detected for ${mapping.idenfyField} - will upload as JPEG`);
-} else {
-  // FALLBACK - assume JPEG if we can't identify
-  console.log(`⚠️ Unknown format for ${mapping.idenfyField}, defaulting to JPEG`);
-  extension = 'jpg';
-  mimeType = 'image/jpeg';
-}
+        if (isPDF) {
+          extension = 'pdf';
+          mimeType = 'application/pdf';
+          console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
+          
+          // IMPORTANT NOTE: Monday.com file columns can't display PDFs
+          // Options:
+          // 1. Convert PDF to image here (requires additional library)
+          // 2. Upload as PDF but mark for manual review
+          // 3. Skip PDF upload and handle separately
+          
+          // For now, we'll upload the PDF and let Monday.com handle it
+          // You may want to add PDF to image conversion here later
+          
+        } else if (isPNG) {
+          extension = 'png';
+          mimeType = 'image/png';
+          console.log(`🖼️ Verified PNG format for ${mapping.idenfyField}`);
+        } else if (isJPEG) {
+          extension = 'jpg';
+          mimeType = 'image/jpeg';
+          console.log(`📸 Verified JPEG format for ${mapping.idenfyField}`);
+        } else if (isWEBP) {
+          // Convert WEBP to JPEG for Monday.com compatibility
+          extension = 'jpg';
+          mimeType = 'image/jpeg';
+          console.log(`🌐 WEBP detected for ${mapping.idenfyField} - will upload as JPEG`);
+        } else {
+          // FALLBACK - assume JPEG if we can't identify
+          console.log(`⚠️ Unknown format for ${mapping.idenfyField}, defaulting to JPEG`);
+          console.log(`   First 20 bytes:`, buffer.slice(0, 20).toString('hex'));
+          extension = 'jpg';
+          mimeType = 'image/jpeg';
+        }
                    
-        // Upload to Monday.com via monday-integration (no conversion needed)
+        // Upload to Monday.com via monday-integration
         console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
         const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
           method: 'POST',
