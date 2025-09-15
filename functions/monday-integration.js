@@ -435,7 +435,7 @@ async function uploadFileBoardA(data) {
     let detectedContentType = contentType || 'image/jpeg';
     let fileExtension = 'jpg';
     
-    // Check for PDF magic bytes
+   // Check for PDF magic bytes - %PDF = 0x25 0x50 0x44 0x46
     if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
       detectedContentType = 'application/pdf';
       fileExtension = 'pdf';
