@@ -5,6 +5,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, ExternalLink, Smartphone, User } from 'lucide-react';
 import DVLAProcessingPage from './DVLAProcessingPage';
+import POAValidationPage from './POAValidationPage';
+import PassportUploadPage from './PassportUploadPage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -1919,8 +1921,26 @@ const renderRejected = () => (
      case 'contact-details': return <ContactDetails />;
      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
      case 'document-upload': return renderDocumentUpload();
-     
-     // NEW DVLA PROCESSING PAGE (purple theme) - NO MORE OLD DVLA CHECK
+
+    case 'poa-validation':
+  return (
+    <POAValidationPage 
+      driverEmail={driverEmail}
+      jobId={jobId}
+    />
+  );
+
+// Passport upload for non-UK drivers
+case 'passport-upload':
+  return (
+    <PassportUploadPage
+      driverEmail={driverEmail}
+      jobId={jobId}
+    />
+  );
+
+// NEW DVLA PROCESSING PAGE (purple theme) - NO MORE OLD DVLA CHECK  
+case 'dvla-processing':
      case 'dvla-processing': 
        return (
          <DVLAProcessingPage 
