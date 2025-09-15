@@ -2,12 +2,9 @@
 // POA duplicate checking and date extraction page
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { FileText, CheckCircle, XCircle, AlertCircle, Loader, Upload, Calendar, MapPin, Home } from 'lucide-react';
 
-const POAValidationPage = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+const POAValidationPage = ({ email, jobId, onComplete }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [validationStatus, setValidationStatus] = useState('checking');
@@ -15,15 +12,13 @@ const POAValidationPage = () => {
   const [duplicateDetected, setDuplicateDetected] = useState(false);
   const [validityDates, setValidityDates] = useState({ poa1: null, poa2: null });
   const [nationality, setNationality] = useState(null);
-  const [skippingValidation, setSkippingValidation] = useState(false); // FIXED: Added missing state variable
-  
-  // Get email and jobId from location state
-  const { email, jobId } = location.state || {};
+  const [skippingValidation, setSkippingValidation] = useState(false);
 
   useEffect(() => {
     if (!email || !jobId) {
       console.error('Missing email or jobId');
-      navigate('/');
+      // Navigate to home by changing URL
+      window.location.href = '/';
       return;
     }
     
@@ -67,7 +62,7 @@ const POAValidationPage = () => {
         
         if (poa1Valid && poa2Valid) {
           console.log('POAs still valid, skipping validation');
-          setSkippingValidation(true); // FIXED: Now using the defined state
+          setSkippingValidation(true);
           setValidationStatus('valid');
           
           // Wait 5 seconds to ensure webhook has processed
@@ -227,11 +222,11 @@ const POAValidationPage = () => {
   };
 
   const routeToNextStep = () => {
-    // Route based on nationality
+    // Route based on nationality using URL parameters like the rest of the app
     if (nationality === 'UK') {
-      navigate('/dvla-processing', { state: { email, jobId } });
+      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(email)}&jobId=${jobId}`;
     } else {
-      navigate('/passport-upload', { state: { email, jobId } });
+      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(email)}&jobId=${jobId}`;
     }
   };
 
@@ -381,7 +376,10 @@ const POAValidationPage = () => {
               </button>
               
               <button
-                onClick={() => navigate('/contact-support', { state: { email, issue: 'poa-validation' } })}
+                onClick={() => {
+                  // Navigate to contact support with state
+                  window.location.href = `/?step=contact-support&email=${encodeURIComponent(email)}&issue=poa-validation`;
+                }}
                 className="w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
               >
                 Contact Support
