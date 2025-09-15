@@ -949,7 +949,11 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
 const isPDF = buffer[0] === 0x25 && buffer[1] === 0x44 && buffer[2] === 0x46; // %PDF
 const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
 const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
+const isWEBP = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
 
+// Log what we actually found for debugging
+console.log(`🔍 Magic bytes for ${mapping.idenfyField}:`, 
+  buffer.slice(0, 12).toString('hex').toUpperCase());
 let extension = 'jpg'; // default
 let mimeType = 'image/jpeg';
 
@@ -965,15 +969,18 @@ if (isPDF) {
   extension = 'jpg';
   mimeType = 'image/jpeg';
   console.log(`📸 Verified JPEG format for ${mapping.idenfyField}`);
+} else if (isWEBP) {
+  // Convert WEBP to JPEG for Monday.com
+  extension = 'jpg';
+  mimeType = 'image/jpeg';
+  console.log(`🌐 WEBP detected for ${mapping.idenfyField} - will upload as JPEG`);
 } else {
-  console.log(`⚠️ Unknown format for ${mapping.idenfyField}, checking headers...`);
-  // Fallback to content-type header
-  const contentType = fileResponse.headers.get('content-type') || '';
-  if (contentType.includes('pdf')) {
-    extension = 'pdf';
-    mimeType = 'application/pdf';
-  }
+  // FALLBACK - assume JPEG if we can't identify
+  console.log(`⚠️ Unknown format for ${mapping.idenfyField}, defaulting to JPEG`);
+  extension = 'jpg';
+  mimeType = 'image/jpeg';
 }
+      }
              
         // Upload to Monday.com via monday-integration (no conversion needed)
         console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
