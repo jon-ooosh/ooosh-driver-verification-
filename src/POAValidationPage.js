@@ -129,14 +129,13 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
           action: 'update-driver-board-a',
           email: driverEmail,
           updates: {
-            poa1ValidUntil: poa1ValidUntil,
-            poa2ValidUntil: poa2ValidUntil,
-            poa1Date: poa1Date || 'Unknown',
-            poa2Date: poa2Date || 'Unknown',
-            poaValidationStatus: result.result?.crossValidation?.approved ? 'Validated' : 'Manual Review Required'
-          }
-        })
-      });
+           poa1ValidUntil: poa1ValidUntil,  // Maps to date_mktr1keg
+      poa2ValidUntil: poa2ValidUntil,  // Maps to date_mktra1a6
+      additionalDetails: `POA1: ${poa1Date || 'Date not found'}, POA2: ${poa2Date || 'Date not found'}`,
+      overallStatus: result.result?.crossValidation?.approved ? 'POA Validated' : 'POA Review Required'
+    }
+  })
+});
       
       setValidationResult({
         ...result,
