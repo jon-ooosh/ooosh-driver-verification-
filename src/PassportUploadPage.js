@@ -2,7 +2,7 @@
 // Passport upload page for non-UK drivers after POA validation
 
 import React, { useState } from 'react';
-import { Upload, Loader, CheckCircle, AlertCircle, Passport } from 'lucide-react';
+import { Upload, Loader, CheckCircle, AlertCircle, BookOpen } from 'lucide-react';
 
 const PassportUploadPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(false);
@@ -52,7 +52,7 @@ const PassportUploadPage = ({ driverEmail, jobId }) => {
   return (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
       <div className="text-center">
-        <Passport className="h-16 w-16 text-purple-600 mx-auto mb-4" />
+        <BookOpen className="h-16 w-16 text-purple-600 mx-auto mb-4" />
         
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
           Passport Verification Required
