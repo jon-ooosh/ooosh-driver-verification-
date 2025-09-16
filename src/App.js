@@ -1899,8 +1899,7 @@ const renderRejected = () => (
 
  // UPDATED: Main render logic with proper DVLA processing
  const renderStep = () => {
-  const urlParams = new URLSearchParams(window.location.search);  
-  switch(currentStep) {
+    switch(currentStep) {
      case 'landing': return renderLanding();
      case 'email-entry': return renderEmailEntry();
      case 'email-verification': return renderEmailVerification();
