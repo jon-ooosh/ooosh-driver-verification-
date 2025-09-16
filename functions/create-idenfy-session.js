@@ -149,10 +149,10 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
 
     // Base configuration
     const requestBody = {
-      clientId: clientId,
-      successUrl: `https://ooosh-driver-verification.netlify.app/?status=success&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
-      errorUrl: `https://ooosh-driver-verification.netlify.app/?status=error&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
-      unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?status=unverified&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
+  clientId: clientId,
+  successUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}`,
+  errorUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}&error=true`,
+  unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}&unverified=true`,
       locale: 'en',
       expiryTime: 3600,
       sessionLength: 1800,
