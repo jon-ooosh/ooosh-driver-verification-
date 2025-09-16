@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Loader } from 'lucide-react';
+// File: src/POAValidationPage.js
+// POA duplicate checking and date extraction page
+
+import React, { useState, useEffect } from 'react';
+import { CheckCircle, XCircle, AlertCircle, Loader, FileText, Calendar } from 'lucide-react';
 
 const POAValidationPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(true);
@@ -7,9 +10,12 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [skippingValidation, setSkippingValidation] = useState(false);
 
-  const validatePOADocuments = useCallback(async () => {
+  useEffect(() => {
+    validatePOADocuments();
+  }, []);
+
+  const validatePOADocuments = async () => {
     try {
       setLoading(true);
       console.log('🔍 Starting POA validation for:', driverEmail);
@@ -33,26 +39,6 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
             nationality: status.nationality,
             licenseIssuedBy: status.licenseIssuedBy
           });
-          
-          // Check if POAs are still valid (skip validation if they are)
-          if (status.poa1ValidUntil && status.poa2ValidUntil) {
-            const now = new Date();
-            const poa1Valid = new Date(status.poa1ValidUntil) > now;
-            const poa2Valid = new Date(status.poa2ValidUntil) > now;
-            
-            if (poa1Valid && poa2Valid) {
-              console.log('✅ POAs still valid, skipping validation');
-              setSkippingValidation(true);
-              setDriverData(status);
-              setLoading(false);
-              
-              // Auto-proceed after 3 seconds
-              setTimeout(() => {
-                proceedToNext(status);
-              }, 3000);
-              return;
-            }
-          }
           
           // Check if we have both POA URLs
           if (status.poa1Url && status.poa2Url) {
@@ -89,7 +75,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'dual-poa',
-          imageData: poaData.poa1Url,
+          imageData: poaData.poa1Url,  // Can be URL or base64
           imageData2: poaData.poa2Url,
           licenseAddress: poaData.licenseAddress || poaData.homeAddress,
           email: driverEmail
@@ -107,29 +93,30 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       const poa1Date = result.result?.poa1?.documentDate || null;
       const poa2Date = result.result?.poa2?.documentDate || null;
       
-      // Use actual document date OR fallback to 30 days from today
+      // Calculate validity dates (90 days from document date, or 30 days from today as fallback)
       const today = new Date();
-      const fallbackValidityDays = 30;
+      const defaultValidityDays = 30;
+      const normalValidityDays = 90;
       
       let poa1ValidUntil, poa2ValidUntil;
       
       if (poa1Date) {
-        // Use the actual document date as the validity date
-        poa1ValidUntil = poa1Date;
+        const date1 = new Date(poa1Date);
+        date1.setDate(date1.getDate() + normalValidityDays);
+        poa1ValidUntil = date1.toISOString().split('T')[0];
       } else {
-        // Fallback: 30 days from today
         const fallbackDate = new Date(today);
-        fallbackDate.setDate(fallbackDate.getDate() + fallbackValidityDays);
+        fallbackDate.setDate(fallbackDate.getDate() + defaultValidityDays);
         poa1ValidUntil = fallbackDate.toISOString().split('T')[0];
       }
       
       if (poa2Date) {
-        // Use the actual document date as the validity date
-        poa2ValidUntil = poa2Date;
+        const date2 = new Date(poa2Date);
+        date2.setDate(date2.getDate() + normalValidityDays);
+        poa2ValidUntil = date2.toISOString().split('T')[0];
       } else {
-        // Fallback: 30 days from today
         const fallbackDate = new Date(today);
-        fallbackDate.setDate(fallbackDate.getDate() + fallbackValidityDays);
+        fallbackDate.setDate(fallbackDate.getDate() + defaultValidityDays);
         poa2ValidUntil = fallbackDate.toISOString().split('T')[0];
       }
       
@@ -160,7 +147,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       // Auto-proceed after 3 seconds if validation passed
       if (result.result?.crossValidation?.approved) {
         setTimeout(() => {
-          proceedToNext(poaData);
+          proceedToNext();
         }, 3000);
       }
       
@@ -170,44 +157,38 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     } finally {
       setLoading(false);
     }
-  }, [driverEmail, proceedToNext]);
+  };
 
-  const proceedToNext = useCallback((data) => {
-    const checkData = data || driverData;
-    
+  const proceedToNext = () => {
     // Check if UK driver based on webhook data
     const isUKDriver = 
-      checkData?.nationality === 'GB' || 
-      checkData?.nationality === 'UK' ||
-      checkData?.nationality === 'United Kingdom' ||
-      checkData?.licenseIssuedBy === 'DVLA' ||
-      checkData?.licenseIssuedBy?.includes('UK') ||
-      checkData?.licenseIssuedBy?.includes('United Kingdom');
+      driverData?.nationality === 'GB' || 
+      driverData?.nationality === 'UK' ||
+      driverData?.nationality === 'United Kingdom' ||
+      driverData?.licenseIssuedBy === 'DVLA' ||
+      driverData?.licenseIssuedBy?.includes('UK') ||
+      driverData?.licenseIssuedBy?.includes('United Kingdom');
     
     console.log('🚦 Routing decision:', { 
       isUKDriver, 
-      nationality: checkData?.nationality,
-      issuedBy: checkData?.licenseIssuedBy 
+      nationality: driverData?.nationality,
+      issuedBy: driverData?.licenseIssuedBy 
     });
     
     if (isUKDriver) {
       // UK driver - go to DVLA check
       window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
     } else {
-      // Non-UK driver - go to passport upload
-      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      // Non-UK driver - verification complete
+      window.location.href = `/?step=complete&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
     }
-  }, [driverData, driverEmail, jobId]);
+  };
 
-  const retryValidation = useCallback(() => {
+  const retryValidation = () => {
     setError('');
     setValidationResult(null);
     validatePOADocuments();
-  }, [validatePOADocuments]);
-
-  useEffect(() => {
-    validatePOADocuments();
-  }, [validatePOADocuments]);
+  };
 
   // Loading state
   if (loading) {
@@ -221,6 +202,16 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
           <p className="text-gray-600">
             Checking your address documents...
           </p>
+          <div className="mt-6 space-y-2 text-sm text-gray-500">
+            <div className="flex items-center justify-center space-x-2">
+              <FileText className="h-4 w-4" />
+              <span>Checking for duplicate documents</span>
+            </div>
+            <div className="flex items-center justify-center space-x-2">
+              <Calendar className="h-4 w-4" />
+              <span>Extracting document dates</span>
+            </div>
+          </div>
           {retryCount > 0 && (
             <p className="mt-4 text-sm text-yellow-600">
               Retry attempt {retryCount}...
@@ -245,10 +236,10 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
           </p>
           <div className="bg-green-50 rounded-lg p-4 mb-4">
             <p className="text-sm text-green-800">
-              POA 1 valid until: {new Date(driverData?.poa1ValidUntil).toLocaleDateString()}
+              POA 1 valid until: {driverData?.poa1ValidUntil}
             </p>
             <p className="text-sm text-green-800">
-              POA 2 valid until: {new Date(driverData?.poa2ValidUntil).toLocaleDateString()}
+              POA 2 valid until: {driverData?.poa2ValidUntil}
             </p>
           </div>
           <p className="text-sm text-gray-500">
@@ -286,6 +277,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   // Results display
   const isDuplicate = validationResult?.result?.isDuplicate;
   const isApproved = validationResult?.result?.crossValidation?.approved;
+  const validation = validationResult?.result?.crossValidation || {};
   const poa1 = validationResult?.result?.poa1 || {};
   const poa2 = validationResult?.result?.poa2 || {};
 
@@ -335,7 +327,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
             <>
               <div className="flex items-start">
                 <div className="flex-shrink-0 mr-3">
-                  <CheckCircle className="h-5 w-5 text-blue-500" />
+                  <Calendar className="h-5 w-5 text-blue-500" />
                 </div>
                 <div>
                   <p className="font-medium">Document 1</p>
@@ -351,7 +343,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
 
               <div className="flex items-start">
                 <div className="flex-shrink-0 mr-3">
-                  <CheckCircle className="h-5 w-5 text-blue-500" />
+                  <Calendar className="h-5 w-5 text-blue-500" />
                 </div>
                 <div>
                   <p className="font-medium">Document 2</p>
@@ -394,10 +386,10 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         ) : isApproved ? (
           <>
             <button
-              onClick={() => proceedToNext()}
+              onClick={proceedToNext}
               className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700"
             >
-              Continue to {driverData?.nationality === 'GB' || driverData?.nationality === 'UK' ? 'DVLA Check' : 'Passport Upload'}
+              Continue to {driverData?.nationality === 'GB' ? 'DVLA Check' : 'Complete Verification'}
             </button>
             <p className="text-sm text-gray-500 text-center">
               Proceeding automatically in a moment...
@@ -406,7 +398,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         ) : (
           <>
             <button
-              onClick={() => proceedToNext()}
+              onClick={proceedToNext}
               className="w-full bg-yellow-500 text-white py-3 px-4 rounded-md hover:bg-yellow-600"
             >
               Continue (Manual Review Required)
