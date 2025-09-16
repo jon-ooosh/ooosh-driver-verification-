@@ -11,7 +11,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
 const [attempts, setAttempts] = useState(0);
 const [driverData, setDriverData] = useState(null);
 const [message, setMessage] = useState('Processing your verification...');
-const initialDataRef = useRef(null);
+const initialDataRef.current = useRef(null);
   
   // Use refs to avoid recreating functions
   const attemptsRef = useRef(0);
@@ -189,7 +189,7 @@ if (currentAttempt === 1 && !initialDataRef.current) {
           console.log('❌ No changes detected in any fields');
         }
       } else {
-        console.log('⏳ Skipping comparison - Initial:', !!initialData, 'Attempt:', currentAttempt);
+        console.log('⏳ Skipping comparison - Initial:', !!initialDataRef.current, 'Attempt:', currentAttempt);
       }
       
       // For testing - allow override
