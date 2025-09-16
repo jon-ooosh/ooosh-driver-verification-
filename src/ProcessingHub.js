@@ -85,7 +85,9 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       
       console.log(`🔄 Polling for webhook (attempt ${currentAttempt}/${MAX_ATTEMPTS})`);
       
-      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+      // Add cache-busting parameter to ensure fresh data
+      const cacheBuster = Date.now();
+      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}&t=${cacheBuster}`);
       
       if (!response.ok) {
         console.log(`📊 Driver status returned: ${response.status}`);
@@ -107,19 +109,25 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         email: data?.email,
         lastUpdated: data?.lastUpdated,
         hasUrls: !!(data?.licenseFrontUrl || data?.poa1Url),
-        status: data?.status
+        status: data?.status,
+        attempt: currentAttempt,
+        allFields: Object.keys(data || {})
       });
       
       // Store initial data on first check
       if (currentAttempt === 1 && !initialData) {
         setInitialData(data);
-        console.log('📸 Stored initial driver state for comparison');
+        console.log('📸 Stored initial driver state for comparison:', data);
       }
       
       // SIMPLE DETECTION: Check if ANY field changed from initial state
       let webhookJustProcessed = false;
       
       if (initialData && currentAttempt > 1) {
+        console.log('🔍 Comparing data - Attempt', currentAttempt);
+        console.log('Initial data:', initialData);
+        console.log('Current data:', data);
+        
         // Check key fields for changes
         const fieldsToCheck = [
           'licenseNumber',
@@ -138,21 +146,46 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
           'dateOfBirth',
           'licenseIssuedBy',
           'homeAddress',
-          'lastUpdated'
+          'lastUpdated',
+          // Add more possible field names
+          'license_number',
+          'license_valid_to',
+          'driver_name',
+          'date_of_birth',
+          'home_address'
         ];
         
         // Check if any field changed
         for (const field of fieldsToCheck) {
-          if (data[field] !== initialData[field]) {
-            console.log(`✅ Field changed: ${field} - from "${initialData[field]}" to "${data[field]}"`);
-            webhookJustProcessed = true;
-            break;
+          if (data[field] !== undefined && initialData[field] !== undefined) {
+            if (data[field] !== initialData[field]) {
+              console.log(`✅ Field changed: ${field} - from "${initialData[field]}" to "${data[field]}"`);
+              webhookJustProcessed = true;
+              break;
+            } else {
+              console.log(`   Field unchanged: ${field} = "${data[field]}"`);
+            }
+          }
+        }
+        
+        // Also check ALL fields (not just our list)
+        if (!webhookJustProcessed) {
+          for (const field in data) {
+            if (initialData[field] !== data[field]) {
+              console.log(`✅ Unlisted field changed: ${field} - from "${initialData[field]}" to "${data[field]}"`);
+              webhookJustProcessed = true;
+              break;
+            }
           }
         }
         
         if (webhookJustProcessed) {
           console.log('🎯 Change detected - webhook has processed!');
+        } else {
+          console.log('❌ No changes detected in any fields');
         }
+      } else {
+        console.log('⏳ Skipping comparison - Initial:', !!initialData, 'Attempt:', currentAttempt);
       }
       
       // For testing - allow override
