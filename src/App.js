@@ -175,6 +175,7 @@ const DriverVerificationApp = () => {
       handleVerificationComplete(status, job, session);
     }, 100);
   }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
   const validateJobAndFetchDetails = async (jobIdParam) => {
