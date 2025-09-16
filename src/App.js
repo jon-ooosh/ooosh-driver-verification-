@@ -1907,12 +1907,12 @@ const renderRejected = () => (
      case 'contact-details': return <ContactDetails />;
      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
      case 'document-upload': return renderDocumentUpload();
-
-    case 'processing-hub':
+     case 'processing-hub':
+  const urlParams = new URLSearchParams(window.location.search);
   return (
     <ProcessingHub 
-      driverEmail={driverEmail}
-      jobId={jobId}
+      driverEmail={urlParams.get('email') || driverEmail}
+      jobId={urlParams.get('job') || jobId}
       sessionType={urlParams.get('sessionType') || 'full'}
     />
   );
