@@ -112,17 +112,18 @@ async function getDriverStatusFromBoardA(email) {
     };
     
     // FIXED: Return complete data structure
-    return {
-      status: documentStatus.overallStatus,
-      email: email,
-      name: driver.driverName || null,
-      phoneNumber: driver.phoneNumber || null,
-      phoneCountry: driver.phoneCountry || null, // FIXED: Added phone country
-      documents: documentStatus.documents,
-      insuranceData: insuranceData, // FIXED: Added insurance data
-      boardAId: driver.id,
-      lastUpdated: driver.lastUpdated || null
-    };
+   return {
+  status: documentStatus.overallStatus,
+  email: email,
+  name: driver.driverName || null,
+  phoneNumber: driver.phoneNumber || null,
+  phoneCountry: driver.phoneCountry || null,
+  documents: documentStatus.documents,
+  insuranceData: insuranceData,
+  boardAId: driver.id,
+  lastUpdated: driver.lastUpdated || null,
+  idenfyCheckDate: driver.idenfyCheckDate || null  // ADD THIS LINE
+};
 
   } catch (error) {
     console.error('Error getting driver status from Board A:', error);
