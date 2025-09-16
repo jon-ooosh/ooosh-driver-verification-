@@ -4,15 +4,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'lucide-react';
 
-console.log('🔍 ProcessingHub attempting to fetch driver with email:', {
+const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
+  console.log('🔍 ProcessingHub props received:', { driverEmail, jobId, sessionType });
+  console.log('🔍 ProcessingHub attempting to fetch driver with email:', {
   raw: driverEmail,
   encoded: encodeURIComponent(driverEmail),
   type: typeof driverEmail,
   length: driverEmail?.length
 });
-
-const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
-  console.log('🔍 ProcessingHub props received:', { driverEmail, jobId, sessionType });
+  
   const [status, setStatus] = useState('waiting'); // waiting, success, timeout, error
   const [attempts, setAttempts] = useState(0);
   const [driverData, setDriverData] = useState(null);
