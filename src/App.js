@@ -641,7 +641,7 @@ switch (status) {
   default:
     break;
 }
-      } catch (err) {
+      catch (err) {
   console.error('Error handling verification complete:', err);
   setError('Failed to process verification result. Please refresh and try again.');
   setCurrentStep('document-upload');
