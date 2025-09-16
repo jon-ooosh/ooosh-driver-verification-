@@ -10,6 +10,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const [status, setStatus] = useState('waiting');
   const [attempts, setAttempts] = useState(0);
   const [driverData, setDriverData] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [message, setMessage] = useState('Processing your verification...');
   
   // Use refs to avoid recreating functions
@@ -109,56 +110,69 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         status: data?.status
       });
       
-      // IMPROVED DETECTION: Look for multiple indicators
+      // Store initial data on first check
+      if (currentAttempt === 1 && !initialData) {
+        setInitialData(data);
+        console.log('📸 Stored initial driver state for comparison');
+      }
+      
+      // SIMPLE DETECTION: Check if ANY field changed from initial state
       let webhookJustProcessed = false;
       
-      // Strategy 1: Check for NEW document URLs (these are only set by webhook)
-      if (data?.licenseFrontUrl || data?.licenseBackUrl || data?.selfieUrl) {
-        console.log('✅ Document URLs detected - webhook has processed');
-        webhookJustProcessed = true;
+      if (initialData && currentAttempt > 1) {
+        // Check key fields for changes
+        const fieldsToCheck = [
+          'licenseNumber',
+          'licenseValidTo', 
+          'nationality',
+          'licenseFrontUrl',
+          'licenseBackUrl',
+          'selfieUrl',
+          'poa1Url',
+          'poa2Url',
+          'poa1ValidUntil',
+          'poa2ValidUntil',
+          'dvlaValidUntil',
+          'passportVerified',
+          'driverName',
+          'dateOfBirth',
+          'licenseIssuedBy',
+          'homeAddress',
+          'lastUpdated'
+        ];
+        
+        // Check if any field changed
+        for (const field of fieldsToCheck) {
+          if (data[field] !== initialData[field]) {
+            console.log(`✅ Field changed: ${field} - from "${initialData[field]}" to "${data[field]}"`);
+            webhookJustProcessed = true;
+            break;
+          }
+        }
+        
+        if (webhookJustProcessed) {
+          console.log('🎯 Change detected - webhook has processed!');
+        }
       }
       
-      // Strategy 2: Check for Idenfy-specific fields that are ONLY set by webhook
-      else if (data?.licenseNumber && data?.licenseValidTo && data?.nationality) {
-        console.log('✅ License details present - webhook has processed');
-        webhookJustProcessed = true;
-      }
-      
-      // Strategy 3: Check for POA validity dates (webhook sets these)
-      else if (data?.poa1ValidUntil && data?.poa2ValidUntil) {
-        console.log('✅ POA validity dates present - webhook has processed');
-        webhookJustProcessed = true;
-      }
-      
-      // Strategy 4: For testing - allow override
+      // For testing - allow override
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('forceRoute') === 'true') {
         console.log('⚠️ DEBUG: forceRoute=true, bypassing wait');
         webhookJustProcessed = true;
       }
       
-      // Strategy 5: If we've been polling for less than 10 seconds and see full data, assume it's fresh
-      if (!webhookJustProcessed && currentAttempt <= 5) {
-        const hasFullData = data?.licenseNumber || data?.driverName || data?.dateOfBirth;
-        if (hasFullData) {
-          console.log('📝 Full driver data present early in polling - checking if fresh...');
-          // Only treat as fresh if we just started polling
-          if (currentAttempt <= 2) {
-            console.log('✅ Data present in first few attempts - treating as fresh webhook');
-            webhookJustProcessed = true;
-          }
-        }
-      }
-      
       if (webhookJustProcessed) {
-        console.log('🎉 Webhook confirmed! Processing route...');
+        console.log('🎉 Webhook confirmed! Waiting 1 second for all data to load...');
         setDriverData(data);
         setStatus('success');
-        setMessage('Verification complete! Routing to next step...');
+        setMessage('Verification complete! Loading next step...');
         
+        // Wait 1 second for all data to load, then route
         setTimeout(() => {
+          console.log('🚀 Routing to next step...');
           routeToNextStep(data);
-        }, 1500);
+        }, 1000);
         
       } else {
         console.log('⏳ No fresh webhook detected - continuing to wait');
@@ -197,13 +211,14 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         setMessage('An error occurred while processing');
       }
     }
-  }, [driverEmail, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]); // Removed attempts from deps!
+  }, [driverEmail, routeToNextStep, initialData, MAX_ATTEMPTS, POLL_INTERVAL]); // Fixed deps
 
   const handleRetry = () => {
     console.log('🔄 Retry requested');
     setStatus('waiting');
     setAttempts(0);
     attemptsRef.current = 0;
+    setInitialData(null); // Clear initial data for fresh comparison
     setMessage('Retrying verification check...');
     checkWebhookProcessed();
   };
