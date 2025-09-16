@@ -591,7 +591,7 @@ const DriverVerificationApp = () => {
   };
 
   // UPDATED: Enhanced verification complete handler with UK driver routing
- const handleVerificationComplete = async (status, jobIdParam, sessionId) => {
+  const handleVerificationComplete = async (status, jobIdParam, sessionId) => {
   console.log('Handling verification complete:', { status, jobId: jobIdParam, sessionId });
   
   setCurrentStep('processing');
@@ -627,25 +627,26 @@ const DriverVerificationApp = () => {
       });
       
       // Handle routing based on status
-switch (status) {
-  case 'success':
-  case 'error':
-  case 'unverified':
-    console.log(`📊 Idenfy ${status}, routing to processing hub`);
-    setCurrentStep('processing-hub');
-    break;
-  case 'rejected':
-    setCurrentStep('rejected');
-    setError('Document verification failed. Please try again or contact support.');
-    break;
-  default:
-    break;
-}
-      catch (err) {
-  console.error('Error handling verification complete:', err);
-  setError('Failed to process verification result. Please refresh and try again.');
-  setCurrentStep('document-upload');
-}
+      switch (status) {
+        case 'success':
+        case 'error':
+        case 'unverified':
+          console.log(`📊 Idenfy ${status}, routing to processing hub`);
+          setCurrentStep('processing-hub');
+          break;
+        case 'rejected':
+          setCurrentStep('rejected');
+          setError('Document verification failed. Please try again or contact support.');
+          break;
+        default:
+          break;
+      }
+    }  
+  } catch (err) {  // ← NOW the catch is properly paired with try
+    console.error('Error handling verification complete:', err);
+    setError('Failed to process verification result. Please refresh and try again.');
+    setCurrentStep('document-upload');
+  }
 };
 
   // DVLA Upload
