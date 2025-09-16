@@ -126,6 +126,9 @@ const DriverVerificationApp = () => {
     const emailParam = urlParams.get('email');
     const stepParam = urlParams.get('step');
     const ukParam = urlParams.get('uk');
+    if (stepParam === 'processing-hub' && emailParam) {
+    setDriverEmail(decodeURIComponent(emailParam));
+  }
     
     console.log('📍 URL Parameters on load:', {
       job: jobParam,
