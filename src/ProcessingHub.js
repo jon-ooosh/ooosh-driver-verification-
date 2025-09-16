@@ -13,6 +13,60 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const MAX_ATTEMPTS = 20; // 20 attempts * 2 seconds = 40 seconds max
   const POLL_INTERVAL = 2000; // 2 seconds
 
+  // Define routeToNextStep FIRST, wrapped in useCallback
+  const routeToNextStep = useCallback((data) => {
+    console.log('🧭 Determining next step based on driver data:', data);
+    
+    // Priority routing logic
+    
+    // 1. Check if POA validation is needed
+    if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
+      console.log('→ Routing to POA validation');
+      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      return;
+    }
+    
+    // Check if POAs are still valid
+    const now = new Date();
+    const poa1Valid = data.poa1ValidUntil && new Date(data.poa1ValidUntil) > now;
+    const poa2Valid = data.poa2ValidUntil && new Date(data.poa2ValidUntil) > now;
+    
+    if (!poa1Valid || !poa2Valid) {
+      console.log('→ POAs expired, routing to POA validation');
+      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      return;
+    }
+    
+    // 2. Determine if UK or Non-UK driver
+    const isUKDriver = 
+      data.nationality === 'GB' || 
+      data.nationality === 'UK' ||
+      data.nationality === 'United Kingdom' ||
+      data.licenseIssuedBy === 'DVLA' ||
+      data.licenseIssuedBy?.includes('UK');
+    
+    if (isUKDriver) {
+      // 3a. UK Driver - check if DVLA check is complete
+      if (!data.dvlaCheckComplete || data.dvlaCheckStatus !== 'valid') {
+        console.log('→ UK driver, routing to DVLA check');
+        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        return;
+      }
+    } else {
+      // 3b. Non-UK Driver - check if passport is verified
+      if (!data.passportVerified) {
+        console.log('→ Non-UK driver, routing to passport upload');
+        window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        return;
+      }
+    }
+    
+    // 4. All checks complete - go to signature
+    console.log('→ All verifications complete, routing to signature');
+    window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+  }, [driverEmail, jobId]);
+
+  // Now define checkWebhookProcessed with routeToNextStep in dependencies
   const checkWebhookProcessed = useCallback(async () => {
     try {
       console.log(`🔄 Checking webhook status (attempt ${attempts + 1}/${MAX_ATTEMPTS})`);
@@ -101,59 +155,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       setStatus('error');
       setMessage('An error occurred while processing your verification');
     }
-  }, [attempts, driverEmail, sessionType]);
-
-  const routeToNextStep = (data) => {
-    console.log('🧭 Determining next step based on driver data:', data);
-    
-    // Priority routing logic
-    
-    // 1. Check if POA validation is needed
-    if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
-      console.log('→ Routing to POA validation');
-      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-      return;
-    }
-    
-    // Check if POAs are still valid
-    const now = new Date();
-    const poa1Valid = data.poa1ValidUntil && new Date(data.poa1ValidUntil) > now;
-    const poa2Valid = data.poa2ValidUntil && new Date(data.poa2ValidUntil) > now;
-    
-    if (!poa1Valid || !poa2Valid) {
-      console.log('→ POAs expired, routing to POA validation');
-      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-      return;
-    }
-    
-    // 2. Determine if UK or Non-UK driver
-    const isUKDriver = 
-      data.nationality === 'GB' || 
-      data.nationality === 'UK' ||
-      data.nationality === 'United Kingdom' ||
-      data.licenseIssuedBy === 'DVLA' ||
-      data.licenseIssuedBy?.includes('UK');
-    
-    if (isUKDriver) {
-      // 3a. UK Driver - check if DVLA check is complete
-      if (!data.dvlaCheckComplete || data.dvlaCheckStatus !== 'valid') {
-        console.log('→ UK driver, routing to DVLA check');
-        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-        return;
-      }
-    } else {
-      // 3b. Non-UK Driver - check if passport is verified
-      if (!data.passportVerified) {
-        console.log('→ Non-UK driver, routing to passport upload');
-        window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-        return;
-      }
-    }
-    
-    // 4. All checks complete - go to signature
-    console.log('→ All verifications complete, routing to signature');
-    window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-  };
+  }, [attempts, driverEmail, sessionType, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]);
 
   const handleRetry = () => {
     setStatus('waiting');
@@ -313,7 +315,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
                 Try Again
               </button>
               
-              <a
+              
                 href="tel:01273911382"
                 className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 
                          focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center 
