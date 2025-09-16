@@ -128,31 +128,36 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         console.log('Initial data:', initialData);
         console.log('Current data:', data);
         
-        // Check key fields for changes
+        // Check ACTUAL Monday.com Board A column IDs for changes
         const fieldsToCheck = [
-          'licenseNumber',
-          'licenseValidTo', 
-          'nationality',
-          'licenseFrontUrl',
-          'licenseBackUrl',
-          'selfieUrl',
-          'poa1Url',
-          'poa2Url',
-          'poa1ValidUntil',
-          'poa2ValidUntil',
-          'dvlaValidUntil',
-          'passportVerified',
-          'driverName',
-          'dateOfBirth',
-          'licenseIssuedBy',
-          'homeAddress',
-          'lastUpdated',
-          // Add more possible field names
-          'license_number',
-          'license_valid_to',
-          'driver_name',
-          'date_of_birth',
-          'home_address'
+          // Board A column IDs from Monday.com
+          'text_mktry2je',    // Driver Name
+          'email_mktrgzj',    // Email Address
+          'text_mktrfqe2',    // Phone Number
+          'date_mktr2x01',    // Date of Birth
+          'text_mktrdh72',    // Nationality
+          'text_mktrrv38',    // License Number
+          'text_mktrz69',     // License Issued By
+          'date_mktr93jq',    // Date Passed Test
+          'date_mktrmdx5',    // License Valid From
+          'date_mktrwk94',    // License Valid To
+          'text_mktr8kvs',    // License Ending
+          'long_text_mktr2jhb', // Home Address
+          'long_text_mktrs5a0', // License Address
+          'date_mktr1keg',    // POA1 Valid Until
+          'date_mktra1a6',    // POA2 Valid Until
+          'date_mktrmjfr',    // DVLA Check Date
+          'file_mktrypb7',    // License Front Image
+          'file_mktr76g6',    // License Back Image
+          'file_mktr56t0',    // Passport
+          'file_mktrf9jv',    // POA Document 1
+          'file_mktr3fdw',    // POA Document 2
+          'file_mktrwhn8',    // DVLA Check Document
+          'file_mktrfanc',    // Signature File
+          'color_mktrwatg',   // Overall Status
+          'date_mktrk8kv',    // Last Updated
+          'color_mktrywv1',   // Verification Source
+          'date4'             // Created Date
         ];
         
         // Check if any field changed
