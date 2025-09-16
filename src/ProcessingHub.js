@@ -248,7 +248,7 @@ if (currentAttempt === 1 && !initialDataRef.current) {
         setMessage('An error occurred while processing');
       }
     }
-  }, [driverEmail, routeToNextStep, initialData, MAX_ATTEMPTS, POLL_INTERVAL]); // Fixed deps
+ }, [driverEmail, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]);
 
   const handleRetry = () => {
     console.log('🔄 Retry requested');
