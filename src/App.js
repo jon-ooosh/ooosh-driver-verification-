@@ -168,16 +168,20 @@ useEffect(() => {
 }, []);
 
   // Check for verification complete callback
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('status');
-    const job = urlParams.get('job');
-    const email = urlParams.get('email');
-    const session = urlParams.get('session');
-    
-    if (status && job && ['success', 'error', 'unverified', 'mock'].includes(status)) {
-      console.log('Verification complete callback:', { status, job, email, session });
-      
+useEffect(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const status = urlParams.get('status');
+  const job = urlParams.get('job');
+  const email = urlParams.get('email');
+  const session = urlParams.get('session');
+  const step = urlParams.get('step');
+  
+  // Don't run if already on processing-hub
+  if (step === 'processing-hub') {
+    return;
+  }
+  
+  if (status && job && ['success', 'error', 'unverified', 'mock'].includes(status)) {
       if (email) {
         setDriverEmail(decodeURIComponent(email));
       }
