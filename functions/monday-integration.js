@@ -766,6 +766,7 @@ function formatBoardAColumnValues(data) {
   if (data.additionalDetails) columnValues.long_text_mktr1a66 = data.additionalDetails;
   if (data.overallStatus) columnValues.color_mktrwatg = { label: data.overallStatus };
   if (data.lastUpdated) columnValues.date_mktrk8kv = { date: data.lastUpdated };
+  if (data.idenfyCheckDate) columnValues.text_mkvv2z8p = data.idenfyCheckDate;
 
   // DEBUGGING: Log final column values
   console.log('📋 Final column values for Monday.com:', Object.keys(columnValues));
@@ -830,6 +831,7 @@ function parseBoardAData(item) {
     poa2ValidUntil: '',
     dvlaValidUntil: '',
     licenseNextCheckDue: ''
+    idenfyCheckDate: ''
   };
 
   item.column_values.forEach(col => {
@@ -925,6 +927,9 @@ function parseBoardAData(item) {
         break;
       case 'date_mktrk8kv': // Last Updated
         driver.lastUpdated = value?.date || '';
+        break;
+        case 'text_mkvv2z8p': // Idenfy Check Date
+        driver.idenfyCheckDate = col.text || '';
         break;
     }
   });
