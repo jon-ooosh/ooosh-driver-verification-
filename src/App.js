@@ -626,46 +626,21 @@ const DriverVerificationApp = () => {
         licenseIssuedBy: freshData?.licenseIssuedBy
       });
       
-      // Handle routing based on status and UK driver
-      switch (status) {
-        case 'success':
-          if (isUKDriver) {
-            console.log('🇬🇧 FORCING UK redirect NOW!');
-            window.location.replace(`/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`);
-            return;
-          } else if (freshData?.status === 'verified') {
-            setCurrentStep('complete');
-          } else {
-            setCurrentStep('poa-validation');
-          }
-          break;
-          
-        case 'error':
-        case 'unverified':
-          setCurrentStep('rejected');
-          setError('Document verification failed. Please try again or contact support.');
-          break;
-          
-        case 'mock':
-          if (isUKDriver) {
-            window.location.replace(`/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&uk=true&job=${jobIdParam || jobId}`);
-            return;
-          } else {
-            setCurrentStep('complete');
-          }
-          break;
-          
-        default:
-          console.log('Unknown verification status:', status);
-          setCurrentStep('document-upload');
-      }
-    }
-    
-  } catch (err) {
-    console.error('Error handling verification complete:', err);
-    setError('Failed to process verification result. Please refresh and try again.');
-    setCurrentStep('document-upload');
-  }
+      // Handle routing based on status
+switch (status) {
+  case 'success':
+  case 'error':
+  case 'unverified':
+    console.log(`📊 Idenfy ${status}, routing to processing hub`);
+    setCurrentStep('processing-hub');
+    break;
+  case 'rejected':
+    setCurrentStep('rejected');
+    setError('Document verification failed. Please try again or contact support.');
+    break;
+  default:
+    break;
+}
 };
 
   // DVLA Upload
@@ -1915,7 +1890,8 @@ const renderRejected = () => (
 
  // UPDATED: Main render logic with proper DVLA processing
  const renderStep = () => {
-   switch(currentStep) {
+  const urlParams = new URLSearchParams(window.location.search);  
+  switch(currentStep) {
      case 'landing': return renderLanding();
      case 'email-entry': return renderEmailEntry();
      case 'email-verification': return renderEmailVerification();
