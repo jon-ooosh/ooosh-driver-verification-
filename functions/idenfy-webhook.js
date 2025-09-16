@@ -515,10 +515,13 @@ async function updateMondayWithRevalidation(email, revalidationData) {
   try {
     console.log('📊 Updating Monday.com with re-validation results...');
 
-    const updateData = {
-      // Store new POA data
-      newPoaDocument: revalidationData.newPoaUrl,
-      poaRevalidationDate: new Date().toISOString().split('T')[0],
+   const updateData = {
+  // WEBHOOK TIMESTAMP - for ProcessingHub detection
+  idenfyCheckDate: new Date().toISOString(),
+  
+  // Store new POA data
+  newPoaDocument: revalidationData.newPoaUrl,
+  poaRevalidationDate: new Date().toISOString().split('T')[0],
       poaSourceValidation: revalidationData.sourceValidation.passed ? 'Passed' : 'Failed',
       
       // Update overall status based on re-validation
@@ -774,6 +777,9 @@ if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
     const updateData = {
       // CRITICAL: Always include email
       email: email,
+
+       // WEBHOOK TIMESTAMP - for ProcessingHub detection
+  idenfyCheckDate: fullWebhookData.checkDate || new Date().toISOString(),
       
       // Names
       driverName: idenfyResult.fullName || 
