@@ -6,16 +6,11 @@ import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'luci
 
 const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   console.log('🔍 ProcessingHub props received:', { driverEmail, jobId, sessionType });
-  console.log('🔍 ProcessingHub attempting to fetch driver with email:', {
-  raw: driverEmail,
-  encoded: encodeURIComponent(driverEmail),
-  type: typeof driverEmail,
-  length: driverEmail?.length
-});
   
   const [status, setStatus] = useState('waiting'); // waiting, success, timeout, error
   const [attempts, setAttempts] = useState(0);
   const [driverData, setDriverData] = useState(null);
+  const [initialDriverState, setInitialDriverState] = useState(null); // Store initial state
   const [message, setMessage] = useState('Processing your verification...');
   
   const MAX_ATTEMPTS = 20; // 20 attempts * 2 seconds = 40 seconds max
@@ -29,7 +24,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     
     // 1. Check if POA validation is needed
     if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
-      console.log('→ Routing to POA validation');
+      console.log('→ Routing to POA validation (missing validity dates)');
       window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
       return;
     }
@@ -51,7 +46,8 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       data.nationality === 'UK' ||
       data.nationality === 'United Kingdom' ||
       data.licenseIssuedBy === 'DVLA' ||
-      data.licenseIssuedBy?.includes('UK');
+      data.licenseIssuedBy?.includes('UK') ||
+      data.licenseIssuedBy?.includes('GB');
     
     if (isUKDriver) {
       // 3a. UK Driver - check if DVLA check is complete
@@ -74,63 +70,121 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
   }, [driverEmail, jobId]);
 
-  // Now define checkWebhookProcessed with routeToNextStep in dependencies
+  // Check webhook processed with proper detection
   const checkWebhookProcessed = useCallback(async () => {
     try {
       console.log(`🔄 Checking webhook status (attempt ${attempts + 1}/${MAX_ATTEMPTS})`);
       
-      // Fetch current driver status from Monday.com
       const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+      console.log('📊 Response status:', response.status);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch driver status');
+        if (response.status === 400 || response.status === 404) {
+          console.log('⚠️ Driver not found - unexpected after email verification');
+          
+          if (attempts < MAX_ATTEMPTS - 1) {
+            setAttempts(prev => prev + 1);
+            setMessage('Waiting for verification to process...');
+            setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
+            return;
+          } else {
+            setStatus('timeout');
+            setMessage('Verification is taking longer than expected');
+            return;
+          }
+        }
+        
+        throw new Error(`Unexpected response: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('📊 Driver status:', data);
+      console.log('📊 Current driver data:', data);
       
-      // Determine if webhook has been processed based on session type
+      // On first attempt, store initial state
+      if (attempts === 0) {
+        setInitialDriverState(data);
+        console.log('📸 Stored initial driver state');
+      }
+      
+      // WEBHOOK DETECTION STRATEGY
       let webhookProcessed = false;
       
-      if (sessionType === 'full') {
-        // Full verification - check for license and POA URLs
-        webhookProcessed = !!(data.licenseUrl && data.poa1Url && data.poa2Url);
-        if (webhookProcessed) {
-          setMessage('Verification complete! Routing to next step...');
+      // Strategy 1: Check if lastUpdated changed to today
+      if (data.lastUpdated) {
+        const today = new Date().toISOString().split('T')[0];
+        const lastUpdated = data.lastUpdated.split('T')[0]; // Handle both date and datetime
+        
+        if (lastUpdated === today) {
+          // Check if this is a new update (not from previous verification)
+          if (!initialDriverState?.lastUpdated || initialDriverState.lastUpdated !== data.lastUpdated) {
+            console.log('✅ Webhook detected - lastUpdated is today and changed');
+            webhookProcessed = true;
+          }
         }
-      } else if (sessionType === 'passport_only') {
-        // Passport verification - check for passport data
-        webhookProcessed = !!data.passportVerified;
-        if (webhookProcessed) {
-          setMessage('Passport verified! Finalizing your registration...');
+      }
+      
+      // Strategy 2: Check for NEW validity dates (webhook sets these)
+      if (!webhookProcessed) {
+        const hasNewValidityDates = (
+          (data.poa1ValidUntil && !initialDriverState?.poa1ValidUntil) ||
+          (data.poa2ValidUntil && !initialDriverState?.poa2ValidUntil) ||
+          (data.dvlaValidUntil && !initialDriverState?.dvlaValidUntil) ||
+          (data.licenseNextCheckDue && !initialDriverState?.licenseNextCheckDue)
+        );
+        
+        if (hasNewValidityDates) {
+          console.log('✅ Webhook detected - new validity dates found');
+          webhookProcessed = true;
         }
-      } else if (sessionType === 'poa_reupload') {
-        // POA re-upload - check for updated POA URLs
-        webhookProcessed = !!(data.poa1Url && data.poa2Url && data.poaLastUpdated);
-        // Check if update timestamp is recent (within last minute)
-        if (webhookProcessed && data.poaLastUpdated) {
-          const lastUpdate = new Date(data.poaLastUpdated);
-          const now = new Date();
-          const timeDiff = (now - lastUpdate) / 1000; // seconds
-          webhookProcessed = timeDiff < 60;
+      }
+      
+      // Strategy 3: Check for document URLs (webhook uploads these)
+      if (!webhookProcessed) {
+        const hasNewDocuments = (
+          (data.licenseFrontUrl && !initialDriverState?.licenseFrontUrl) ||
+          (data.licenseBackUrl && !initialDriverState?.licenseBackUrl) ||
+          (data.selfieUrl && !initialDriverState?.selfieUrl) ||
+          (data.poa1Url && !initialDriverState?.poa1Url) ||
+          (data.poa2Url && !initialDriverState?.poa2Url)
+        );
+        
+        if (hasNewDocuments) {
+          console.log('✅ Webhook detected - new document URLs found');
+          webhookProcessed = true;
         }
-        if (webhookProcessed) {
-          setMessage('Address documents updated! Validating...');
+      }
+      
+      // Strategy 4: Check for Idenfy-specific data updates
+      if (!webhookProcessed) {
+        const hasNewIdenfyData = (
+          (data.licenseNumber && !initialDriverState?.licenseNumber) ||
+          (data.licenseValidTo && !initialDriverState?.licenseValidTo) ||
+          (data.nationality && !initialDriverState?.nationality) ||
+          (data.licenseIssuedBy && !initialDriverState?.licenseIssuedBy)
+        );
+        
+        if (hasNewIdenfyData) {
+          console.log('✅ Webhook detected - new Idenfy data found');
+          webhookProcessed = true;
         }
-      } else if (sessionType === 'license_only') {
-        // License re-verification
-        webhookProcessed = !!(data.licenseUrl && data.licenseLastUpdated);
-        if (webhookProcessed) {
-          setMessage('License verified! Checking remaining requirements...');
+      }
+      
+      // Strategy 5: Session-specific checks
+      if (!webhookProcessed && sessionType === 'poa_reupload') {
+        // Check for POA re-upload specific fields
+        if (data.poaRevalidationDate || data.newPoaDocument || data.poaSourceValidation) {
+          console.log('✅ POA re-upload webhook detected');
+          webhookProcessed = true;
         }
       }
       
       if (webhookProcessed) {
-        console.log('✅ Webhook processed, routing to next step');
+        console.log('🎉 Webhook processed successfully!');
         setDriverData(data);
         setStatus('success');
+        setMessage('Verification complete! Routing to next step...');
         
-        // Wait 1.5 seconds to show success message before routing
+        // Wait briefly to show success message
         setTimeout(() => {
           routeToNextStep(data);
         }, 1500);
@@ -140,16 +194,17 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         setAttempts(prev => prev + 1);
         
         // Update message based on wait time
-        if (attempts > 5) {
+        if (attempts === 0) {
+          setMessage('Processing your verification...');
+        } else if (attempts > 5) {
           setMessage('Still processing... This sometimes takes a moment...');
-        }
-        if (attempts > 10) {
+        } else if (attempts > 10) {
           setMessage('Taking a bit longer than usual, please wait...');
+        } else if (attempts > 15) {
+          setMessage('Almost there, just a few more seconds...');
         }
         
-        setTimeout(() => {
-          checkWebhookProcessed();
-        }, POLL_INTERVAL);
+        setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
         
       } else {
         // Timeout reached
@@ -160,24 +215,29 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       
     } catch (error) {
       console.error('❌ Error checking webhook status:', error);
-      setStatus('error');
-      setMessage('An error occurred while processing your verification');
+      
+      if (attempts >= MAX_ATTEMPTS - 1) {
+        setStatus('error');
+        setMessage('An error occurred while processing your verification');
+      } else {
+        setAttempts(prev => prev + 1);
+        setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
+      }
     }
-  }, [attempts, driverEmail, sessionType, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]);
+  }, [attempts, driverEmail, sessionType, routeToNextStep, initialDriverState, MAX_ATTEMPTS, POLL_INTERVAL]);
 
   const handleRetry = () => {
     setStatus('waiting');
     setAttempts(0);
+    setInitialDriverState(null);
     setMessage('Retrying verification check...');
     checkWebhookProcessed();
   };
 
   const handleManualContinue = () => {
-    // Force route based on last known state
     if (driverData) {
       routeToNextStep(driverData);
     } else {
-      // Fallback to POA validation as safe default
       window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
     }
   };
@@ -323,8 +383,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
                 Try Again
               </button>
               
-              
-            <a    href="tel:01273911382"
+              <a href="tel:01273911382"
                 className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 
                          focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center 
                          justify-center"
