@@ -11,7 +11,6 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const [attempts, setAttempts] = useState(0);
   const [driverData, setDriverData] = useState(null);
   const [message, setMessage] = useState('Processing your verification...');
-  const [loadTime] = useState(Date.now());
   
   // Use refs to avoid recreating functions
   const attemptsRef = useRef(0);
