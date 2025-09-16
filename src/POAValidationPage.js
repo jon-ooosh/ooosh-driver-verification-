@@ -10,7 +10,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [skippingValidation, setSkippingValidation] = useState(false);
+  const [skippingValidation] = useState(false);
 
   const proceedToNext = useCallback((data) => {
     const checkData = data || driverData;
