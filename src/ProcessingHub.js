@@ -1,5 +1,5 @@
 // File: src/ProcessingHub.js
-// FIXED: Infinite loop issue and webhook detection
+// SIMPLIFIED: Monitor idenfyCheckDate timestamp only
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'lucide-react';
@@ -8,10 +8,10 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   console.log('🔍 ProcessingHub initialized:', { driverEmail, jobId, sessionType });
   
   const [status, setStatus] = useState('waiting');
-const [attempts, setAttempts] = useState(0);
-const [driverData, setDriverData] = useState(null);
-const [message, setMessage] = useState('Processing your verification...');
-const initialDataRef = useRef(null);
+  const [attempts, setAttempts] = useState(0);
+  const [driverData, setDriverData] = useState(null);
+  const [message, setMessage] = useState('Processing your verification...');
+  const initialCheckDateRef = useRef(null);
   
   // Use refs to avoid recreating functions
   const attemptsRef = useRef(0);
@@ -75,7 +75,7 @@ const initialDataRef = useRef(null);
     window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
   }, [driverEmail, jobId]);
 
-  // Check for webhook - now stable without recreating
+  // SIMPLIFIED: Check for webhook by monitoring idenfyCheckDate
   const checkWebhookProcessed = useCallback(async () => {
     try {
       // Use ref value for attempts
@@ -107,99 +107,40 @@ const initialDataRef = useRef(null);
       
       console.log('📊 Driver data retrieved:', {
         email: data?.email,
-        lastUpdated: data?.lastUpdated,
-        hasUrls: !!(data?.licenseFrontUrl || data?.poa1Url),
-        status: data?.status,
-        attempt: currentAttempt,
-        allFields: Object.keys(data || {})
+        idenfyCheckDate: data?.idenfyCheckDate,
+        attempt: currentAttempt
       });
       
-     // Store initial data on first check
-if (currentAttempt === 1 && !initialDataRef.current) {
-  initialDataRef.current = data;
-  console.log('📸 Stored initial driver state:', data);
-}
+      // SIMPLE CHECK: Look for idenfyCheckDate timestamp
+      let webhookReceived = false;
       
-      // SIMPLE DETECTION: Check if ANY field changed from initial state
-      let webhookJustProcessed = false;
+      // First attempt: store initial state
+      if (currentAttempt === 1) {
+        initialCheckDateRef.current = data?.idenfyCheckDate || null;
+        console.log('📸 Initial idenfyCheckDate:', initialCheckDateRef.current);
+      }
       
-     if (initialDataRef.current && currentAttempt > 1) {
-  console.log('🔍 Comparing - Initial data exists:', !!initialDataRef.current, 'Attempt:', currentAttempt);
-  // Simplified logging - only log changes, not every field
-        
-        // Check for fields that driver-status ACTUALLY returns
-        const fieldsToCheck = [
-          // These are the transformed field names from driver-status
-          'status',
-          'email', 
-          'name',
-          'driverName',
-          'phoneNumber',
-          'phoneCountry',
-          'dateOfBirth',
-          'nationality',
-          'licenseNumber',
-          'licenseValidTo',
-          'licenseIssuedBy', 
-          'licenseExpiry',
-          'homeAddress',
-          'licenseAddress',
-          'lastUpdated',
-          'poa1ValidUntil',
-          'poa2ValidUntil',
-          'dvlaValidUntil',
-          'licenseFrontUrl',
-          'licenseBackUrl',
-          'selfieUrl',
-          'poa1Url',
-          'poa2Url',
-          'passportVerified',
-          'dvlaCheckComplete',
-          'dvlaCheckStatus',
-          'documentRequirements'
-        ];
-        
-        // Check if any field changed
-        for (const field of fieldsToCheck) {
-          if (data[field] !== undefined && initialDataRef.current[field] !== undefined) {
-            if (data[field] !== initialDataRef.current[field]) {
-              console.log(`✅ Field changed: ${field} - from "${initialDataRef.current[field]}" to "${data[field]}"`);
-              webhookJustProcessed = true;
-              break;
-            } else {
-              console.log(`   Field unchanged: ${field} = "${data[field]}"`);
-            }
-          }
+      // Check if webhook timestamp changed
+      if (data?.idenfyCheckDate) {
+        if (!initialCheckDateRef.current) {
+          // Timestamp exists now but didn't before
+          console.log('✅ Webhook processed! Timestamp appeared:', data.idenfyCheckDate);
+          webhookReceived = true;
+        } else if (data.idenfyCheckDate !== initialCheckDateRef.current) {
+          // Timestamp changed
+          console.log('✅ Webhook processed! Timestamp changed from:', initialCheckDateRef.current, 'to:', data.idenfyCheckDate);
+          webhookReceived = true;
         }
-        
-        // Also check ALL fields (not just our list)
-        if (!webhookJustProcessed) {
-          for (const field in data) {
-            if (initialDataRef.current[field] !== data[field]) {
-              console.log(`✅ Unlisted field changed: ${field} - from "${initialDataRef.current[field]}" to "${data[field]}"`);
-              webhookJustProcessed = true;
-              break;
-            }
-          }
-        }
-        
-        if (webhookJustProcessed) {
-          console.log('🎯 Change detected - webhook has processed!');
-        } else {
-          console.log('❌ No changes detected in any fields');
-        }
-      } else {
-        console.log('⏳ Skipping comparison - Initial:', !!initialDataRef.current, 'Attempt:', currentAttempt);
       }
       
       // For testing - allow override
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('forceRoute') === 'true') {
         console.log('⚠️ DEBUG: forceRoute=true, bypassing wait');
-        webhookJustProcessed = true;
+        webhookReceived = true;
       }
       
-      if (webhookJustProcessed) {
+      if (webhookReceived) {
         console.log('🎉 Webhook confirmed! Waiting 1 second for all data to load...');
         setDriverData(data);
         setStatus('success');
@@ -212,7 +153,7 @@ if (currentAttempt === 1 && !initialDataRef.current) {
         }, 1000);
         
       } else {
-        console.log('⏳ No fresh webhook detected - continuing to wait');
+        console.log('⏳ No webhook received yet - idenfyCheckDate:', data?.idenfyCheckDate);
         
         if (currentAttempt < MAX_ATTEMPTS) {
           // Update message based on time waited
@@ -248,14 +189,14 @@ if (currentAttempt === 1 && !initialDataRef.current) {
         setMessage('An error occurred while processing');
       }
     }
- }, [driverEmail, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]);
+  }, [driverEmail, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]);
 
   const handleRetry = () => {
     console.log('🔄 Retry requested');
     setStatus('waiting');
     setAttempts(0);
     attemptsRef.current = 0;
-    initialDataRef.current = null; // Clear initial data for fresh comparison
+    initialCheckDateRef.current = null; // Clear initial timestamp
     setMessage('Retrying verification check...');
     checkWebhookProcessed();
   };
@@ -309,7 +250,6 @@ if (currentAttempt === 1 && !initialDataRef.current) {
               </div>
             </div>
             
-            {/* Progress bar - FIXED: added max-width */}
             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-purple-600 h-2 rounded-full transition-all duration-500"
