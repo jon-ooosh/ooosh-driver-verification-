@@ -2,7 +2,7 @@
 // Passport upload page for non-UK drivers after POA validation
 
 import React, { useState } from 'react';
-import { Upload, Loader, CheckCircle, AlertCircle, BookOpen } from 'lucide-react';
+import { Upload, Loader, CheckCircle, BookOpen } from 'lucide-react';
 
 const PassportUploadPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(false);
