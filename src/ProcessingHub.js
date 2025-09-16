@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'lucide-react';
 
 const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
+  console.log('🔍 ProcessingHub props received:', { driverEmail, jobId, sessionType });
   const [status, setStatus] = useState('waiting'); // waiting, success, timeout, error
   const [attempts, setAttempts] = useState(0);
   const [driverData, setDriverData] = useState(null);
