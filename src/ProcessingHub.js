@@ -1,8 +1,7 @@
 // File: src/ProcessingHub.js
-// Central processing hub that waits for Idenfy webhook and routes appropriately
-// FIXED: Syntax error corrected - missing closing parenthesis for useCallback
+// FIXED: Infinite loop issue and webhook detection
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'lucide-react';
 
 const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
@@ -12,23 +11,25 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const [attempts, setAttempts] = useState(0);
   const [driverData, setDriverData] = useState(null);
   const [message, setMessage] = useState('Processing your verification...');
-  const [loadTime] = useState(Date.now()); // Track when component loaded
+  const [loadTime] = useState(Date.now());
   
-  const MAX_ATTEMPTS = 20; // 20 attempts * 2 seconds = 40 seconds max
-  const POLL_INTERVAL = 2000; // 2 seconds
+  // Use refs to avoid recreating functions
+  const attemptsRef = useRef(0);
+  const intervalRef = useRef(null);
+  
+  const MAX_ATTEMPTS = 20;
+  const POLL_INTERVAL = 2000;
 
-  // Route to next step - but ONLY after webhook confirmed
+  // Route to next step
   const routeToNextStep = useCallback((data) => {
     console.log('🧭 Routing based on webhook data:', data);
     
-    // Safety check - don't route without data
     if (!data) {
       console.error('❌ No data for routing');
       return;
     }
     
-    // Routing logic based on webhook data
-    // 1. Check POA validation
+    // Check POA validation
     if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
       console.log('→ Missing POA validity dates - routing to POA validation');
       window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
@@ -46,7 +47,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       return;
     }
     
-    // 2. Check if UK driver needs DVLA
+    // Check if UK driver needs DVLA
     const isUKDriver = 
       data.nationality === 'GB' || 
       data.nationality === 'United Kingdom' ||
@@ -63,7 +64,6 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         return;
       }
     } else {
-      // 3. Non-UK driver needs passport?
       if (!data.passportVerified) {
         console.log('→ Non-UK driver needs passport upload');
         window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
@@ -71,27 +71,29 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       }
     }
     
-    // 4. All complete - signature
     console.log('→ All verifications complete - routing to signature');
     window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
   }, [driverEmail, jobId]);
 
-  // Check for webhook - STRICT checking for NEW data only
+  // Check for webhook - now stable without recreating
   const checkWebhookProcessed = useCallback(async () => {
     try {
-      console.log(`🔄 Polling for webhook (attempt ${attempts + 1}/${MAX_ATTEMPTS})`);
+      // Use ref value for attempts
+      const currentAttempt = attemptsRef.current + 1;
+      attemptsRef.current = currentAttempt;
+      setAttempts(currentAttempt);
+      
+      console.log(`🔄 Polling for webhook (attempt ${currentAttempt}/${MAX_ATTEMPTS})`);
       
       const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
       
-      // Handle response
       if (!response.ok) {
         console.log(`📊 Driver status returned: ${response.status}`);
         
-        // Keep polling regardless of status
-        if (attempts < MAX_ATTEMPTS - 1) {
-          setAttempts(prev => prev + 1);
+        if (currentAttempt < MAX_ATTEMPTS) {
           setMessage('Waiting for verification to process...');
-          setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
+          // Continue polling
+          intervalRef.current = setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
         } else {
           setStatus('timeout');
           setMessage('Verification is taking longer than expected');
@@ -101,7 +103,6 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       
       const data = await response.json();
       
-      // Log what we found
       console.log('📊 Driver data retrieved:', {
         email: data?.email,
         lastUpdated: data?.lastUpdated,
@@ -109,80 +110,63 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         status: data?.status
       });
       
-      // CRITICAL: Detect if webhook has JUST processed
+      // IMPROVED DETECTION: Look for multiple indicators
       let webhookJustProcessed = false;
       
-      // Strategy 1: Check if lastUpdated is VERY recent
-      if (data?.lastUpdated) {
-        // Parse the date (handle both date-only and datetime formats)
-        const lastUpdateStr = data.lastUpdated;
-        let lastUpdateTime;
-        
-        // If it's just a date (YYYY-MM-DD), it was updated today
-        if (lastUpdateStr.length === 10) {
-          // Date only - check if it's today
-          const today = new Date().toISOString().split('T')[0];
-          if (lastUpdateStr === today) {
-            // Updated today - but we need to know if it's RECENT
-            console.log('📅 lastUpdated is today (date only)');
-            
-            // Check for other fresh indicators
-            if (data.licenseFrontUrl || data.poa1Url || data.licenseNumber) {
-              // Has data that webhook would set
-              const millisSinceLoad = Date.now() - loadTime;
-              const secondsSinceLoad = millisSinceLoad / 1000;
-              
-              // If we've been polling less than 30 seconds and data exists, assume it's new
-              if (secondsSinceLoad < 30) {
-                console.log(`✅ Data present and we started polling ${secondsSinceLoad.toFixed(1)}s ago - assuming webhook processed`);
-                webhookJustProcessed = true;
-              }
-            }
-          }
-        } else {
-          // Has datetime - can check precisely
-          lastUpdateTime = new Date(lastUpdateStr);
-          const now = new Date();
-          const secondsAgo = (now - lastUpdateTime) / 1000;
-          
-          // Webhook processed if updated in last 30 seconds
-          if (secondsAgo < 30) {
-            console.log(`✅ Webhook detected - updated ${secondsAgo.toFixed(1)}s ago`);
-            webhookJustProcessed = true;
-          } else {
-            console.log(`⏳ Last update was ${secondsAgo.toFixed(1)}s ago - too old, still waiting`);
-          }
-        }
+      // Strategy 1: Check for NEW document URLs (these are only set by webhook)
+      if (data?.licenseFrontUrl || data?.licenseBackUrl || data?.selfieUrl) {
+        console.log('✅ Document URLs detected - webhook has processed');
+        webhookJustProcessed = true;
       }
       
-      // Strategy 2: For testing - check URL param override
+      // Strategy 2: Check for Idenfy-specific fields that are ONLY set by webhook
+      else if (data?.licenseNumber && data?.licenseValidTo && data?.nationality) {
+        console.log('✅ License details present - webhook has processed');
+        webhookJustProcessed = true;
+      }
+      
+      // Strategy 3: Check for POA validity dates (webhook sets these)
+      else if (data?.poa1ValidUntil && data?.poa2ValidUntil) {
+        console.log('✅ POA validity dates present - webhook has processed');
+        webhookJustProcessed = true;
+      }
+      
+      // Strategy 4: For testing - allow override
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('forceRoute') === 'true') {
         console.log('⚠️ DEBUG: forceRoute=true, bypassing wait');
         webhookJustProcessed = true;
       }
       
-      // Decision point
+      // Strategy 5: If we've been polling for less than 10 seconds and see full data, assume it's fresh
+      if (!webhookJustProcessed && currentAttempt <= 5) {
+        const hasFullData = data?.licenseNumber || data?.driverName || data?.dateOfBirth;
+        if (hasFullData) {
+          console.log('📝 Full driver data present early in polling - checking if fresh...');
+          // Only treat as fresh if we just started polling
+          if (currentAttempt <= 2) {
+            console.log('✅ Data present in first few attempts - treating as fresh webhook');
+            webhookJustProcessed = true;
+          }
+        }
+      }
+      
       if (webhookJustProcessed) {
         console.log('🎉 Webhook confirmed! Processing route...');
         setDriverData(data);
         setStatus('success');
         setMessage('Verification complete! Routing to next step...');
         
-        // Small delay then route
         setTimeout(() => {
           routeToNextStep(data);
         }, 1500);
         
       } else {
-        // No webhook yet - KEEP WAITING
         console.log('⏳ No fresh webhook detected - continuing to wait');
         
-        if (attempts < MAX_ATTEMPTS - 1) {
-          setAttempts(prev => prev + 1);
-          
+        if (currentAttempt < MAX_ATTEMPTS) {
           // Update message based on time waited
-          const secondsWaited = attempts * 2;
+          const secondsWaited = currentAttempt * 2;
           if (secondsWaited < 10) {
             setMessage('Waiting for verification to complete...');
           } else if (secondsWaited < 20) {
@@ -194,10 +178,9 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
           }
           
           // Continue polling
-          setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
+          intervalRef.current = setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
           
         } else {
-          // Max attempts reached
           console.log('⏱️ Timeout - webhook never arrived after 40 seconds');
           setStatus('timeout');
           setMessage('Verification is taking longer than expected');
@@ -207,21 +190,21 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     } catch (error) {
       console.error('❌ Error in webhook check:', error);
       
-      // On error, keep trying unless out of attempts
-      if (attempts < MAX_ATTEMPTS - 1) {
-        setAttempts(prev => prev + 1);
-        setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
+      const currentAttempt = attemptsRef.current;
+      if (currentAttempt < MAX_ATTEMPTS) {
+        intervalRef.current = setTimeout(() => checkWebhookProcessed(), POLL_INTERVAL);
       } else {
         setStatus('error');
         setMessage('An error occurred while processing');
       }
     }
-  }, [attempts, driverEmail, routeToNextStep, loadTime, MAX_ATTEMPTS, POLL_INTERVAL]); // FIXED: Added closing parenthesis here
+  }, [driverEmail, routeToNextStep, MAX_ATTEMPTS, POLL_INTERVAL]); // Removed attempts from deps!
 
   const handleRetry = () => {
     console.log('🔄 Retry requested');
     setStatus('waiting');
     setAttempts(0);
+    attemptsRef.current = 0;
     setMessage('Retrying verification check...');
     checkWebhookProcessed();
   };
@@ -231,7 +214,6 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     if (driverData) {
       routeToNextStep(driverData);
     } else {
-      // Default to POA validation if no data
       window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
     }
   };
@@ -240,8 +222,15 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   useEffect(() => {
     console.log('🚀 ProcessingHub mounted - starting webhook poll');
     checkWebhookProcessed();
+    
+    // Cleanup on unmount
+    return () => {
+      if (intervalRef.current) {
+        clearTimeout(intervalRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - only run once on mount
+  }, []);
 
   // Render states
   if (status === 'waiting') {
@@ -269,11 +258,14 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
               </div>
             </div>
             
-            {/* Progress bar */}
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            {/* Progress bar - FIXED: added max-width */}
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-purple-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${(attempts / MAX_ATTEMPTS) * 100}%` }}
+                style={{ 
+                  width: `${Math.min(100, (attempts / MAX_ATTEMPTS) * 100)}%`,
+                  maxWidth: '100%'
+                }}
               />
             </div>
             
