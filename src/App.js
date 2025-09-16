@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle, Upload, FileText, Mail, XCircle, Phone, Exter
 import DVLAProcessingPage from './DVLAProcessingPage';
 import POAValidationPage from './POAValidationPage';
 import PassportUploadPage from './PassportUploadPage';
+import ProcessingHub from './ProcessingHub';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -1922,7 +1923,16 @@ const renderRejected = () => (
      case 'insurance-questionnaire': return <InsuranceQuestionnaire />;
      case 'document-upload': return renderDocumentUpload();
 
-    case 'poa-validation':
+    case 'processing-hub':
+  return (
+    <ProcessingHub 
+      driverEmail={driverEmail}
+      jobId={jobId}
+      sessionType={urlParams.get('sessionType') || 'full'}
+    />
+  );
+
+case 'poa-validation':
   return (
     <POAValidationPage 
       driverEmail={driverEmail}
