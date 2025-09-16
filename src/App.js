@@ -170,10 +170,12 @@ const DriverVerificationApp = () => {
         setDriverEmail(decodeURIComponent(email));
       }
       
+     // Small delay to ensure state is set
+    setTimeout(() => {
       handleVerificationComplete(status, job, session);
-    }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []); // Added eslint-disable comment
+    }, 100);
+  }
+}, []);
 
   const validateJobAndFetchDetails = async (jobIdParam) => {
     setLoading(true);
