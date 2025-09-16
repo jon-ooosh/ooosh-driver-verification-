@@ -8,10 +8,10 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   console.log('🔍 ProcessingHub initialized:', { driverEmail, jobId, sessionType });
   
   const [status, setStatus] = useState('waiting');
-  const [attempts, setAttempts] = useState(0);
-  const [driverData, setDriverData] = useState(null);
-  const [initialData, setInitialData] = useState(null);
-  const [message, setMessage] = useState('Processing your verification...');
+const [attempts, setAttempts] = useState(0);
+const [driverData, setDriverData] = useState(null);
+const [message, setMessage] = useState('Processing your verification...');
+const initialDataRef = useRef(null);
   
   // Use refs to avoid recreating functions
   const attemptsRef = useRef(0);
@@ -114,19 +114,18 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         allFields: Object.keys(data || {})
       });
       
-      // Store initial data on first check
-      if (currentAttempt === 1 && !initialData) {
-        setInitialData(data);
-        console.log('📸 Stored initial driver state for comparison:', data);
-      }
+     // Store initial data on first check
+if (currentAttempt === 1 && !initialDataRef.current) {
+  initialDataRef.current = data;
+  console.log('📸 Stored initial driver state:', data);
+}
       
       // SIMPLE DETECTION: Check if ANY field changed from initial state
       let webhookJustProcessed = false;
       
-      if (initialData && currentAttempt > 1) {
-        console.log('🔍 Comparing data - Attempt', currentAttempt);
-        console.log('Initial data:', initialData);
-        console.log('Current data:', data);
+     if (initialDataRef.current && currentAttempt > 1) {
+  console.log('🔍 Comparing - Initial data exists:', !!initialDataRef.current, 'Attempt:', currentAttempt);
+  // Simplified logging - only log changes, not every field
         
         // Check for fields that driver-status ACTUALLY returns
         const fieldsToCheck = [
@@ -162,9 +161,9 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         
         // Check if any field changed
         for (const field of fieldsToCheck) {
-          if (data[field] !== undefined && initialData[field] !== undefined) {
-            if (data[field] !== initialData[field]) {
-              console.log(`✅ Field changed: ${field} - from "${initialData[field]}" to "${data[field]}"`);
+          if (data[field] !== undefined && initialDataRef.current[field] !== undefined) {
+            if (data[field] !== initialDataRef.current[field]) {
+              console.log(`✅ Field changed: ${field} - from "${initialDataRef.current[field]}" to "${data[field]}"`);
               webhookJustProcessed = true;
               break;
             } else {
@@ -176,8 +175,8 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         // Also check ALL fields (not just our list)
         if (!webhookJustProcessed) {
           for (const field in data) {
-            if (initialData[field] !== data[field]) {
-              console.log(`✅ Unlisted field changed: ${field} - from "${initialData[field]}" to "${data[field]}"`);
+            if (initialDataRef.current[field] !== data[field]) {
+              console.log(`✅ Unlisted field changed: ${field} - from "${initialDataRef.current[field]}" to "${data[field]}"`);
               webhookJustProcessed = true;
               break;
             }
@@ -256,7 +255,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     setStatus('waiting');
     setAttempts(0);
     attemptsRef.current = 0;
-    setInitialData(null); // Clear initial data for fresh comparison
+    initialDataRef.current = null; // Clear initial data for fresh comparison
     setMessage('Retrying verification check...');
     checkWebhookProcessed();
   };
