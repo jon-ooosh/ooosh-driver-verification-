@@ -65,27 +65,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
             poa1ValidUntil: status.poa1ValidUntil,
             poa2ValidUntil: status.poa2ValidUntil
           });
-          
-          // Check if POAs are still valid (skip validation if they are)
-          if (status.poa1ValidUntil && status.poa2ValidUntil) {
-            const now = new Date();
-            const poa1Valid = new Date(status.poa1ValidUntil) > now;
-            const poa2Valid = new Date(status.poa2ValidUntil) > now;
-            
-            if (poa1Valid && poa2Valid) {
-              console.log('✅ POAs still valid, skipping validation');
-              setSkippingValidation(true);
-              setDriverData(status);
-              setLoading(false);
-              
-              // Auto-proceed after 3 seconds
-              setTimeout(() => {
-                proceedToNext(status);
-              }, 3000);
-              return;
-            }
-          }
-          
+                  
           // Check if we have both POA URLs
           if (status.poa1Url && status.poa2Url) {
             poaData = status;
