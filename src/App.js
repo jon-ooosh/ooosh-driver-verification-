@@ -119,23 +119,35 @@ const DriverVerificationApp = () => {
     };
   }, []);
 
-  // UPDATED: Extract job ID from URL on load with DVLA processing support
+ // UPDATED: Extract job ID from URL on load with DVLA processing support
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const jobParam = urlParams.get('job');
     const emailParam = urlParams.get('email');
     const stepParam = urlParams.get('step');
     const ukParam = urlParams.get('uk');
-    if (stepParam === 'processing-hub' && emailParam) {
-    setDriverEmail(decodeURIComponent(emailParam));
-  }
+    const sessionTypeParam = urlParams.get('sessionType');
     
     console.log('📍 URL Parameters on load:', {
       job: jobParam,
       email: emailParam,
       step: stepParam,
-      uk: ukParam
+      uk: ukParam,
+      sessionType: sessionTypeParam
     });
+    
+    // Handle direct navigation to processing hub
+    if (stepParam === 'processing-hub') {
+      console.log('🎯 Direct navigation to processing hub');
+      if (emailParam) {
+        setDriverEmail(decodeURIComponent(emailParam));
+      }
+      if (jobParam) {
+        setJobId(jobParam);
+      }
+      setCurrentStep('processing-hub');
+      return; // Stop processing other parameters
+    }
     
     // Handle direct navigation to DVLA processing page
     if (stepParam === 'dvla-processing' && emailParam) {
