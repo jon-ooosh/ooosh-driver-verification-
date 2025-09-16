@@ -1,7 +1,7 @@
 // File: src/POAValidationPage.js
 // POA duplicate checking and date extraction page
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader, FileText, Calendar } from 'lucide-react';
 
 const POAValidationPage = ({ driverEmail, jobId }) => {
@@ -10,13 +10,36 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [skippingValidation, setSkippingValidation] = useState(false); // FIXED: Added missing state
+  const [skippingValidation, setSkippingValidation] = useState(false);
 
-  useEffect(() => {
-    validatePOADocuments();
-  }, []);
+  const proceedToNext = useCallback((data) => {
+    const checkData = data || driverData;
+    
+    // Check if UK driver based on webhook data
+    const isUKDriver = 
+      checkData?.nationality === 'GB' || 
+      checkData?.nationality === 'UK' ||
+      checkData?.nationality === 'United Kingdom' ||
+      checkData?.licenseIssuedBy === 'DVLA' ||
+      checkData?.licenseIssuedBy?.includes('UK') ||
+      checkData?.licenseIssuedBy?.includes('United Kingdom');
+    
+    console.log('🚦 Routing decision:', { 
+      isUKDriver, 
+      nationality: checkData?.nationality,
+      issuedBy: checkData?.licenseIssuedBy 
+    });
+    
+    if (isUKDriver) {
+      // UK driver - go to DVLA check
+      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+    } else {
+      // Non-UK driver - go to passport upload (not complete)
+      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+    }
+  }, [driverData, driverEmail, jobId]);
 
-  const validatePOADocuments = async () => {
+  const validatePOADocuments = useCallback(async () => {
     try {
       setLoading(true);
       console.log('🔍 Starting POA validation for:', driverEmail);
@@ -98,7 +121,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'dual-poa',
-          imageData: poaData.poa1Url,  // Can be URL or base64
+          imageData: poaData.poa1Url,
           imageData2: poaData.poa2Url,
           licenseAddress: poaData.licenseAddress || poaData.homeAddress,
           email: driverEmail
@@ -116,7 +139,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       const poa1Date = result.result?.poa1?.documentDate || null;
       const poa2Date = result.result?.poa2?.documentDate || null;
       
-      // FIXED: Use actual document date OR fallback to 30 days from today
+      // Use actual document date OR fallback to 30 days from today
       const today = new Date();
       const fallbackValidityDays = 30;
       
@@ -179,40 +202,17 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [driverEmail, proceedToNext]);
 
-  const proceedToNext = (data) => {
-    const checkData = data || driverData;
-    
-    // Check if UK driver based on webhook data
-    const isUKDriver = 
-      checkData?.nationality === 'GB' || 
-      checkData?.nationality === 'UK' ||
-      checkData?.nationality === 'United Kingdom' ||
-      checkData?.licenseIssuedBy === 'DVLA' ||
-      checkData?.licenseIssuedBy?.includes('UK') ||
-      checkData?.licenseIssuedBy?.includes('United Kingdom');
-    
-    console.log('🚦 Routing decision:', { 
-      isUKDriver, 
-      nationality: checkData?.nationality,
-      issuedBy: checkData?.licenseIssuedBy 
-    });
-    
-    if (isUKDriver) {
-      // UK driver - go to DVLA check
-      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-    } else {
-      // Non-UK driver - go to passport upload (not complete)
-      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-    }
-  };
-
-  const retryValidation = () => {
+  const retryValidation = useCallback(() => {
     setError('');
     setValidationResult(null);
     validatePOADocuments();
-  };
+  }, [validatePOADocuments]);
+
+  useEffect(() => {
+    validatePOADocuments();
+  }, [validatePOADocuments]);
 
   // Loading state
   if (loading) {
