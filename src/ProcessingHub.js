@@ -21,59 +21,73 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const POLL_INTERVAL = 2000;
 
   // Route to next step
-  const routeToNextStep = useCallback((data) => {
-    console.log('🧭 Routing based on webhook data:', data);
-    
-    if (!data) {
-      console.error('❌ No data for routing');
+  // In ProcessingHub.js, update routeToNextStep with detailed logging:
+
+const routeToNextStep = useCallback((data) => {
+  console.log('🧭 ROUTING DECISION START');
+  console.log('📊 Full driver data:', JSON.stringify(data, null, 2));
+  
+  if (!data) {
+    console.error('❌ No data for routing - STOPPING');
+    return;
+  }
+  
+  // Check POA validation
+  console.log('🔍 Checking POA dates:', {
+    poa1ValidUntil: data.poa1ValidUntil,
+    poa2ValidUntil: data.poa2ValidUntil
+  });
+  
+  if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
+    console.log('🚦 ROUTING TO: poa-validation (missing POA dates)');
+    window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+    return;
+  }
+  
+  // Check if POAs are expired
+  const now = new Date();
+  const poa1Valid = new Date(data.poa1ValidUntil) > now;
+  const poa2Valid = new Date(data.poa2ValidUntil) > now;
+  
+  console.log('📅 POA validity check:', { poa1Valid, poa2Valid });
+  
+  if (!poa1Valid || !poa2Valid) {
+    console.log('🚦 ROUTING TO: poa-validation (expired POAs)');
+    window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+    return;
+  }
+  
+  // Check if UK driver
+  const isUKDriver = 
+    data.nationality === 'GB' || 
+    data.nationality === 'United Kingdom' ||
+    data.licenseIssuedBy === 'DVLA' ||
+    data.licenseIssuedBy?.includes('UK') ||
+    data.licenseIssuedBy?.includes('GB');
+  
+  console.log('🇬🇧 UK check:', { 
+    isUKDriver, 
+    nationality: data.nationality, 
+    issuedBy: data.licenseIssuedBy 
+  });
+  
+  if (isUKDriver) {
+    if (!data.dvlaCheckComplete || data.dvlaCheckStatus !== 'valid') {
+      console.log('🚦 ROUTING TO: dvla-processing (UK driver needs DVLA)');
+      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
       return;
     }
-    
-    // Check POA validation
-    if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
-      console.log('→ Missing POA validity dates - routing to POA validation');
-      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+  } else {
+    if (!data.passportVerified) {
+      console.log('🚦 ROUTING TO: passport-upload (non-UK needs passport)');
+      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
       return;
     }
-    
-    // Check if POAs are expired
-    const now = new Date();
-    const poa1Valid = new Date(data.poa1ValidUntil) > now;
-    const poa2Valid = new Date(data.poa2ValidUntil) > now;
-    
-    if (!poa1Valid || !poa2Valid) {
-      console.log('→ POAs expired - routing to POA validation');
-      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-      return;
-    }
-    
-    // Check if UK driver needs DVLA
-    const isUKDriver = 
-      data.nationality === 'GB' || 
-      data.nationality === 'United Kingdom' ||
-      data.licenseIssuedBy === 'DVLA' ||
-      data.licenseIssuedBy?.includes('UK') ||
-      data.licenseIssuedBy?.includes('GB');
-    
-    console.log('🇬🇧 UK Driver check:', { isUKDriver, nationality: data.nationality, issuedBy: data.licenseIssuedBy });
-    
-    if (isUKDriver) {
-      if (!data.dvlaCheckComplete || data.dvlaCheckStatus !== 'valid') {
-        console.log('→ UK driver needs DVLA check');
-        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-        return;
-      }
-    } else {
-      if (!data.passportVerified) {
-        console.log('→ Non-UK driver needs passport upload');
-        window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-        return;
-      }
-    }
-    
-    console.log('→ All verifications complete - routing to signature');
-    window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-  }, [driverEmail, jobId]);
+  }
+  
+  console.log('🚦 ROUTING TO: signature (all checks complete)');
+  window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+}, [driverEmail, jobId]);
 
   // SIMPLIFIED: Check for webhook by monitoring idenfyCheckDate
   const checkWebhookProcessed = useCallback(async () => {
@@ -120,16 +134,38 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         console.log('📸 Initial idenfyCheckDate:', initialCheckDateRef.current);
       }
       
-      // Check if webhook timestamp changed
+     // AFTER - Replace with this:
+      // Check if webhook timestamp exists AND is recent
       if (data?.idenfyCheckDate) {
-        if (!initialCheckDateRef.current) {
-          // Timestamp exists now but didn't before
-          console.log('✅ Webhook processed! Timestamp appeared:', data.idenfyCheckDate);
-          webhookReceived = true;
-        } else if (data.idenfyCheckDate !== initialCheckDateRef.current) {
-          // Timestamp changed
-          console.log('✅ Webhook processed! Timestamp changed from:', initialCheckDateRef.current, 'to:', data.idenfyCheckDate);
-          webhookReceived = true;
+        console.log('📅 Found idenfyCheckDate:', data.idenfyCheckDate);
+        
+        // Parse ISO timestamp
+        try {
+          const webhookTime = new Date(data.idenfyCheckDate);
+          const now = new Date();
+          const minutesAgo = (now - webhookTime) / (1000 * 60);
+          
+          console.log(`⏰ Webhook timestamp is ${minutesAgo.toFixed(1)} minutes old`);
+          
+          // If timestamp is recent (within 5 minutes), consider webhook received
+          if (minutesAgo >= 0 && minutesAgo < 5) {
+            console.log('✅ Recent webhook detected!');
+            webhookReceived = true;
+          } else if (minutesAgo < 0) {
+            console.log('⚠️ Timestamp is in the future - possible timezone issue');
+            // Still accept it if it's not too far in the future (1 minute tolerance)
+            if (minutesAgo > -1) {
+              webhookReceived = true;
+            }
+          } else {
+            console.log('⏳ Timestamp too old - continuing to wait for fresh webhook');
+          }
+        } catch (e) {
+          console.error('Failed to parse timestamp:', e);
+          // Fallback: if we can't parse it but it exists, assume it's new
+          if (!initialCheckDateRef.current || data.idenfyCheckDate !== initialCheckDateRef.current) {
+            webhookReceived = true;
+          }
         }
       }
       
