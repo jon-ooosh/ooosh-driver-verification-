@@ -495,10 +495,10 @@ useEffect(() => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'update-driver-board-a', // Changed from create to update
+        action: 'update-driver-board-a',
         email: driverEmail,
-        updates: { // Changed from driverData to updates
-          datePassedTest: insuranceFormData.datePassedTest, // ADD THIS LINE
+        updates: {
+          datePassedTest: insuranceFormData.datePassedTest,
           hasDisability: insuranceFormData.hasDisability === 'yes',
           hasConvictions: insuranceFormData.hasConvictions === 'yes',
           hasProsecution: insuranceFormData.hasProsecution === 'yes',
@@ -516,12 +516,37 @@ useEffect(() => {
       console.error('Failed to save insurance data to Monday.com Board A');
     }
     
+    // NEW CODE STARTS HERE - Check what documents are valid
+    const statusResponse = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+    
+    if (statusResponse.ok) {
+      const driverData = await statusResponse.json();
+      console.log('Driver status after insurance:', driverData);
+      
+      // Check if all documents are valid
+      const allValid = 
+        driverData.documents?.license?.valid &&
+        driverData.documents?.poa1?.valid &&
+        driverData.documents?.poa2?.valid &&
+        driverData.documents?.dvlaCheck?.valid;
+      
+      if (allValid) {
+        console.log('✅ All documents valid - routing to signature');
+        setCurrentStep('complete'); // Change to 'signature' when you build that page
+      } else {
+        console.log('📄 Documents need verification - routing to upload');
+        setCurrentStep('document-upload');
+      }
+    } else {
+      setCurrentStep('document-upload'); // Default if can't check status
+    }
+        
   } catch (err) {
     console.error('Error saving insurance data to Monday.com:', err);
+    setCurrentStep('document-upload');  // Default on error
+  } finally {
+    setLoading(false);  // Moved to finally block
   }
-  
-  setCurrentStep('document-upload');
-  setLoading(false);
 };
 
   const startVerification = () => {
@@ -574,7 +599,7 @@ useEffect(() => {
     let verificationMessage = '';
     switch(verificationType) {
       case 'license':
-        verificationMessage = 'Your driving license needs renewal';
+        verificationMessage = 'Your driving licence needs renewal';
         break;
       case 'poa1':
         verificationMessage = 'Your first proof of address needs updating';
@@ -1080,7 +1105,7 @@ const InsuranceQuestionnaire = () => {
     const yearsDifference = (today - passedDate) / (1000 * 60 * 60 * 24 * 365.25);
     
     if (yearsDifference < 2) {
-      setDatePassedTestError(`You must have held your license for at least 2 years. Currently: ${yearsDifference.toFixed(1)} years`);
+      setDatePassedTestError(`You must have held your licence for at least 2 years. Currently: ${yearsDifference.toFixed(1)} years`);
       return false;
     }
 
