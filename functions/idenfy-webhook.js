@@ -248,28 +248,45 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
     console.log('✅ Board A updated successfully');
 
     // Step 4: Save documents to Monday.com with actual file upload
-    await saveIdenfyDocumentsToMonday(email, fullWebhookData);
+    await saveIdenfyDocumentsToMonday(email, fullWebhookData); 
+    
+    // Step 4.5: Process POA documents immediately if present
+const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
+console.log('📊 POA processing result:', {
+  processed: poaProcessingResult.poasProcessed,
+  approved: poaProcessingResult.approved,
+  isDuplicate: poaProcessingResult.isDuplicate
+});
 
-    // Step 5: Update document validity dates (preserves your logic)
-    await updateDocumentValidityDates(email, fullWebhookData);
+// Step 5: Update document validity dates (your existing code)
+await updateDocumentValidityDates(email, fullWebhookData);
 
-    // Step 6: Determine next step based on driver type and verification status
-    let nextStep = 'complete';
-    if (idenfyResult.approved) {
-      // Check if UK driver (needs DVLA check)
-      const isUKDriver = data.docIssuingCountry === 'GB' || data.docNationality === 'GB';
-      
-      if (isUKDriver) {
-        console.log('🇬🇧 UK driver detected - routing to DVLA check');
-        nextStep = 'dvla_processing';  // This should route to your DVLA page
-      } else {
-        console.log('🌍 Non-UK driver - verification complete');
-        nextStep = 'complete';
-      }
+// Step 6: Determine next step (modify existing logic)
+let nextStep = 'complete';
+if (idenfyResult.approved) {
+  // Check if UK driver
+  const isUKDriver = data.docIssuingCountry === 'GB' || data.docNationality === 'GB';
+  
+  // Check if POAs need attention
+  const poaNeedsReview = poaProcessingResult.isDuplicate || 
+                         (poaProcessingResult.poasProcessed && !poaProcessingResult.approved);
+  
+  if (isUKDriver) {
+    if (poaNeedsReview) {
+      console.log('🇬🇧 UK driver with POA issues - needs manual review');
+      nextStep = 'poa_review_required';
     } else {
-      console.log('❌ Idenfy verification failed');
-      nextStep = 'verification_failed';
+      console.log('🇬🇧 UK driver - routing to DVLA check');
+      nextStep = 'dvla_processing';
     }
+  } else {
+    console.log('🌍 Non-UK driver - verification complete');
+    nextStep = 'complete';
+  }
+} else {
+  console.log('❌ Idenfy verification failed');
+  nextStep = 'verification_failed';
+}
 
     return { 
       success: true, 
@@ -961,16 +978,7 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
           extension = 'pdf';
           mimeType = 'application/pdf';
           console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
-          
-          // IMPORTANT NOTE: Monday.com file columns can't display PDFs
-          // Options:
-          // 1. Convert PDF to image here (requires additional library)
-          // 2. Upload as PDF but mark for manual review
-          // 3. Skip PDF upload and handle separately
-          
-          // For now, we'll upload the PDF and let Monday.com handle it
-          // You may want to add PDF to image conversion here later
-          
+                     
         } else if (isPNG) {
           extension = 'png';
           mimeType = 'image/png';
@@ -1006,6 +1014,170 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
             contentType: mimeType  // Pass the correct content type
           })
         });
+
+        // Process POA documents immediately for validation
+async function processPoaDocumentsImmediately(email, fullWebhookData) {
+  try {
+    console.log('🔍 Checking for POA documents to process...');
+    
+    // Extract POA URLs from webhook data
+    const poa1Url = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+                    fullWebhookData.fileUrls?.UTILITY_BILL ||
+                    fullWebhookData.fileUrls?.POA1;
+    
+    const poa2Url = fullWebhookData.additionalStepPdfUrls?.POA2 || 
+                    fullWebhookData.fileUrls?.POA2 ||
+                    fullWebhookData.fileUrls?.BANK_STATEMENT;
+    
+    // No POAs? That's fine - might be license-only revalidation
+    if (!poa1Url && !poa2Url) {
+      console.log('ℹ️ No POA documents in this verification - likely license-only');
+      return {
+        success: true,
+        poasProcessed: false,
+        reason: 'No POA documents present'
+      };
+    }
+    
+    // Single POA? Mark for review but continue
+    if ((poa1Url && !poa2Url) || (!poa1Url && poa2Url)) {
+      console.log('⚠️ Only one POA document found - marking for review');
+      await updatePoaValidationResults(email, {
+        poaValidationStatus: 'Incomplete',
+        poaValidationNotes: 'Only one POA document provided',
+        poa1Processed: !!poa1Url,
+        poa2Processed: !!poa2Url
+      });
+      
+      return {
+        success: true,
+        poasProcessed: true,
+        incomplete: true,
+        reason: 'Only one POA document'
+      };
+    }
+    
+    console.log('📋 Found both POA documents - processing for validation...');
+    
+    // Call document-processor for dual POA validation
+    const validationResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'dual-poa',
+        imageData: poa1Url,  // The function will fetch from URL
+        imageData2: poa2Url,
+        email: email
+      })
+    });
+    
+    if (!validationResponse.ok) {
+      console.error('❌ POA validation service error');
+      throw new Error('Document processor failed');
+    }
+    
+    const validationResult = await validationResponse.json();
+    console.log('✅ POA validation complete:', {
+      isDuplicate: validationResult.result?.isDuplicate,
+      crossValidationApproved: validationResult.result?.crossValidation?.approved
+    });
+    
+    // Extract validation data
+    const isDuplicate = validationResult.result?.isDuplicate || false;
+    const crossValidationApproved = validationResult.result?.crossValidation?.approved || false;
+    const poa1Data = validationResult.result?.poa1 || {};
+    const poa2Data = validationResult.result?.poa2 || {};
+    
+    // Calculate validity dates (90 days from document date or today)
+    const today = new Date();
+    const calculateValidUntil = (docDate) => {
+      if (docDate) {
+        const date = new Date(docDate);
+        date.setDate(date.getDate() + 90);
+        return date.toISOString().split('T')[0];
+      }
+      const fallback = new Date(today);
+      fallback.setDate(fallback.getDate() + 90);
+      return fallback.toISOString().split('T')[0];
+    };
+    
+    // Save validation results to Monday
+    const updateData = {
+      // POA validation results
+      poaValidationStatus: isDuplicate ? 'Duplicate' : 
+                           crossValidationApproved ? 'Validated' : 
+                           'Manual Review',
+      poa1ValidUntil: calculateValidUntil(poa1Data.documentDate),
+      poa2ValidUntil: calculateValidUntil(poa2Data.documentDate),
+      
+      // POA details for reference
+      poa1Provider: poa1Data.providerName || 'Unknown',
+      poa2Provider: poa2Data.providerName || 'Unknown',
+      poa1Date: poa1Data.documentDate || 'Not extracted',
+      poa2Date: poa2Data.documentDate || 'Not extracted',
+      
+      // Validation flags
+      poaDuplicate: isDuplicate ? 'Yes' : 'No',
+      poaCrossValidated: crossValidationApproved ? 'Yes' : 'No',
+      poasProcessed: 'Yes',
+      
+      // Timestamp for ProcessingHub to detect
+      poaProcessingComplete: new Date().toISOString()
+    };
+    
+    await updatePoaValidationResults(email, updateData);
+    
+    return {
+      success: true,
+      poasProcessed: true,
+      isDuplicate: isDuplicate,
+      approved: crossValidationApproved,
+      validUntilPoa1: updateData.poa1ValidUntil,
+      validUntilPoa2: updateData.poa2ValidUntil
+    };
+    
+  } catch (error) {
+    console.error('❌ Error processing POA documents:', error);
+    
+    // Mark as error but don't fail the webhook
+    await updatePoaValidationResults(email, {
+      poaValidationStatus: 'Processing Error',
+      poaValidationNotes: error.message,
+      poasProcessed: 'Error'
+    });
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Helper function to update POA validation results
+async function updatePoaValidationResults(email, updates) {
+  try {
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: {
+          ...updates,
+          lastUpdated: new Date().toISOString().split('T')[0]
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to update POA validation results');
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Error updating Monday with POA results:', error);
+  }
+}
         
         const uploadResult = await uploadResponse.json();
         
