@@ -198,7 +198,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
         setTimeout(() => {
           console.log('🚀 Routing to next step...');
           routeToNextStep(data);
-        }, 1000);
+       }, 4000); // Changed from 1000 to 4000 to allow time for data to populate
         
       } else {
         console.log('⏳ No webhook received yet - idenfyCheckDate:', data?.idenfyCheckDate);
