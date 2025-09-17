@@ -830,7 +830,7 @@ function parseBoardAData(item) {
     poa1ValidUntil: '',
     poa2ValidUntil: '',
     dvlaValidUntil: '',
-    licenseNextCheckDue: ''
+    licenseNextCheckDue: '',
     idenfyCheckDate: ''
   };
 
