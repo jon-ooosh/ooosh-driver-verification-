@@ -880,12 +880,12 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     const documentMappings = [
       {
         idenfyField: 'FRONT',
-        fileType: 'licenseFront',
+        fileType: 'license_front',
         url: fullWebhookData.fileUrls?.FRONT
       },
       {
         idenfyField: 'BACK',
-        fileType: 'licenseBack',
+        fileType: 'license_back',
         url: fullWebhookData.fileUrls?.BACK
       },
       {
