@@ -1,8 +1,8 @@
 // File: src/POAValidationPage.js
-// Simplified POA validation results display page
+// POA validation results display page - reads pre-calculated results from webhook
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Loader, FileText, Calendar } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Loader, Calendar } from 'lucide-react';
 
 const POAValidationPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(true);
@@ -18,7 +18,9 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       checkData?.nationality === 'GB' || 
       checkData?.nationality === 'UK' ||
       checkData?.nationality === 'United Kingdom' ||
-      checkData?.licenseIssuedBy === 'DVLA';
+      checkData?.licenseIssuedBy === 'DVLA' ||
+      checkData?.licenseIssuedBy?.includes('UK') ||
+      checkData?.licenseIssuedBy?.includes('United Kingdom');
     
     console.log('🚦 Routing decision:', { 
       isUKDriver, 
