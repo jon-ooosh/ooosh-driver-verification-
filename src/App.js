@@ -1278,15 +1278,15 @@ const InsuranceQuestionnaire = () => {
         {/* NEW: Date Passed Test Section */}
         <div className="border border-purple-300 rounded-md p-4 bg-purple-50">
           <h3 className="text-xl font-bold text-purple-900 mb-3">
-            Driving License Validation
+            Date Passed Test
           </h3>
           <p className="text-base text-gray-700 mb-3">
-            For insurance purposes, you must have held a full UK driving license (category B) for at least 2 years.
+            You must have held a full driving licence (category B) for at least 2 years.
           </p>
           
           <div className="form-group">
             <label htmlFor="datePassedTest" className="block text-lg font-medium text-gray-700 mb-2">
-              Date you passed your driving test (category B) *
+              Date you passed your category B driving test *
             </label>
             <input
               type="date"
