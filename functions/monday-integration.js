@@ -929,8 +929,9 @@ function parseBoardAData(item) {
         driver.lastUpdated = value?.date || '';
         break;
         case 'text_mkvv2z8p': // Idenfy Check Date
+        console.log('📍 FOUND idenfyCheckDate field! Value:', col.text); 
         driver.idenfyCheckDate = col.text || '';
-        break;
+          break;
     }
   });
 
