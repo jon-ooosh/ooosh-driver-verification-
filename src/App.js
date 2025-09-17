@@ -135,6 +135,13 @@ useEffect(() => {
     uk: ukParam,
     sessionType: sessionTypeParam
   });
+  console.log('🎯 URL Route Debug:', {
+    step: stepParam,
+    email: emailParam,
+    job: jobParam,
+    fullURL: window.location.href,
+    timestamp: new Date().toISOString()
+  });
   
   // Handle direct navigation to processing hub
   if (stepParam === 'processing-hub') {
