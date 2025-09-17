@@ -164,6 +164,24 @@ useEffect(() => {
     setCurrentStep('dvla-processing');
     return; // Stop processing other parameters
   }
+
+  // Handle direct navigation to POA validation page
+  if (stepParam === 'poa-validation' && emailParam) {
+    console.log('🎯 Direct navigation to POA validation page');
+    setDriverEmail(decodeURIComponent(emailParam));
+    if (jobParam) setJobId(jobParam);
+    setCurrentStep('poa-validation');
+    return; // Stop processing other parameters
+  }
+  
+  // Handle direct navigation to passport upload page
+  if (stepParam === 'passport-upload' && emailParam) {
+    console.log('🎯 Direct navigation to passport upload page');
+    setDriverEmail(decodeURIComponent(emailParam));
+    if (jobParam) setJobId(jobParam);
+    setCurrentStep('passport-upload');
+    return; // Stop processing other parameters
+  }
   
   // Handle normal job flow
   if (jobParam) {
