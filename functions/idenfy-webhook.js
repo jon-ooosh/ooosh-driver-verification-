@@ -248,51 +248,53 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
     console.log('✅ Board A updated successfully');
 
     // Step 4: Save documents to Monday.com with actual file upload
-    await saveIdenfyDocumentsToMonday(email, fullWebhookData); 
+    await saveIdenfyDocumentsToMonday(email, fullWebhookData);
     
     // Step 4.5: Process POA documents immediately if present
-const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
-console.log('📊 POA processing result:', {
-  processed: poaProcessingResult.poasProcessed,
-  approved: poaProcessingResult.approved,
-  isDuplicate: poaProcessingResult.isDuplicate
-});
+    const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
+    console.log('📊 POA processing result:', {
+      processed: poaProcessingResult.poasProcessed,
+      approved: poaProcessingResult.approved,
+      isDuplicate: poaProcessingResult.isDuplicate
+    });
 
-// Step 5: Update document validity dates (your existing code)
-await updateDocumentValidityDates(email, fullWebhookData);
+    // Step 5: Update document validity dates (your existing code)
+    await updateDocumentValidityDates(email, fullWebhookData);
 
-// Step 6: Determine next step (modify existing logic)
-let nextStep = 'complete';
-if (idenfyResult.approved) {
-  // Check if UK driver
-  const isUKDriver = data.docIssuingCountry === 'GB' || data.docNationality === 'GB';
-  
-  // Check if POAs need attention
-  const poaNeedsReview = poaProcessingResult.isDuplicate || 
-                         (poaProcessingResult.poasProcessed && !poaProcessingResult.approved);
-  
-  if (isUKDriver) {
-    if (poaNeedsReview) {
-      console.log('🇬🇧 UK driver with POA issues - needs manual review');
-      nextStep = 'poa_review_required';
+    // Step 6: Determine next step (modify existing logic)
+    let nextStep = 'complete';
+    if (idenfyResult.approved) {
+      // Check if UK driver - prioritize license issuer over nationality
+      const isUKDriver = data.authority === 'DVLA' || 
+                        data.docIssuingCountry === 'GB' || 
+                        data.docNationality === 'GB';
+      
+      // Check if POAs need attention
+      const poaNeedsReview = poaProcessingResult.isDuplicate || 
+                            (poaProcessingResult.poasProcessed && !poaProcessingResult.approved);
+      
+      if (isUKDriver) {
+        if (poaNeedsReview) {
+          console.log('🇬🇧 UK driver with POA issues - needs manual review');
+          nextStep = 'poa_review_required';
+        } else {
+          console.log('🇬🇧 UK driver - routing to DVLA check');
+          nextStep = 'dvla_processing';
+        }
+      } else {
+        console.log('🌍 Non-UK driver - verification complete');
+        nextStep = 'complete';
+      }
     } else {
-      console.log('🇬🇧 UK driver - routing to DVLA check');
-      nextStep = 'dvla_processing';
+      console.log('❌ Idenfy verification failed');
+      nextStep = 'verification_failed';
     }
-  } else {
-    console.log('🌍 Non-UK driver - verification complete');
-    nextStep = 'complete';
-  }
-} else {
-  console.log('❌ Idenfy verification failed');
-  nextStep = 'verification_failed';
-}
 
     return { 
       success: true, 
       boardAUpdated: true,
       nextStep: nextStep,
-      ukDriver: data.docIssuingCountry === 'GB',
+      ukDriver: data.authority === 'DVLA' || data.docIssuingCountry === 'GB',
       additionalStepsProcessed: false
     };
 
@@ -435,7 +437,7 @@ async function processNewPoaWithOcr(poaDoc) {
     console.log('🔍 Running OCR on new POA document...');
 
     // Call your existing AWS Textract function
-    const response = await fetch(`${process.env.URL}/.netlify/functions/test-claude-ocr`, {
+    const response = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -532,13 +534,13 @@ async function updateMondayWithRevalidation(email, revalidationData) {
   try {
     console.log('📊 Updating Monday.com with re-validation results...');
 
-   const updateData = {
-  // WEBHOOK TIMESTAMP - for ProcessingHub detection
-  idenfyCheckDate: new Date().toISOString(),
-  
-  // Store new POA data
-  newPoaDocument: revalidationData.newPoaUrl,
-  poaRevalidationDate: new Date().toISOString().split('T')[0],
+    const updateData = {
+      // WEBHOOK TIMESTAMP - for ProcessingHub detection
+      idenfyCheckDate: new Date().toISOString(),
+      
+      // Store new POA data
+      newPoaDocument: revalidationData.newPoaUrl,
+      poaRevalidationDate: new Date().toISOString().split('T')[0],
       poaSourceValidation: revalidationData.sourceValidation.passed ? 'Passed' : 'Failed',
       
       // Update overall status based on re-validation
@@ -721,7 +723,6 @@ function analyzeIdenfyVerificationResult(status, data) {
 }
 
 //updateBoardAWithIdenfyResults function
-
 async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData) {
   try {
     console.log('💾 Updating Board A with Idenfy data...');
@@ -739,21 +740,21 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       })
     });
 
-     const existingDriverData = await existingDriverResponse.json();
+    const existingDriverData = await existingDriverResponse.json();
     const preservedDatePassedTest = existingDriverData.driver?.datePassedTest || '';
     console.log('📅 Preserved datePassedTest:', preservedDatePassedTest);
 
-      // Extract POA address data if present (for cross-validation)
-let poaAddress = '';
-if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
-  const addressData = fullWebhookData.additionalData.UTILITY_BILL.address;
-  poaAddress = addressData.value || addressData || '';
-  console.log('📍 POA Address extracted:', poaAddress);
-} else if (fullWebhookData.additionalData?.POA2?.address) {
-  const addressData = fullWebhookData.additionalData.POA2.address;
-  poaAddress = addressData.value || addressData || '';
-  console.log('📍 POA2 Address extracted:', poaAddress);
-}
+    // Extract POA address data if present (for cross-validation)
+    let poaAddress = '';
+    if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
+      const addressData = fullWebhookData.additionalData.UTILITY_BILL.address;
+      poaAddress = addressData.value || addressData || '';
+      console.log('📍 POA Address extracted:', poaAddress);
+    } else if (fullWebhookData.additionalData?.POA2?.address) {
+      const addressData = fullWebhookData.additionalData.POA2.address;
+      poaAddress = addressData.value || addressData || '';
+      console.log('📍 POA2 Address extracted:', poaAddress);
+    }
     
     // Check for provisional license only (no date checking)
     if (idenfyData.driverLicenseCategory) {
@@ -795,8 +796,8 @@ if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
       // CRITICAL: Always include email
       email: email,
 
-       // WEBHOOK TIMESTAMP - for ProcessingHub detection
-  idenfyCheckDate: fullWebhookData.checkDate || new Date().toISOString(),
+      // WEBHOOK TIMESTAMP - for ProcessingHub detection
+      idenfyCheckDate: fullWebhookData.checkDate || new Date().toISOString(),
       
       // Names
       driverName: idenfyResult.fullName || 
@@ -816,7 +817,7 @@ if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
       licenseValidTo: idenfyData.docExpiry,
       licenseEnding: idenfyResult.licenseEnding,
       
-     // License Valid From - use preserved datePassedTest from insurance questionnaire
+      // License Valid From - use preserved datePassedTest from insurance questionnaire
       licenseValidFrom: preservedDatePassedTest || idenfyData.docDateOfIssue || '',
       
       // Authority/Issuer
@@ -824,16 +825,16 @@ if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
                        (idenfyData.docIssuingCountry === 'GB' ? 'DVLA' : 
                         idenfyData.docIssuingCountry || ''),
       
-     // Addresses - prioritize POA address if available
-homeAddress: poaAddress || 
-             idenfyData.address || 
-             idenfyData.manualAddress || 
-             idenfyData.docAddress || '',
+      // Addresses - prioritize POA address if available
+      homeAddress: poaAddress || 
+                   idenfyData.address || 
+                   idenfyData.manualAddress || 
+                   idenfyData.docAddress || '',
 
-licenseAddress: idenfyData.address || 
-                idenfyData.manualAddress || 
-                idenfyData.docAddress || 
-                poaAddress || '',
+      licenseAddress: idenfyData.address || 
+                      idenfyData.manualAddress || 
+                      idenfyData.docAddress || 
+                      poaAddress || '',
       
       // Status
       overallStatus: idenfyResult.approved ? 'Working on it' : 'Stuck',
@@ -841,7 +842,7 @@ licenseAddress: idenfyData.address ||
       lastUpdated: new Date().toISOString().split('T')[0]
     };
     
-      // Remove empty fields (except email)
+    // Remove empty fields (except email)
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === '' && key !== 'email') {
         delete updateData[key];
@@ -885,15 +886,12 @@ licenseAddress: idenfyData.address ||
   }
 }
 
-// File: functions/idenfy-webhook.js
-// FIXED VERSION - saveIdenfyDocumentsToMonday function
-// This section handles downloading and uploading POA documents from idenfy to Monday.com
-
+// Save Idenfy documents to Monday.com
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📸 Saving Idenfy documents to Monday.com...');
     
-    // Map all possible document URLs - both regular and additional step documents
+    // Map all possible document URLs - REMOVED SELFIE/FACE
     const documentMappings = [
       {
         idenfyField: 'FRONT',
@@ -904,11 +902,6 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
         idenfyField: 'BACK',
         fileType: 'license_back',
         url: fullWebhookData.fileUrls?.BACK
-      },
-      {
-        idenfyField: 'FACE',
-        fileType: 'selfie',
-        url: fullWebhookData.fileUrls?.FACE
       },
       {
         idenfyField: 'UTILITY_BILL',
@@ -957,7 +950,6 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
         console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
 
         // Check actual file content using magic bytes
-        // FIXED: Correct PDF magic bytes check - %PDF = 0x25 0x50 0x44 0x46
         const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
         const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
         const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
@@ -978,7 +970,6 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
           extension = 'pdf';
           mimeType = 'application/pdf';
           console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
-                     
         } else if (isPNG) {
           extension = 'png';
           mimeType = 'image/png';
@@ -1014,8 +1005,61 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
             contentType: mimeType  // Pass the correct content type
           })
         });
+        
+        const uploadResult = await uploadResponse.json();
+        
+        if (uploadResponse.ok && uploadResult.success) {
+          console.log(`✅ ${mapping.idenfyField} uploaded successfully as ${extension.toUpperCase()}`);
+          uploadResults.push({ 
+            field: mapping.idenfyField, 
+            success: true,
+            fileId: uploadResult.fileId,
+            format: extension.toUpperCase()
+          });
+        } else {
+          console.error(`❌ Failed to upload ${mapping.idenfyField} to Monday:`, uploadResult.error);
+          uploadResults.push({ 
+            field: mapping.idenfyField, 
+            success: false, 
+            error: uploadResult.error 
+          });
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error processing ${mapping.idenfyField}:`, error.message);
+        uploadResults.push({ 
+          field: mapping.idenfyField, 
+          success: false, 
+          error: error.message 
+        });
+      }
+      
+      // Small delay between uploads to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Log summary
+    const successCount = uploadResults.filter(r => r.success).length;
+    const failCount = uploadResults.filter(r => !r.success).length;
+    
+    console.log(`📊 Document upload summary: ${successCount} succeeded, ${failCount} failed`);
+    if (failCount > 0) {
+      console.log('Failed uploads:', uploadResults.filter(r => !r.success));
+    }
+    
+    return { 
+      success: true, 
+      uploadResults: uploadResults,
+      summary: `${successCount}/${uploadResults.length} documents uploaded`
+    };
+    
+  } catch (error) {
+    console.error('❌ Error saving documents to Monday:', error);
+    return { success: false, error: error.message };
+  }
+}
 
-        // Process POA documents immediately for validation
+// Process POA documents immediately for validation
 async function processPoaDocumentsImmediately(email, fullWebhookData) {
   try {
     console.log('🔍 Checking for POA documents to process...');
@@ -1178,61 +1222,8 @@ async function updatePoaValidationResults(email, updates) {
     console.error('Error updating Monday with POA results:', error);
   }
 }
-        
-        const uploadResult = await uploadResponse.json();
-        
-        if (uploadResponse.ok && uploadResult.success) {
-          console.log(`✅ ${mapping.idenfyField} uploaded successfully as ${extension.toUpperCase()}`);
-          uploadResults.push({ 
-            field: mapping.idenfyField, 
-            success: true,
-            fileId: uploadResult.fileId,
-            format: extension.toUpperCase()
-          });
-        } else {
-          console.error(`❌ Failed to upload ${mapping.idenfyField} to Monday:`, uploadResult.error);
-          uploadResults.push({ 
-            field: mapping.idenfyField, 
-            success: false, 
-            error: uploadResult.error 
-          });
-        }
-        
-      } catch (error) {
-        console.error(`❌ Error processing ${mapping.idenfyField}:`, error.message);
-        uploadResults.push({ 
-          field: mapping.idenfyField, 
-          success: false, 
-          error: error.message 
-        });
-      }
-      
-      // Small delay between uploads to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    // Log summary
-    const successCount = uploadResults.filter(r => r.success).length;
-    const failCount = uploadResults.filter(r => !r.success).length;
-    
-    console.log(`📊 Document upload summary: ${successCount} succeeded, ${failCount} failed`);
-    if (failCount > 0) {
-      console.log('Failed uploads:', uploadResults.filter(r => !r.success));
-    }
-    
-    return { 
-      success: true, 
-      uploadResults: uploadResults,
-      summary: `${successCount}/${uploadResults.length} documents uploaded`
-    };
-    
-  } catch (error) {
-    console.error('❌ Error saving documents to Monday:', error);
-    return { success: false, error: error.message };
-  }
-}
 
-// FIXED: Update document validity dates with email included
+// Update document validity dates with email included
 async function updateDocumentValidityDates(email, webhookData) {
   try {
     console.log('📅 Updating document validity dates...');
@@ -1244,21 +1235,13 @@ async function updateDocumentValidityDates(email, webhookData) {
       return result.toISOString().split('T')[0];
     };
     
-    // Extract actual document dates from Idenfy data
-    const poa1Date = webhookData.data?.utilityBillIssueDate || 
-                     webhookData.data?.docIssuedDate || 
-                     today.toISOString().split('T')[0];
-    const poa2Date = webhookData.data?.utilityBillIssueDate2 || 
-                     webhookData.data?.docIssuedDate || 
-                     today.toISOString().split('T')[0];
-
+    // Don't update POA dates here as they're handled in processPoaDocumentsImmediately
+    // Only update DVLA and license check dates
     const updates = {
       // Include email to avoid the error
       email: email,
       
-      // Validity dates
-      poa1ValidUntil: addDays(new Date(poa1Date), 90),
-      poa2ValidUntil: addDays(new Date(poa2Date), 90),
+      // DVLA and license check dates
       dvlaValidUntil: addDays(today, 90),  // DVLA check valid for 90 days
       licenseNextCheckDue: addDays(today, 90),
       
@@ -1266,8 +1249,6 @@ async function updateDocumentValidityDates(email, webhookData) {
     };
     
     console.log('📅 Setting validity dates:', {
-      poa1: updates.poa1ValidUntil,
-      poa2: updates.poa2ValidUntil,
       dvla: updates.dvlaValidUntil,
       nextCheck: updates.licenseNextCheckDue
     });
@@ -1294,7 +1275,7 @@ async function updateDocumentValidityDates(email, webhookData) {
   }
 }
 
-// Process POA validation for UK drivers
+// Process POA validation for UK drivers (LEGACY - kept for backward compatibility)
 async function processPoaValidation(idenfyData, fullWebhookData) {
   try {
     console.log('🔍 Processing POA validation for UK driver...');
@@ -1328,8 +1309,6 @@ async function processPoaValidation(idenfyData, fullWebhookData) {
       };
     }
 
-    // TODO: Implement AWS OCR cross-validation
-    // For now, return success if we have 2 documents
     console.log('✅ POA validation passed (mock for now)');
     
     return {
