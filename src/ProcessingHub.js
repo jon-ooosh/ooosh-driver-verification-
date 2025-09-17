@@ -1,5 +1,5 @@
 // File: src/ProcessingHub.js
-// SIMPLIFIED: Monitor idenfyCheckDate timestamp only
+// COMPLETE VERSION with all routing fixes
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'lucide-react';
@@ -20,76 +20,95 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const MAX_ATTEMPTS = 20;
   const POLL_INTERVAL = 2000;
 
-  // Route to next step
-  // In ProcessingHub.js, update routeToNextStep with detailed logging:
-
-const routeToNextStep = useCallback((data) => {
-  console.log('🧭 ROUTING DECISION START');
-  console.log('📊 Full driver data:', JSON.stringify(data, null, 2));
-  
-  if (!data) {
-    console.error('❌ No data for routing - STOPPING');
-    return;
-  }
-  
-  // Check POA validation
-  console.log('🔍 Checking POA dates:', {
-    poa1ValidUntil: data.poa1ValidUntil,
-    poa2ValidUntil: data.poa2ValidUntil
-  });
-  
-  if (!data.poa1ValidUntil || !data.poa2ValidUntil) {
-    console.log('🚦 ROUTING TO: poa-validation (missing POA dates)');
-    window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-    return;
-  }
-  
-  // Check if POAs are expired
-  const now = new Date();
-  const poa1Valid = new Date(data.poa1ValidUntil) > now;
-  const poa2Valid = new Date(data.poa2ValidUntil) > now;
-  
-  console.log('📅 POA validity check:', { poa1Valid, poa2Valid });
-  
-  if (!poa1Valid || !poa2Valid) {
-    console.log('🚦 ROUTING TO: poa-validation (expired POAs)');
-    window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-    return;
-  }
-  
-  // Check if UK driver
-  const isUKDriver = 
-    data.nationality === 'GB' || 
-    data.nationality === 'United Kingdom' ||
-    data.licenseIssuedBy === 'DVLA' ||
-    data.licenseIssuedBy?.includes('UK') ||
-    data.licenseIssuedBy?.includes('GB');
-  
-  console.log('🇬🇧 UK check:', { 
-    isUKDriver, 
-    nationality: data.nationality, 
-    issuedBy: data.licenseIssuedBy 
-  });
-  
-  if (isUKDriver) {
-    if (!data.dvlaCheckComplete || data.dvlaCheckStatus !== 'valid') {
-      console.log('🚦 ROUTING TO: dvla-processing (UK driver needs DVLA)');
-      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+  // Route to next step - FIXED to use correct data structure
+  const routeToNextStep = useCallback((data) => {
+    console.log('🧭 ROUTING DECISION START');
+    console.log('📊 Full driver data:', JSON.stringify(data, null, 2));
+    
+    if (!data) {
+      console.error('❌ No data for routing - STOPPING');
       return;
     }
-  } else {
-    if (!data.passportVerified) {
-      console.log('🚦 ROUTING TO: passport-upload (non-UK needs passport)');
-      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+    
+    // Check POA validation - FIXED to use documents structure
+    const poa1Date = data.documents?.poa1?.expiryDate;
+    const poa2Date = data.documents?.poa2?.expiryDate;
+    const poa1Valid = data.documents?.poa1?.valid;
+    const poa2Valid = data.documents?.poa2?.valid;
+    
+    console.log('🔍 Checking POA status:', {
+      poa1Date,
+      poa2Date,
+      poa1Valid,
+      poa2Valid
+    });
+    
+    // Check if POAs are invalid or missing
+    if (!poa1Valid || !poa2Valid) {
+      console.log('🚦 ROUTING TO: poa-validation (POAs invalid or missing)');
+      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
       return;
     }
-  }
-  
-  console.log('🚦 ROUTING TO: signature (all checks complete)');
-  window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-}, [driverEmail, jobId]);
+    
+    // Check if UK driver needs DVLA
+    const isUKDriver = 
+      data.nationality === 'GB' || 
+      data.nationality === 'United Kingdom' ||
+      data.licenseIssuedBy === 'DVLA' ||
+      data.licenseIssuedBy?.includes('UK') ||
+      data.licenseIssuedBy?.includes('GB');
+    
+    console.log('🇬🇧 UK check:', { 
+      isUKDriver, 
+      nationality: data.nationality, 
+      issuedBy: data.licenseIssuedBy 
+    });
+    
+    if (isUKDriver) {
+      // Check DVLA validity - FIXED to use documents structure
+      const dvlaValid = data.documents?.dvlaCheck?.valid;
+      
+      console.log('📋 DVLA check status:', {
+        dvlaValid,
+        dvlaExpiry: data.documents?.dvlaCheck?.expiryDate,
+        dvlaStatus: data.documents?.dvlaCheck?.status
+      });
+      
+      if (!dvlaValid) {
+        console.log('🚦 ROUTING TO: dvla-processing (UK driver needs DVLA check)');
+        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        return;
+      }
+    } else {
+      // Non-UK driver - check passport
+      if (!data.passportVerified) {
+        console.log('🚦 ROUTING TO: passport-upload (non-UK needs passport)');
+        window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        return;
+      }
+    }
+    
+    // Check license verification date
+    const licenseCheckValid = data.documents?.licenseCheck?.valid;
+    const licenseCheckDue = data.documents?.licenseCheck?.nextCheckDue;
+    
+    console.log('📅 License check status:', {
+      valid: licenseCheckValid,
+      nextCheckDue: licenseCheckDue
+    });
+    
+    if (licenseCheckDue && !licenseCheckValid) {
+      console.log('🚦 ROUTING TO: document-upload (license check due)');
+      window.location.href = `/?step=document-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      return;
+    }
+    
+    // All checks passed - go to signature
+    console.log('🚦 ROUTING TO: signature (all checks complete)');
+    window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+  }, [driverEmail, jobId]);
 
-  // SIMPLIFIED: Check for webhook by monitoring idenfyCheckDate
+  // Check for webhook by monitoring idenfyCheckDate
   const checkWebhookProcessed = useCallback(async () => {
     try {
       // Use ref value for attempts
@@ -125,16 +144,9 @@ const routeToNextStep = useCallback((data) => {
         attempt: currentAttempt
       });
       
-      // SIMPLE CHECK: Look for idenfyCheckDate timestamp
+      // Check for webhook timestamp
       let webhookReceived = false;
       
-      // First attempt: store initial state
-      if (currentAttempt === 1) {
-        initialCheckDateRef.current = data?.idenfyCheckDate || null;
-        console.log('📸 Initial idenfyCheckDate:', initialCheckDateRef.current);
-      }
-      
-     // AFTER - Replace with this:
       // Check if webhook timestamp exists AND is recent
       if (data?.idenfyCheckDate) {
         console.log('📅 Found idenfyCheckDate:', data.idenfyCheckDate);
