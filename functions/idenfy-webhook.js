@@ -276,7 +276,7 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
       if (isUKDriver) {
         if (poaNeedsReview) {
           console.log('🇬🇧 UK driver with POA issues - needs manual review');
-          nextStep = 'poa_review_required';
+          nextStep = 'poa_validation';
         } else {
           console.log('🇬🇧 UK driver - routing to DVLA check');
           nextStep = 'dvla_processing';
