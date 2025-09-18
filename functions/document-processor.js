@@ -851,10 +851,31 @@ async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress
   console.log('🔄 Testing DUAL POA cross-validation workflow');
   
   try {
-    // Extract text from both documents
-    const text1Result = await callAwsTextract(imageData1, fileType);
-    const text2Result = await callAwsTextract(imageData2, fileType);
+    // Check if imageData1 and imageData2 are URLs
+    let base64Data1 = imageData1;
+    let base64Data2 = imageData2;
     
+    // If they're URLs (start with http), fetch them
+    if (imageData1.startsWith('http')) {
+      console.log('📥 Fetching POA1 from URL...');
+      const response1 = await fetch(imageData1);
+      const buffer1 = await response1.arrayBuffer();
+      base64Data1 = Buffer.from(buffer1).toString('base64');
+      console.log('✅ POA1 fetched:', Math.round(buffer1.byteLength / 1024), 'KB');
+    }
+    
+    if (imageData2.startsWith('http')) {
+      console.log('📥 Fetching POA2 from URL...');
+      const response2 = await fetch(imageData2);
+      const buffer2 = await response2.arrayBuffer();
+      base64Data2 = Buffer.from(buffer2).toString('base64');
+      console.log('✅ POA2 fetched:', Math.round(buffer2.byteLength / 1024), 'KB');
+    }
+    
+    // Now continue with base64 data
+    const text1Result = await callAwsTextract(base64Data1, fileType);
+    const text2Result = await callAwsTextract(base64Data2, fileType);
+       
     // Check for duplicate documents
     const hash1 = calculateDocumentHash(text1Result.extractedText);
     const hash2 = calculateDocumentHash(text2Result.extractedText);
