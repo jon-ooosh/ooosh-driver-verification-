@@ -1,6 +1,6 @@
 // File: functions/driver-status.js
 // OOOSH Driver Verification - Get Driver Status Function
-// FIXED: Now returns insuranceData, phoneCountry, and proper document dates
+// UPDATED: Now returns licenseIssuedBy and passportValidUntil
 
 const fetch = require('node-fetch');
 
@@ -96,10 +96,10 @@ async function getDriverStatusFromBoardA(email) {
     
     const driver = result.driver;
     
-    // Analyze document status
+    // Analyze document status with passport support
     const documentStatus = analyzeDocumentStatus(driver);
     
-    // FIXED: Build insurance data from driver fields
+    // Build insurance data from driver fields
     const insuranceData = {
       datePassedTest: driver.datePassedTest || '',
       hasDisability: driver.hasDisability || false,
@@ -111,19 +111,27 @@ async function getDriverStatusFromBoardA(email) {
       additionalDetails: driver.additionalDetails || ''
     };
     
-    // FIXED: Return complete data structure
-   return {
-  status: documentStatus.overallStatus,
-  email: email,
-  name: driver.driverName || null,
-  phoneNumber: driver.phoneNumber || null,
-  phoneCountry: driver.phoneCountry || null,
-  documents: documentStatus.documents,
-  insuranceData: insuranceData,
-  boardAId: driver.id,
-  lastUpdated: driver.lastUpdated || null,
-  idenfyCheckDate: driver.idenfyCheckDate || null  // ADD THIS LINE
-};
+    // UPDATED: Return complete data including licenseIssuedBy and passport dates
+    return {
+      status: documentStatus.overallStatus,
+      email: email,
+      name: driver.driverName || null,
+      phoneNumber: driver.phoneNumber || null,
+      phoneCountry: driver.phoneCountry || null,
+      licenseIssuedBy: driver.licenseIssuedBy || null, // CRITICAL FOR UK DETECTION
+      nationality: driver.nationality || null,
+      documents: documentStatus.documents,
+      insuranceData: insuranceData,
+      boardAId: driver.id,
+      lastUpdated: driver.lastUpdated || null,
+      idenfyCheckDate: driver.idenfyCheckDate || null,
+      // Include raw date fields for router
+      licenseNextCheckDue: driver.licenseNextCheckDue || null,
+      poa1ValidUntil: driver.poa1ValidUntil || null,
+      poa2ValidUntil: driver.poa2ValidUntil || null,
+      dvlaValidUntil: driver.dvlaValidUntil || null,
+      passportValidUntil: driver.passportValidUntil || null  // NEW FIELD
+    };
 
   } catch (error) {
     console.error('Error getting driver status from Board A:', error);
@@ -139,6 +147,7 @@ function analyzeDocumentStatus(driver) {
     poa1: { valid: false },
     poa2: { valid: false },
     dvlaCheck: { valid: false },
+    passportCheck: { valid: false },  // Added passport
     licenseCheck: { valid: true }
   };
 
@@ -150,46 +159,44 @@ function analyzeDocumentStatus(driver) {
     documents.license = {
       valid: licenseExpiry > today,
       expiryDate: driver.licenseValidTo,
-      type: 'UK Driving License',
+      type: 'Driving License',
       status: licenseExpiry > today ? 'valid' : 'expired'
     };
   }
 
-  // FIXED: Always include expiryDate even if expired
+  // Check POA1 Status
   if (driver.poa1ValidUntil) {
     const poa1Expiry = new Date(driver.poa1ValidUntil);
     documents.poa1 = {
       valid: poa1Expiry > today,
-      expiryDate: driver.poa1ValidUntil, // ALWAYS include date
+      expiryDate: driver.poa1ValidUntil,
       type: 'Proof of Address #1',
       status: poa1Expiry > today ? 'valid' : 'expired'
     };
   } else {
-    // Even if no date, provide structure
     documents.poa1 = {
       valid: false,
       status: 'required'
     };
   }
 
-  // FIXED: Always include expiryDate even if expired
+  // Check POA2 Status
   if (driver.poa2ValidUntil) {
     const poa2Expiry = new Date(driver.poa2ValidUntil);
     documents.poa2 = {
       valid: poa2Expiry > today,
-      expiryDate: driver.poa2ValidUntil, // ALWAYS include date
+      expiryDate: driver.poa2ValidUntil,
       type: 'Proof of Address #2',
       status: poa2Expiry > today ? 'valid' : 'expired'
     };
   } else {
-    // Even if no date, provide structure
     documents.poa2 = {
       valid: false,
       status: 'required'
     };
   }
 
-  // Check DVLA Check Status
+  // Check DVLA Check Status (for UK drivers)
   if (driver.dvlaValidUntil) {
     const dvlaExpiry = new Date(driver.dvlaValidUntil);
     documents.dvlaCheck = {
@@ -202,6 +209,22 @@ function analyzeDocumentStatus(driver) {
     documents.dvlaCheck = {
       valid: false,
       status: 'required'
+    };
+  }
+
+  // Check Passport Status (for non-UK drivers)
+  if (driver.passportValidUntil) {
+    const passportExpiry = new Date(driver.passportValidUntil);
+    documents.passportCheck = {
+      valid: passportExpiry > today,
+      expiryDate: driver.passportValidUntil,
+      status: passportExpiry > today ? 'valid' : 'expired',
+      type: 'Passport Verification'
+    };
+  } else {
+    documents.passportCheck = {
+      valid: false,
+      status: 'not_required'  // Will be determined by license issuer
     };
   }
 
@@ -220,10 +243,12 @@ function analyzeDocumentStatus(driver) {
 
   console.log('📊 Document analysis complete:', {
     overallStatus,
+    licenseIssuedBy: driver.licenseIssuedBy,
     license: documents.license.valid,
     poa1: documents.poa1.valid,
     poa2: documents.poa2.valid,
-    dvlaCheck: documents.dvlaCheck.valid
+    dvlaCheck: documents.dvlaCheck.valid,
+    passportCheck: documents.passportCheck.valid
   });
 
   return { overallStatus, documents };
@@ -234,7 +259,10 @@ function determineOverallStatus(documents, driver) {
   const hasValidPoa1 = documents.poa1.valid;
   const hasValidPoa2 = documents.poa2.valid;
   const hasValidDvla = documents.dvlaCheck.valid;
+  const hasValidPassport = documents.passportCheck.valid;
   const licenseCheckCurrent = documents.licenseCheck?.valid !== false;
+  
+  const isUkDriver = driver.licenseIssuedBy === 'DVLA';
 
   const boardStatus = driver.overallStatus;
 
@@ -246,16 +274,28 @@ function determineOverallStatus(documents, driver) {
     return 'stuck';
   }
 
-  if (hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidDvla && licenseCheckCurrent) {
-    return 'verified';
+  // Check based on driver type
+  if (isUkDriver) {
+    // UK drivers need license, POAs, and DVLA
+    if (hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidDvla && licenseCheckCurrent) {
+      return 'verified';
+    }
+  } else {
+    // Non-UK drivers need license, POAs, and passport
+    if (hasValidLicense && hasValidPoa1 && hasValidPoa2 && hasValidPassport && licenseCheckCurrent) {
+      return 'verified';
+    }
   }
 
   if (hasValidLicense) {
     if (!hasValidPoa1 || !hasValidPoa2) {
       return 'poa_expired';
     }
-    if (!hasValidDvla) {
+    if (isUkDriver && !hasValidDvla) {
       return 'dvla_expired';
+    }
+    if (!isUkDriver && !hasValidPassport) {
+      return 'passport_expired';
     }
     if (!licenseCheckCurrent) {
       return 'license_check_due';
@@ -282,15 +322,23 @@ function createNewDriverStatus(email) {
     name: null,
     phoneNumber: null,
     phoneCountry: null,
+    licenseIssuedBy: null,
+    nationality: null,
     documents: {
       license: { valid: false, status: 'required' },
       poa1: { valid: false, status: 'required' },
       poa2: { valid: false, status: 'required' },
       dvlaCheck: { valid: false, status: 'required' },
+      passportCheck: { valid: false, status: 'not_required' },
       licenseCheck: { valid: true, status: 'not_required' }
     },
     insuranceData: null,
     boardAId: null,
-    lastUpdated: null
+    lastUpdated: null,
+    licenseNextCheckDue: null,
+    poa1ValidUntil: null,
+    poa2ValidUntil: null,
+    dvlaValidUntil: null,
+    passportValidUntil: null
   };
 }
