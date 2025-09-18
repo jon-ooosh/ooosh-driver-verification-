@@ -253,22 +253,28 @@ function analyzeDocuments(driverData) {
     allValid: false
   };
 
-  // FIXED: Only check who issued the license - that's what matters
+  // Check who issued the license
   analysis.isUkDriver = driverData.licenseIssuedBy === 'DVLA';
 
   console.log('🚗 License Issuer Check:', {
     licenseIssuedBy: driverData.licenseIssuedBy,
-    isUkDriver: analysis.isUkDriver,
-    nationality: driverData.nationality // Log for reference but don't use
+    isUkDriver: analysis.isUkDriver
   });
 
-  // Check license validity (using licenseNextCheckDue date)
-  if (driverData.licenseNextCheckDue || driverData.documents?.licenseCheck?.nextCheckDue) {
-    const licenseDate = new Date(
-      driverData.licenseNextCheckDue || driverData.documents.licenseCheck.nextCheckDue
-    );
-    analysis.license.valid = licenseDate > today;
-    analysis.license.expiryDate = licenseDate.toISOString().split('T')[0];
+  // FIXED: Check license verification status (when we last checked it, not when it expires)
+  // licenseNextCheckDue tells us when we need to reverify the license with Idenfy
+  if (driverData.licenseNextCheckDue) {
+    const licenseCheckDate = new Date(driverData.licenseNextCheckDue);
+    analysis.license.valid = licenseCheckDate > today;
+    analysis.license.expiryDate = licenseCheckDate.toISOString().split('T')[0];
+  } else if (driverData.documents?.licenseCheck?.nextCheckDue) {
+    const licenseCheckDate = new Date(driverData.documents.licenseCheck.nextCheckDue);
+    analysis.license.valid = licenseCheckDate > today;
+    analysis.license.expiryDate = licenseCheckDate.toISOString().split('T')[0];
+  } else {
+    // If no check date exists, license needs verification
+    analysis.license.valid = false;
+    console.log('⚠️ No license verification date found - needs Idenfy check');
   }
 
   // Check POA1 validity
@@ -291,7 +297,7 @@ function analyzeDocuments(driverData) {
 
   // Check DVLA or Passport validity based on driver type
   if (analysis.isUkDriver) {
-    // UK license holders need DVLA check
+    // UK drivers need DVLA check
     if (driverData.dvlaValidUntil || driverData.documents?.dvlaCheck?.expiryDate) {
       const dvlaDate = new Date(
         driverData.dvlaValidUntil || driverData.documents.dvlaCheck.expiryDate
@@ -301,7 +307,7 @@ function analyzeDocuments(driverData) {
       analysis.dvlaOrPassport.type = 'dvla';
     }
   } else {
-    // Non-UK license holders need passport check
+    // Non-UK drivers need passport check
     if (driverData.passportValidUntil) {
       const passportDate = new Date(driverData.passportValidUntil);
       analysis.dvlaOrPassport.valid = passportDate > today;
@@ -315,6 +321,13 @@ function analyzeDocuments(driverData) {
                      analysis.poa1.valid && 
                      analysis.poa2.valid && 
                      analysis.dvlaOrPassport.valid;
+
+  console.log('📊 Document Analysis:', {
+    licenseCheck: analysis.license.valid ? `Valid until ${analysis.license.expiryDate}` : 'Needs verification',
+    poa1: analysis.poa1.valid ? `Valid until ${analysis.poa1.expiryDate}` : 'Needs upload',
+    poa2: analysis.poa2.valid ? `Valid until ${analysis.poa2.expiryDate}` : 'Needs upload',
+    dvlaOrPassport: analysis.dvlaOrPassport.valid ? `Valid until ${analysis.dvlaOrPassport.expiryDate}` : 'Needs check'
+  });
 
   return analysis;
 }
