@@ -96,6 +96,20 @@ exports.handler = async (event, context) => {
       webhookData.status.autoDocument = "DOC_NOT_VALIDATED";
       break;
 
+      case 'check-monday-data':
+  // Just check what's in Monday for a given email
+  const checkResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${email}`);
+  const driverData = await checkResponse.json();
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      scenario: 'check-monday-data',
+      email: email,
+      mondayData: driverData
+    })
+  };
+
     default:
       return {
         statusCode: 400,
