@@ -253,10 +253,14 @@ function analyzeDocuments(driverData) {
     allValid: false
   };
 
-  // Check if UK driver based on license issuer
-  analysis.isUkDriver = driverData.licenseIssuedBy === 'DVLA' || 
-                       driverData.nationality === 'British' ||
-                       driverData.nationality === 'UK';
+  // FIXED: Only check who issued the license - that's what matters
+  analysis.isUkDriver = driverData.licenseIssuedBy === 'DVLA';
+
+  console.log('🚗 License Issuer Check:', {
+    licenseIssuedBy: driverData.licenseIssuedBy,
+    isUkDriver: analysis.isUkDriver,
+    nationality: driverData.nationality // Log for reference but don't use
+  });
 
   // Check license validity (using licenseNextCheckDue date)
   if (driverData.licenseNextCheckDue || driverData.documents?.licenseCheck?.nextCheckDue) {
@@ -287,7 +291,7 @@ function analyzeDocuments(driverData) {
 
   // Check DVLA or Passport validity based on driver type
   if (analysis.isUkDriver) {
-    // UK drivers need DVLA check
+    // UK license holders need DVLA check
     if (driverData.dvlaValidUntil || driverData.documents?.dvlaCheck?.expiryDate) {
       const dvlaDate = new Date(
         driverData.dvlaValidUntil || driverData.documents.dvlaCheck.expiryDate
@@ -297,7 +301,7 @@ function analyzeDocuments(driverData) {
       analysis.dvlaOrPassport.type = 'dvla';
     }
   } else {
-    // Non-UK drivers need passport check
+    // Non-UK license holders need passport check
     if (driverData.passportValidUntil) {
       const passportDate = new Date(driverData.passportValidUntil);
       analysis.dvlaOrPassport.valid = passportDate > today;
