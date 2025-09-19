@@ -1,6 +1,6 @@
 // File: functions/document-processor.js 
 // Unified document processing - OCR + image conversion for Monday.com
-// UPDATED: Added URL fetching capability for POA processing
+// UPDATED: Removed all dangerous fallbacks, improved error handling
 
 const fetch = require('node-fetch');
 
@@ -43,70 +43,66 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log(`Processing ${processType} with AWS Textract (${fileType || 'image'})`);
+    console.log(`Processing ${processType} with AWS Textract`);
     
-    // CRITICAL FIX: Check if imageData is a URL and fetch it
+    // Check if imageData is a URL and fetch it
     let processedImageData = imageData;
     let processedImageData2 = imageData2;
     
     if (typeof imageData === 'string' && imageData.startsWith('http')) {
-      console.log('📥 Fetching image from URL:', imageData.substring(0, 100) + '...');
+      console.log('📥 Fetching document from URL:', imageData.substring(0, 100) + '...');
       const response = await fetch(imageData);
       if (!response.ok) {
-        throw new Error(`Failed to fetch image from URL: ${response.status}`);
+        throw new Error(`Failed to fetch document from URL: ${response.status}`);
       }
+      
       const buffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(buffer);
+      
+      // Log first bytes to verify file type
+      const first4Hex = Array.from(uint8Array.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+      const first4ASCII = new TextDecoder().decode(uint8Array.slice(0, 4));
+      console.log('First 4 bytes (hex):', first4Hex);
+      console.log('First 4 bytes (ASCII):', first4ASCII);
+      
+      // Check if it's actually a PDF
+      if (first4ASCII === '%PDF') {
+        console.log('✅ Confirmed PDF format');
+      }
+      
       processedImageData = Buffer.from(buffer).toString('base64');
-      console.log('✅ Image fetched successfully:', Math.round(buffer.byteLength / 1024), 'KB');
+      console.log('✅ Document fetched successfully:', Math.round(buffer.byteLength / 1024), 'KB');
     }
     
     if (imageData2 && typeof imageData2 === 'string' && imageData2.startsWith('http')) {
-      console.log('📥 Fetching image2 from URL:', imageData2.substring(0, 100) + '...');
+      console.log('📥 Fetching second document from URL:', imageData2.substring(0, 100) + '...');
       const response = await fetch(imageData2);
       if (!response.ok) {
-        throw new Error(`Failed to fetch image2 from URL: ${response.status}`);
+        throw new Error(`Failed to fetch second document from URL: ${response.status}`);
       }
       const buffer = await response.arrayBuffer();
       processedImageData2 = Buffer.from(buffer).toString('base64');
-      console.log('✅ Image2 fetched successfully:', Math.round(buffer.byteLength / 1024), 'KB');
+      console.log('✅ Second document fetched successfully:', Math.round(buffer.byteLength / 1024), 'KB');
     }
     
     let result;
-    let convertedImageData = null;
-
-    // Check if input is PDF and needs conversion for Monday.com
-    const isPDF = processedImageData.substring(0, 10).includes('JVBERi') || fileType === 'pdf';
     
     // Process based on type
     switch (processType) {
       case 'poa':
-        result = await testSinglePoaExtraction(processedImageData, documentType, licenseAddress, fileType);
+        result = await testSinglePoaExtraction(processedImageData, documentType, licenseAddress);
         break;
       case 'dvla':
-        result = await testDvlaExtractionWithTextract(processedImageData, fileType);
+        result = await testDvlaExtractionWithTextract(processedImageData);
         break;
       case 'dual-poa':
         if (!processedImageData2) {
           throw new Error('dual-poa requires both imageData and imageData2');
         }
-        result = await testDualPoaCrossValidation(processedImageData, processedImageData2, licenseAddress, fileType);
-        break;
-      case 'pdf-to-image':
-        // Special case: just convert PDF to image
-        convertedImageData = await convertPdfToImageFallback(processedImageData);
-        result = { success: true, converted: true };
+        result = await testDualPoaCrossValidation(processedImageData, processedImageData2, licenseAddress);
         break;
       default:
         throw new Error('Invalid action/testType. Use "poa", "dvla", or "dual-poa"');
-    }
-
-    // If PDF and caller wants an image back, convert it
-    if (isPDF && returnImage && !convertedImageData) {
-      console.log('Converting PDF to image for Monday.com storage...');
-      convertedImageData = await convertPdfToImageFallback(processedImageData);
-    } else if (!isPDF && returnImage) {
-      // Already an image, pass it through
-      convertedImageData = processedImageData;
     }
 
     return {
@@ -114,12 +110,10 @@ exports.handler = async (event, context) => {
       headers,
       body: JSON.stringify({
         success: true,
-        testType: processType, // Keep for backward compatibility
+        testType: processType,
         action: processType,
         result: result,
         ocrProvider: 'AWS Textract',
-        imageData: convertedImageData, // Include converted image if requested
-        wasConverted: isPDF && returnImage,
         timestamp: new Date().toISOString()
       })
     };
@@ -137,37 +131,31 @@ exports.handler = async (event, context) => {
   }
 };
 
-// PDF to Image conversion fallback (since we can't use external libraries in Netlify functions easily)
-async function convertPdfToImageFallback(base64Pdf) {
-  try {
-    console.log('Converting PDF to image format...');
-    
-    // For Netlify functions, we'll use AWS Textract's ability to process PDFs
-       
-    // Return the PDF as-is but marked for browser-side conversion
-    return base64Pdf;
-    
-  } catch (error) {
-    console.error('PDF conversion error:', error);
-    // Return original if conversion fails
-    return base64Pdf;
-  }
-}
-
-// AWS TEXTRACT: DVLA processing with reliable extraction
-async function testDvlaExtractionWithTextract(imageData, fileType = 'image') {
-  console.log('🚗 Testing DVLA OCR with AWS Textract');
+// AWS TEXTRACT: DVLA processing
+async function testDvlaExtractionWithTextract(imageData) {
+  console.log('🚗 Processing DVLA document with AWS Textract');
   
   if (!process.env.OOOSH_AWS_ACCESS_KEY_ID || !process.env.OOOSH_AWS_SECRET_ACCESS_KEY) {
-    console.log('⚠️ AWS credentials not configured - using enhanced mock');
-    return getEnhancedMockDvlaAnalysis();
+    console.error('⚠️ AWS credentials not configured');
+    return {
+      success: false,
+      error: 'AWS credentials not configured',
+      isValid: false,
+      extractionSuccess: false,
+      insuranceDecision: {
+        approved: false,
+        manualReview: true,
+        reasons: ['OCR service not configured - manual review required'],
+        riskLevel: 'unknown'
+      }
+    };
   }
 
   try {
     console.log('Attempting AWS Textract for DVLA analysis...');
     
-    // Call AWS Textract - it handles both images AND PDFs
-    const textractResult = await callAwsTextract(imageData, fileType);
+    // Call AWS Textract
+    const textractResult = await callAwsTextract(imageData);
     
     // Parse DVLA-specific data from the extracted text
     const dvlaData = parseDvlaFromText(textractResult.extractedText);
@@ -179,44 +167,64 @@ async function testDvlaExtractionWithTextract(imageData, fileType = 'image') {
     return validatedData;
 
   } catch (error) {
-    console.log('❌ AWS Textract failed, using fallback:', error.message);
-    return createDvlaFallback(fileType, error.message);
+    console.error('❌ AWS Textract failed:', error.message);
+    return {
+      success: false,
+      error: error.message,
+      isValid: false,
+      extractionSuccess: false,
+      insuranceDecision: {
+        approved: false,
+        manualReview: true,
+        reasons: ['OCR processing failed - manual review required'],
+        riskLevel: 'unknown'
+      }
+    };
   }
 }
 
 // AWS TEXTRACT: Call the API
-async function callAwsTextract(imageData, fileType) {
+async function callAwsTextract(imageData) {
   console.log('📞 Calling AWS Textract API...');
   
   const region = process.env.OOOSH_AWS_REGION || 'eu-west-2';
   const endpoint = `https://textract.${region}.amazonaws.com/`;
   
-  // Validate image size (AWS limit is 10MB)
+  // Validate image size (AWS limit is 10MB for synchronous, 5MB for base64)
   const imageSizeBytes = (imageData.length * 3) / 4; // Approximate base64 to bytes
-  console.log(`📏 Image size: ${Math.round(imageSizeBytes / 1024)}KB`);
+  const sizeMB = imageSizeBytes / (1024 * 1024);
+  console.log(`📏 Document size: ${sizeMB.toFixed(2)}MB`);
   
-  if (imageSizeBytes > 10000000) { // 10MB limit
-    throw new Error('Image too large for AWS Textract (max 10MB)');
+  if (imageSizeBytes > 5242880) { // 5MB limit for base64
+    throw new Error(`Document too large for AWS Textract sync API (${sizeMB.toFixed(2)}MB, max 5MB)`);
   }
   
   // Ensure clean base64 (remove data URL prefix if present)
   const cleanBase64 = imageData.replace(/^data:.*?base64,/, ''); 
   
-  // Use DetectDocumentText for better PDF compatibility
+  // Verify it's valid base64
+  try {
+    Buffer.from(cleanBase64, 'base64');
+  } catch (e) {
+    throw new Error('Invalid base64 data');
+  }
+  
+  // Use AnalyzeDocument for better PDF support
   const requestBody = JSON.stringify({
     Document: {
       Bytes: cleanBase64
-    }
+    },
+    FeatureTypes: ["TABLES", "FORMS"]
   });
   
   // Create AWS signature
-  const signature = await createAwsSignature('POST', 'DetectDocumentText', requestBody, region);
+  const signature = await createAwsSignature('POST', 'AnalyzeDocument', requestBody, region);
   
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-amz-json-1.1',
-      'X-Amz-Target': 'Textract.DetectDocumentText',
+      'X-Amz-Target': 'Textract.AnalyzeDocument',
       'Authorization': signature.authHeader,
       'X-Amz-Date': signature.timestamp,
       'X-Amz-Content-Sha256': signature.contentHash
@@ -224,17 +232,32 @@ async function callAwsTextract(imageData, fileType) {
     body: requestBody
   });
 
+  const responseText = await response.text();
+  
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('AWS Textract error:', response.status, errorText);
-    throw new Error(`AWS Textract error (${response.status}): ${errorText}`);
+    console.error('AWS Textract error:', response.status, responseText);
+    
+    // Parse error for better reporting
+    try {
+      const errorData = JSON.parse(responseText);
+      if (errorData.__type === 'UnsupportedDocumentException') {
+        throw new Error('Document format not supported by AWS Textract. Try converting to JPG/PNG.');
+      }
+      throw new Error(`AWS Textract error: ${errorData.Message || responseText}`);
+    } catch (e) {
+      throw new Error(`AWS Textract error (${response.status}): ${responseText}`);
+    }
   }
 
-  const result = await response.json();
+  const result = JSON.parse(responseText);
   console.log('📄 AWS Textract response received');
   
   // Extract all text from the response
   const extractedText = extractTextFromTextractResponse(result);
+  
+  if (!extractedText || extractedText.length < 50) {
+    throw new Error('No readable text extracted from document');
+  }
   
   return {
     extractedText: extractedText,
@@ -274,7 +297,7 @@ function calculateAverageConfidence(textractResponse) {
   return Math.round(avgConfidence);
 }
 
-// Extract license ending (last 8 characters) for anti-fraud validation
+// Extract license ending for anti-fraud validation
 function extractLicenseEnding(text) {
   console.log('🔍 Extracting license ending from DVLA text...');
   
@@ -282,7 +305,7 @@ function extractLicenseEnding(text) {
   const licensePatterns = [
     /Driving licence number[:\s]+XXXXXXXX([A-Z0-9]{6,8})/i,
     /licence number[:\s]+XXXXXXXX([A-Z0-9]{6,8})/i,
-    /XXXXXXXX([A-Z0-9]{6,8})/g // Fallback pattern
+    /XXXXXXXX([A-Z0-9]{6,8})/g
   ];
   
   for (const pattern of licensePatterns) {
@@ -424,24 +447,22 @@ function extractEndorsementsNoDuplicates(text) {
 
 // Calculate total points without double-counting
 function extractTotalPointsNoDuplicates(text) {
-  console.log('🔍 Calculating total points (no duplicates)...');
+  console.log('🔍 Calculating total points...');
   
-  // Get specific endorsements first
-  const endorsements = extractEndorsementsNoDuplicates(text);
-  
-  if (endorsements.length > 0) {
-    // Calculate from specific endorsements
-    const calculatedPoints = endorsements.reduce((sum, endorsement) => sum + endorsement.points, 0);
-    console.log('✅ Points from specific endorsements:', calculatedPoints);
-    return calculatedPoints;
+  // Look for explicit point statements first
+  const pointsMatch = text.match(/(\d+)\s+Points?/i);
+  if (pointsMatch) {
+    const points = parseInt(pointsMatch[1]);
+    console.log('✅ Points found:', points);
+    return points;
   }
   
-  // Fallback: Look for direct points statements
-  const directPointsMatch = text.match(/(\d+)\s+Points?/i);
-  if (directPointsMatch) {
-    const points = parseInt(directPointsMatch[1]);
-    console.log('✅ Points from direct statement:', points);
-    return points;
+  // If no explicit points, check endorsements
+  const endorsements = extractEndorsementsNoDuplicates(text);
+  if (endorsements.length > 0) {
+    const calculatedPoints = endorsements.reduce((sum, endorsement) => sum + endorsement.points, 0);
+    console.log('✅ Points from endorsements:', calculatedPoints);
+    return calculatedPoints;
   }
   
   console.log('ℹ️ No points found - clean license');
@@ -483,7 +504,7 @@ function parseDvlaDate(dateStr) {
 function validateDvlaData(dvlaData) {
   console.log('🔍 Validating DVLA data...');
   
-  // CRITICAL: Must have check code to be valid DVLA document
+  // Must have check code to be valid DVLA document
   if (!dvlaData.checkCode) {
     dvlaData.issues.push('❌ DVLA check code not found - not a valid DVLA document');
     dvlaData.isValid = false;
@@ -534,7 +555,7 @@ function validateDvlaData(dvlaData) {
     dvlaData.insuranceDecision = {
       approved: false,
       manualReview: true,
-      reasons: ['Document validation failed - not a valid DVLA check'],
+      reasons: ['Document validation failed - manual review required'],
       riskLevel: 'invalid'
     };
   } else {
@@ -692,82 +713,13 @@ function getSignatureKey(key, dateStamp, regionName, serviceName) {
   return crypto.createHmac('sha256', kService).update('aws4_request').digest();
 }
 
-// Mock data functions
-function getEnhancedMockDvlaAnalysis() {
-  return {
-    licenseNumber: "WOOD661120JO9LA",
-    licenseEnding: "162JD9GA",
-    driverName: "JONATHAN WOOD",
-    checkCode: "Kd m3 ch Nn",
-    dateGenerated: "2025-07-21",
-    validFrom: "2006-08-01",
-    validTo: "2032-08-01",
-    drivingStatus: "Current full licence",
-    endorsements: [{
-      code: "SP30",
-      date: "2023-03-15",
-      points: 3,
-      description: "Exceeding statutory speed limit on a public road"
-    }],
-    totalPoints: 3,
-    restrictions: [],
-    categories: ["B", "BE"],
-    isValid: true,
-    issues: [],
-    confidence: 85,
-    ageInDays: 0,
-    extractionSuccess: true,
-    insuranceDecision: {
-      approved: true,
-      excess: 0,
-      manualReview: false,
-      reasons: ["Minor points - standard approval"],
-      riskLevel: "standard"
-    },
-    mockMode: true,
-    ocrProvider: 'AWS Textract (Mock)'
-  };
-}
-
-function createDvlaFallback(fileType, errorMessage) {
-  return {
-    licenseNumber: 'FALLBACK751120FB9AB',
-    licenseEnding: 'FB9AB123',
-    driverName: 'Fallback Driver',
-    checkCode: 'Fb 12 ck 34',
-    dateGenerated: '2025-07-21',
-    validFrom: '2010-01-01',
-    validTo: '2030-01-01',
-    drivingStatus: 'Current full licence',
-    endorsements: [],
-    totalPoints: 0,
-    restrictions: [],
-    categories: ['B'],
-    isValid: true,
-    issues: [`⚠️ AWS Textract failed: ${errorMessage}`, '⚠️ Using fallback data'],
-    confidence: 0,
-    ageInDays: 0,
-    extractionSuccess: false,
-    parseError: errorMessage,
-    insuranceDecision: {
-      approved: true,
-      excess: 0,
-      manualReview: false,
-      reasons: ['Clean license - no points (fallback)'],
-      riskLevel: 'low'
-    },
-    fallbackMode: true,
-    ocrProvider: 'Fallback'
-  };
-}
-
 // POA processing functions
-async function testSinglePoaExtraction(imageData, documentType = 'unknown', licenseAddress = '', fileType = 'image') {
+async function testSinglePoaExtraction(imageData, documentType = 'unknown', licenseAddress = '') {
   console.log('Processing POA with AWS Textract...');
   
   try {
     // Use AWS Textract to extract text
-    const textractResult = await callAwsTextract(imageData, fileType);
+    const textractResult = await callAwsTextract(imageData);
     const extractedText = textractResult.extractedText;
     
     // Extract POA-specific data
@@ -786,11 +738,15 @@ async function testSinglePoaExtraction(imageData, documentType = 'unknown', lice
     
   } catch (error) {
     console.error('POA extraction error:', error);
-    return getMockPoaData('Single-POA'); // Fallback to mock
+    return {
+      success: false,
+      error: error.message,
+      extractionSuccess: false
+    };
   }
 }
 
-// Add these helper functions:
+// Helper functions for POA extraction
 function extractProviderName(text) {
   // Look for common utility/bank names
   const providers = ['British Gas', 'EDF Energy', 'Scottish Power', 'Thames Water', 
@@ -870,17 +826,14 @@ function extractAccountNumber(text) {
   return '****' + Math.floor(Math.random() * 10000);
 }
 
-// UPDATED: Fixed URL fetching in testDualPoaCrossValidation
-async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress, fileType) {
+// Dual POA cross-validation
+async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress) {
   console.log('🔄 Testing DUAL POA cross-validation workflow');
   
   try {
-    // Note: imageData1 and imageData2 have already been fetched in the main handler
-    // They are now base64 strings, not URLs
-    
     // Process both with AWS Textract
-    const text1Result = await callAwsTextract(imageData1, fileType);
-    const text2Result = await callAwsTextract(imageData2, fileType);
+    const text1Result = await callAwsTextract(imageData1);
+    const text2Result = await callAwsTextract(imageData2);
        
     // Check for duplicate documents
     const hash1 = calculateDocumentHash(text1Result.extractedText);
@@ -932,7 +885,14 @@ async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress
     
   } catch (error) {
     console.error('Dual POA error:', error);
-    return getMockPoaData('dual-poa-error');
+    return {
+      success: false,
+      error: error.message,
+      crossValidation: {
+        approved: false,
+        issues: ['Processing failed']
+      }
+    };
   }
 }
 
@@ -970,40 +930,4 @@ function performPoaCrossValidation(poa1, poa2) {
 
   validation.approved = validation.checks.bothExtracted && validation.checks.differentProviders && validation.checks.differentAccountNumbers;
   return validation;
-}
-
-function getMockPoaData(documentId) {
-  const mockData = {
-    POA1: {
-      documentId: 'POA1',
-      documentType: 'utility_bill',
-      providerName: 'British Gas',
-      documentDate: '2025-06-15',
-      accountNumber: '****1234',
-      confidence: 'high',
-      extractionSuccess: true,
-      mockMode: true
-    },
-    POA2: {
-      documentId: 'POA2',
-      documentType: 'bank_statement',
-      providerName: 'HSBC Bank',
-      documentDate: '2025-06-20',
-      accountNumber: '****5678',
-      confidence: 'high',
-      extractionSuccess: true,
-      mockMode: true
-    },
-    'Single-POA': {
-      documentId: 'Single-POA',
-      documentType: 'utility_bill',
-      providerName: 'British Gas',
-      documentDate: '2025-06-15',
-      accountNumber: '****1234',
-      confidence: 'high',
-      extractionSuccess: true,
-      mockMode: true
-    }
-  };
-  return mockData[documentId] || mockData.POA1;
 }
