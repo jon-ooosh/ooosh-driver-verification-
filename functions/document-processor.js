@@ -1,6 +1,6 @@
 // File: functions/document-processor.js 
 // Unified document processing - OCR + image conversion for Monday.com
-// Replaces test-claude-ocr.js with added PDF-to-image conversion
+// UPDATED: Added URL fetching capability for POA processing
 
 const fetch = require('node-fetch');
 
@@ -38,35 +38,62 @@ exports.handler = async (event, context) => {
         headers,
         body: JSON.stringify({ 
           error: 'action/testType and imageData are required',
-          usage: 'action: "poa", "dvla", or "dual-poa", imageData: base64 string'
+          usage: 'action: "poa", "dvla", or "dual-poa", imageData: base64 string or URL'
         })
       };
     }
 
     console.log(`Processing ${processType} with AWS Textract (${fileType || 'image'})`);
+    
+    // CRITICAL FIX: Check if imageData is a URL and fetch it
+    let processedImageData = imageData;
+    let processedImageData2 = imageData2;
+    
+    if (typeof imageData === 'string' && imageData.startsWith('http')) {
+      console.log('📥 Fetching image from URL:', imageData.substring(0, 100) + '...');
+      const response = await fetch(imageData);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image from URL: ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      processedImageData = Buffer.from(buffer).toString('base64');
+      console.log('✅ Image fetched successfully:', Math.round(buffer.byteLength / 1024), 'KB');
+    }
+    
+    if (imageData2 && typeof imageData2 === 'string' && imageData2.startsWith('http')) {
+      console.log('📥 Fetching image2 from URL:', imageData2.substring(0, 100) + '...');
+      const response = await fetch(imageData2);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image2 from URL: ${response.status}`);
+      }
+      const buffer = await response.arrayBuffer();
+      processedImageData2 = Buffer.from(buffer).toString('base64');
+      console.log('✅ Image2 fetched successfully:', Math.round(buffer.byteLength / 1024), 'KB');
+    }
+    
     let result;
     let convertedImageData = null;
 
     // Check if input is PDF and needs conversion for Monday.com
-    const isPDF = imageData.substring(0, 10).includes('JVBERi') || fileType === 'pdf';
+    const isPDF = processedImageData.substring(0, 10).includes('JVBERi') || fileType === 'pdf';
     
     // Process based on type
     switch (processType) {
       case 'poa':
-        result = await testSinglePoaExtraction(imageData, documentType, licenseAddress, fileType);
+        result = await testSinglePoaExtraction(processedImageData, documentType, licenseAddress, fileType);
         break;
       case 'dvla':
-        result = await testDvlaExtractionWithTextract(imageData, fileType);
+        result = await testDvlaExtractionWithTextract(processedImageData, fileType);
         break;
       case 'dual-poa':
-        if (!imageData2) {
+        if (!processedImageData2) {
           throw new Error('dual-poa requires both imageData and imageData2');
         }
-        result = await testDualPoaCrossValidation(imageData, imageData2, licenseAddress, fileType);
+        result = await testDualPoaCrossValidation(processedImageData, processedImageData2, licenseAddress, fileType);
         break;
       case 'pdf-to-image':
         // Special case: just convert PDF to image
-        convertedImageData = await convertPdfToImageFallback(imageData);
+        convertedImageData = await convertPdfToImageFallback(processedImageData);
         result = { success: true, converted: true };
         break;
       default:
@@ -76,10 +103,10 @@ exports.handler = async (event, context) => {
     // If PDF and caller wants an image back, convert it
     if (isPDF && returnImage && !convertedImageData) {
       console.log('Converting PDF to image for Monday.com storage...');
-      convertedImageData = await convertPdfToImageFallback(imageData);
+      convertedImageData = await convertPdfToImageFallback(processedImageData);
     } else if (!isPDF && returnImage) {
       // Already an image, pass it through
-      convertedImageData = imageData;
+      convertedImageData = processedImageData;
     }
 
     return {
@@ -116,11 +143,7 @@ async function convertPdfToImageFallback(base64Pdf) {
     console.log('Converting PDF to image format...');
     
     // For Netlify functions, we'll use AWS Textract's ability to process PDFs
-    // and return a placeholder image. In production, you'd want a proper PDF renderer
-    
-    // For now, AWS Textract can handle PDFs directly, so we'll just mark it as converted
-    // The actual rendering would happen in the browser or a dedicated service
-    
+       
     // Return the PDF as-is but marked for browser-side conversion
     return base64Pdf;
     
@@ -143,8 +166,8 @@ async function testDvlaExtractionWithTextract(imageData, fileType = 'image') {
   try {
     console.log('Attempting AWS Textract for DVLA analysis...');
     
-  // Call AWS Textract - it handles both images AND PDFs
-const textractResult = await callAwsTextract(imageData, fileType);
+    // Call AWS Textract - it handles both images AND PDFs
+    const textractResult = await callAwsTextract(imageData, fileType);
     
     // Parse DVLA-specific data from the extracted text
     const dvlaData = parseDvlaFromText(textractResult.extractedText);
@@ -177,7 +200,7 @@ async function callAwsTextract(imageData, fileType) {
   }
   
   // Ensure clean base64 (remove data URL prefix if present)
-const cleanBase64 = imageData.replace(/^data:.*?base64,/, ''); 
+  const cleanBase64 = imageData.replace(/^data:.*?base64,/, ''); 
   
   // Use DetectDocumentText for better PDF compatibility
   const requestBody = JSON.stringify({
@@ -276,7 +299,7 @@ function extractLicenseEnding(text) {
 }
 
 // Parse DVLA-specific information from extracted text
-  function parseDvlaFromText(text) {
+function parseDvlaFromText(text) {
   console.log('🔍 Parsing DVLA data from extracted text...');
   
   // Check if this looks like a DVLA document
@@ -847,34 +870,17 @@ function extractAccountNumber(text) {
   return '****' + Math.floor(Math.random() * 10000);
 }
 
+// UPDATED: Fixed URL fetching in testDualPoaCrossValidation
 async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress, fileType) {
   console.log('🔄 Testing DUAL POA cross-validation workflow');
   
   try {
-    // Check if imageData1 and imageData2 are URLs
-    let base64Data1 = imageData1;
-    let base64Data2 = imageData2;
+    // Note: imageData1 and imageData2 have already been fetched in the main handler
+    // They are now base64 strings, not URLs
     
-    // If they're URLs (start with http), fetch them
-    if (imageData1.startsWith('http')) {
-      console.log('📥 Fetching POA1 from URL...');
-      const response1 = await fetch(imageData1);
-      const buffer1 = await response1.arrayBuffer();
-      base64Data1 = Buffer.from(buffer1).toString('base64');
-      console.log('✅ POA1 fetched:', Math.round(buffer1.byteLength / 1024), 'KB');
-    }
-    
-    if (imageData2.startsWith('http')) {
-      console.log('📥 Fetching POA2 from URL...');
-      const response2 = await fetch(imageData2);
-      const buffer2 = await response2.arrayBuffer();
-      base64Data2 = Buffer.from(buffer2).toString('base64');
-      console.log('✅ POA2 fetched:', Math.round(buffer2.byteLength / 1024), 'KB');
-    }
-    
-    // Now continue with base64 data
-    const text1Result = await callAwsTextract(base64Data1, fileType);
-    const text2Result = await callAwsTextract(base64Data2, fileType);
+    // Process both with AWS Textract
+    const text1Result = await callAwsTextract(imageData1, fileType);
+    const text2Result = await callAwsTextract(imageData2, fileType);
        
     // Check for duplicate documents
     const hash1 = calculateDocumentHash(text1Result.extractedText);
