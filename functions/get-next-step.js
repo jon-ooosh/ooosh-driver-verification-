@@ -141,18 +141,20 @@ function calculateNextStep(driverData, currentStep) {
       };
     }
     
-    // Determine what needs uploading via Idenfy
+    // FIXED: Determine what needs uploading via Idenfy
     const idenfyRequirements = [];
     if (!analysis.license.valid) idenfyRequirements.push('license');
     if (!analysis.poa1.valid) idenfyRequirements.push('poa1');
     if (!analysis.poa2.valid) idenfyRequirements.push('poa2');
     
-    if (idenfyRequirements.length === 3 || !driverData.idenfyCheckDate) {
+    // Only do full-idenfy if ALL three documents are needed
+    // Don't force full-idenfy just because they haven't done Idenfy before
+    if (idenfyRequirements.length === 3) {
       return {
         step: 'full-idenfy',
-        reason: 'First time verification or all documents expired'
+        reason: 'All documents need verification'
       };
-    } else {
+    } else if (idenfyRequirements.length > 0) {
       return {
         step: 'selective-idenfy',
         reason: `Need to upload: ${idenfyRequirements.join(', ')}`
@@ -226,10 +228,20 @@ function calculateNextStep(driverData, currentStep) {
   }
 
   // 7. Default fallback - analyze what's needed
-  if (!analysis.license.valid || !analysis.poa1.valid || !analysis.poa2.valid) {
+  const defaultRequirements = [];
+  if (!analysis.license.valid) defaultRequirements.push('license');
+  if (!analysis.poa1.valid) defaultRequirements.push('poa1');
+  if (!analysis.poa2.valid) defaultRequirements.push('poa2');
+  
+  if (defaultRequirements.length === 3) {
     return {
       step: 'full-idenfy',
-      reason: 'Documents expired or missing, need Idenfy verification'
+      reason: 'Documents expired or missing, need full verification'
+    };
+  } else if (defaultRequirements.length > 0) {
+    return {
+      step: 'selective-idenfy',
+      reason: `Need to verify: ${defaultRequirements.join(', ')}`
     };
   }
 
@@ -237,97 +249,4 @@ function calculateNextStep(driverData, currentStep) {
     step: 'signature',
     reason: 'Default route to signature'
   };
-}
-
-// Analyze document validity from dates
-function analyzeDocuments(driverData) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize to start of day for date comparison
-  
-  const analysis = {
-    license: { valid: false, expiryDate: null },
-    poa1: { valid: false, expiryDate: null },
-    poa2: { valid: false, expiryDate: null },
-    dvlaOrPassport: { valid: false, expiryDate: null, type: null },
-    isUkDriver: false,
-    allValid: false
-  };
-
-  // Check who issued the license
-  analysis.isUkDriver = driverData.licenseIssuedBy === 'DVLA';
-
-  console.log('🚗 License Issuer Check:', {
-    licenseIssuedBy: driverData.licenseIssuedBy,
-    isUkDriver: analysis.isUkDriver
-  });
-
-  // FIXED: Check license verification status (when we last checked it, not when it expires)
-  // licenseNextCheckDue tells us when we need to reverify the license with Idenfy
-  if (driverData.licenseNextCheckDue) {
-    const licenseCheckDate = new Date(driverData.licenseNextCheckDue);
-    analysis.license.valid = licenseCheckDate > today;
-    analysis.license.expiryDate = licenseCheckDate.toISOString().split('T')[0];
-  } else if (driverData.documents?.licenseCheck?.nextCheckDue) {
-    const licenseCheckDate = new Date(driverData.documents.licenseCheck.nextCheckDue);
-    analysis.license.valid = licenseCheckDate > today;
-    analysis.license.expiryDate = licenseCheckDate.toISOString().split('T')[0];
-  } else {
-    // If no check date exists, license needs verification
-    analysis.license.valid = false;
-    console.log('⚠️ No license verification date found - needs Idenfy check');
-  }
-
-  // Check POA1 validity
-  if (driverData.poa1ValidUntil || driverData.documents?.poa1?.expiryDate) {
-    const poa1Date = new Date(
-      driverData.poa1ValidUntil || driverData.documents.poa1.expiryDate
-    );
-    analysis.poa1.valid = poa1Date > today;
-    analysis.poa1.expiryDate = poa1Date.toISOString().split('T')[0];
-  }
-
-  // Check POA2 validity
-  if (driverData.poa2ValidUntil || driverData.documents?.poa2?.expiryDate) {
-    const poa2Date = new Date(
-      driverData.poa2ValidUntil || driverData.documents.poa2.expiryDate
-    );
-    analysis.poa2.valid = poa2Date > today;
-    analysis.poa2.expiryDate = poa2Date.toISOString().split('T')[0];
-  }
-
-  // Check DVLA or Passport validity based on driver type
-  if (analysis.isUkDriver) {
-    // UK drivers need DVLA check
-    if (driverData.dvlaValidUntil || driverData.documents?.dvlaCheck?.expiryDate) {
-      const dvlaDate = new Date(
-        driverData.dvlaValidUntil || driverData.documents.dvlaCheck.expiryDate
-      );
-      analysis.dvlaOrPassport.valid = dvlaDate > today;
-      analysis.dvlaOrPassport.expiryDate = dvlaDate.toISOString().split('T')[0];
-      analysis.dvlaOrPassport.type = 'dvla';
-    }
-  } else {
-    // Non-UK drivers need passport check
-    if (driverData.passportValidUntil) {
-      const passportDate = new Date(driverData.passportValidUntil);
-      analysis.dvlaOrPassport.valid = passportDate > today;
-      analysis.dvlaOrPassport.expiryDate = passportDate.toISOString().split('T')[0];
-      analysis.dvlaOrPassport.type = 'passport';
-    }
-  }
-
-  // Check if all required documents are valid
-  analysis.allValid = analysis.license.valid && 
-                     analysis.poa1.valid && 
-                     analysis.poa2.valid && 
-                     analysis.dvlaOrPassport.valid;
-
-  console.log('📊 Document Analysis:', {
-    licenseCheck: analysis.license.valid ? `Valid until ${analysis.license.expiryDate}` : 'Needs verification',
-    poa1: analysis.poa1.valid ? `Valid until ${analysis.poa1.expiryDate}` : 'Needs upload',
-    poa2: analysis.poa2.valid ? `Valid until ${analysis.poa2.expiryDate}` : 'Needs upload',
-    dvlaOrPassport: analysis.dvlaOrPassport.valid ? `Valid until ${analysis.dvlaOrPassport.expiryDate}` : 'Needs check'
-  });
-
-  return analysis;
 }
