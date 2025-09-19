@@ -1,5 +1,5 @@
 // File: functions/monday-integration.js
-// COMPLETE VERSION with fixed file upload and better error logging
+// COMPLETE VERSION with passport column support (date_mkvxy5t1)
 
 const fetch = require('node-fetch');
 
@@ -748,10 +748,11 @@ function formatBoardAColumnValues(data) {
   if (data.homeAddress) columnValues.long_text_mktr2jhb = data.homeAddress;
   if (data.licenseAddress) columnValues.long_text_mktrs5a0 = data.licenseAddress;
 
-  // Document Expiry Dates
+  // Document Expiry Dates - INCLUDING PASSPORT
   if (data.poa1ValidUntil) columnValues.date_mktr1keg = { date: data.poa1ValidUntil };
   if (data.poa2ValidUntil) columnValues.date_mktra1a6 = { date: data.poa2ValidUntil };
   if (data.dvlaValidUntil) columnValues.date_mktrmjfr = { date: data.dvlaValidUntil };
+  if (data.passportValidUntil) columnValues.date_mkvxy5t1 = { date: data.passportValidUntil }; // PASSPORT ADDED
   if (data.licenseNextCheckDue) columnValues.date_mktsbgpy = { date: data.licenseNextCheckDue };
 
   // Insurance Questions (Yes/No status columns)
@@ -830,6 +831,7 @@ function parseBoardAData(item) {
     poa1ValidUntil: '',
     poa2ValidUntil: '',
     dvlaValidUntil: '',
+    passportValidUntil: '',  // PASSPORT ADDED
     licenseNextCheckDue: '',
     idenfyCheckDate: ''
   };
@@ -862,7 +864,7 @@ function parseBoardAData(item) {
       case 'text_mktrz69': // License Issued By
         driver.licenseIssuedBy = col.text || '';
         break;
-        case 'date_mktr93jq': // Date Passed Test 
+      case 'date_mktr93jq': // Date Passed Test 
         driver.datePassedTest = value?.date || '';
         break;
       case 'date_mktrwk94': // License Valid To
@@ -885,6 +887,9 @@ function parseBoardAData(item) {
         break;
       case 'date_mktrmjfr': // DVLA Valid Until
         driver.dvlaValidUntil = value?.date || '';
+        break;
+      case 'date_mkvxy5t1': // Passport Valid Until - PASSPORT ADDED
+        driver.passportValidUntil = value?.date || '';
         break;
       case 'date_mktsbgpy': // License Next Check Due
         driver.licenseNextCheckDue = value?.date || '';
@@ -928,10 +933,10 @@ function parseBoardAData(item) {
       case 'date_mktrk8kv': // Last Updated
         driver.lastUpdated = value?.date || '';
         break;
-        case 'text_mkvv2z8p': // Idenfy Check Date
+      case 'text_mkvv2z8p': // Idenfy Check Date
         console.log('📍 FOUND idenfyCheckDate field! Value:', col.text); 
         driver.idenfyCheckDate = col.text || '';
-          break;
+        break;
     }
   });
 
