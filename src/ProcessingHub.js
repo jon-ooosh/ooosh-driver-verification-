@@ -1,5 +1,5 @@
 // File: src/ProcessingHub.js
-// COMPLETE VERSION with all routing fixes
+// UPDATED to use centralized get-next-step router
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader, CheckCircle, AlertCircle, Clock, RefreshCw, Shield } from 'lucide-react';
@@ -20,92 +20,63 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
   const MAX_ATTEMPTS = 20;
   const POLL_INTERVAL = 2000;
 
-  // Route to next step - FIXED to use correct data structure
-  const routeToNextStep = useCallback((data) => {
-    console.log('🧭 ROUTING DECISION START');
-    console.log('📊 Full driver data:', JSON.stringify(data, null, 2));
+  // Route to next step using CENTRALIZED ROUTER
+  const routeToNextStep = useCallback(async (data) => {
+    console.log('🧭 CALLING CENTRALIZED ROUTER');
     
     if (!data) {
       console.error('❌ No data for routing - STOPPING');
       return;
     }
     
-    // Check POA validation - FIXED to use documents structure
-    const poa1Date = data.documents?.poa1?.expiryDate;
-    const poa2Date = data.documents?.poa2?.expiryDate;
-    const poa1Valid = data.documents?.poa1?.valid;
-    const poa2Valid = data.documents?.poa2?.valid;
-    
-    console.log('🔍 Checking POA status:', {
-      poa1Date,
-      poa2Date,
-      poa1Valid,
-      poa2Valid
-    });
-    
-    // Check if POAs are invalid or missing
-    if (!poa1Valid || !poa2Valid) {
-      console.log('🚦 ROUTING TO: poa-validation (POAs invalid or missing)');
-      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-      return;
-    }
-    
-    // Check if UK driver needs DVLA
-    const isUKDriver = 
-      data.nationality === 'GB' || 
-      data.nationality === 'United Kingdom' ||
-      data.licenseIssuedBy === 'DVLA' ||
-      data.licenseIssuedBy?.includes('UK') ||
-      data.licenseIssuedBy?.includes('GB');
-    
-    console.log('🇬🇧 UK check:', { 
-      isUKDriver, 
-      nationality: data.nationality, 
-      issuedBy: data.licenseIssuedBy 
-    });
-    
-    if (isUKDriver) {
-      // Check DVLA validity - FIXED to use documents structure
-      const dvlaValid = data.documents?.dvlaCheck?.valid;
-      
-      console.log('📋 DVLA check status:', {
-        dvlaValid,
-        dvlaExpiry: data.documents?.dvlaCheck?.expiryDate,
-        dvlaStatus: data.documents?.dvlaCheck?.status
+    try {
+      // Call the centralized router
+      const routerResponse = await fetch('/.netlify/functions/get-next-step', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: driverEmail,
+          currentStep: 'idenfy-complete'  // ProcessingHub is after Idenfy
+        })
       });
       
-      if (!dvlaValid) {
-        console.log('🚦 ROUTING TO: dvla-processing (UK driver needs DVLA check)');
-        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      if (!routerResponse.ok) {
+        console.error('❌ Router call failed:', routerResponse.status);
+        // Fallback to POA validation
+        window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
         return;
       }
-    } else {
-      // Non-UK driver - check passport
-      if (!data.passportVerified) {
-        console.log('🚦 ROUTING TO: passport-upload (non-UK needs passport)');
-        window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-        return;
-      }
+      
+      const routerData = await routerResponse.json();
+      console.log('✅ Router response:', routerData);
+      
+      const nextStep = routerData.nextStep;
+      const reason = routerData.reason;
+      
+      console.log(`🚦 ROUTING TO: ${nextStep} (${reason})`);
+      
+      // Map router steps to URL steps
+      const stepMapping = {
+        'poa-validation': 'poa-validation',
+        'dvla-check': 'dvla-processing',
+        'passport-upload': 'passport-upload',
+        'signature': 'signature',
+        'full-idenfy': 'document-upload',
+        'selective-idenfy': 'document-upload'
+      };
+      
+      const urlStep = stepMapping[nextStep] || 'poa-validation';
+      
+      // Navigate to next step
+      window.location.href = `/?step=${urlStep}&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      
+    } catch (error) {
+      console.error('❌ Error calling router:', error);
+      // Fallback to POA validation
+      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
     }
-    
-    // Check license verification date
-    const licenseCheckValid = data.documents?.licenseCheck?.valid;
-    const licenseCheckDue = data.documents?.licenseCheck?.nextCheckDue;
-    
-    console.log('📅 License check status:', {
-      valid: licenseCheckValid,
-      nextCheckDue: licenseCheckDue
-    });
-    
-    if (licenseCheckDue && !licenseCheckValid) {
-      console.log('🚦 ROUTING TO: document-upload (license check due)');
-      window.location.href = `/?step=document-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-      return;
-    }
-    
-    // All checks passed - go to signature
-    console.log('🚦 ROUTING TO: signature (all checks complete)');
-    window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
   }, [driverEmail, jobId]);
 
   // Check for webhook by monitoring idenfyCheckDate
@@ -189,16 +160,16 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
       }
       
       if (webhookReceived) {
-        console.log('🎉 Webhook confirmed! Waiting 1 second for all data to load...');
+        console.log('🎉 Webhook confirmed! Waiting for data to populate...');
         setDriverData(data);
         setStatus('success');
         setMessage('Verification complete! Loading next step...');
         
-        // Wait 1 second for all data to load, then route
+        // Wait 4 seconds for all data to load, then route using centralized router
         setTimeout(() => {
-          console.log('🚀 Routing to next step...');
+          console.log('🚀 Routing to next step via centralized router...');
           routeToNextStep(data);
-       }, 4000); // Changed from 1000 to 4000 to allow time for data to populate
+        }, 4000);
         
       } else {
         console.log('⏳ No webhook received yet - idenfyCheckDate:', data?.idenfyCheckDate);
@@ -249,12 +220,43 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     checkWebhookProcessed();
   };
 
-  const handleManualContinue = () => {
-    console.log('⏭️ Manual continue requested');
+  const handleManualContinue = async () => {
+    console.log('⏭️ Manual continue requested - using centralized router');
+    
     if (driverData) {
-      routeToNextStep(driverData);
+      await routeToNextStep(driverData);
     } else {
-      window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      // Call router without driver data (router will fetch it)
+      try {
+        const routerResponse = await fetch('/.netlify/functions/get-next-step', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: driverEmail,
+            currentStep: 'processing-hub'
+          })
+        });
+        
+        if (routerResponse.ok) {
+          const routerData = await routerResponse.json();
+          const stepMapping = {
+            'poa-validation': 'poa-validation',
+            'dvla-check': 'dvla-processing',
+            'passport-upload': 'passport-upload',
+            'signature': 'signature'
+          };
+          const urlStep = stepMapping[routerData.nextStep] || 'poa-validation';
+          window.location.href = `/?step=${urlStep}&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        } else {
+          // Fallback
+          window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        }
+      } catch (error) {
+        console.error('Router call failed:', error);
+        window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      }
     }
   };
 
@@ -272,7 +274,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Render states
+  // Render states (unchanged)
   if (status === 'waiting') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -415,7 +417,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
                          focus:outline-none focus:ring-2 focus:ring-red-500 inline-flex items-center 
                          justify-center"
               >
-                Call Support
+                Call us.
               </a>
             </div>
           </div>
