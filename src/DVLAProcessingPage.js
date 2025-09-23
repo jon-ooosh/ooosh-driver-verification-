@@ -783,7 +783,7 @@ const VerificationComplete = ({ decision, driverData, isUKDriver }) => {
       )}
 
       <div className="text-center text-sm text-gray-500">
-        <p>Need help? Contact us info@oooshtours.co.uk/p>
+        <p>Need help? Contact us info@oooshtours.co.uk</p>
       </div>
     </div>
   );
