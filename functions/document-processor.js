@@ -184,47 +184,47 @@ async function testDvlaExtractionWithTextract(imageData) {
 }
 
 // AWS TEXTRACT: Call the API
-async function callAwsTextract(imageData) {
+async function callAwsTextract(imageData, fileType) {
   console.log('📞 Calling AWS Textract API...');
   
   const region = process.env.OOOSH_AWS_REGION || 'eu-west-2';
   const endpoint = `https://textract.${region}.amazonaws.com/`;
   
-  // Validate image size (AWS limit is 10MB for synchronous, 5MB for base64)
-  const imageSizeBytes = (imageData.length * 3) / 4; // Approximate base64 to bytes
+  // Clean base64
+  const cleanBase64 = imageData.replace(/^data:.*?base64,/, '');
+
+  // Check if PDF
+const buffer = Buffer.from(cleanBase64, 'base64');
+const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+
+if (isPDF) {
+  throw new Error('PDF format detected. Please convert to JPG/PNG before processing.');
+}
+  
+  // Validate size
+  const imageSizeBytes = (cleanBase64.length * 3) / 4;
   const sizeMB = imageSizeBytes / (1024 * 1024);
   console.log(`📏 Document size: ${sizeMB.toFixed(2)}MB`);
   
-  if (imageSizeBytes > 5242880) { // 5MB limit for base64
-    throw new Error(`Document too large for AWS Textract sync API (${sizeMB.toFixed(2)}MB, max 5MB)`);
+  if (imageSizeBytes > 5242880) {
+    throw new Error(`Document too large (${sizeMB.toFixed(2)}MB, max 5MB)`);
   }
   
-  // Ensure clean base64 (remove data URL prefix if present)
-  const cleanBase64 = imageData.replace(/^data:.*?base64,/, ''); 
-  
-  // Verify it's valid base64
-  try {
-    Buffer.from(cleanBase64, 'base64');
-  } catch (e) {
-    throw new Error('Invalid base64 data');
-  }
-  
-  // Use AnalyzeDocument for better PDF support
+  // Use DetectDocumentText (like your working test-claude-ocr.js)
   const requestBody = JSON.stringify({
     Document: {
       Bytes: cleanBase64
-    },
-    FeatureTypes: ["TABLES", "FORMS"]
+    }
   });
   
   // Create AWS signature
-  const signature = await createAwsSignature('POST', 'AnalyzeDocument', requestBody, region);
+  const signature = await createAwsSignature('POST', 'DetectDocumentText', requestBody, region);
   
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-amz-json-1.1',
-      'X-Amz-Target': 'Textract.AnalyzeDocument',
+      'X-Amz-Target': 'Textract.DetectDocumentText',
       'Authorization': signature.authHeader,
       'X-Amz-Date': signature.timestamp,
       'X-Amz-Content-Sha256': signature.contentHash
@@ -236,16 +236,11 @@ async function callAwsTextract(imageData) {
   
   if (!response.ok) {
     console.error('AWS Textract error:', response.status, responseText);
-    
-    // Parse error for better reporting
     try {
       const errorData = JSON.parse(responseText);
-      if (errorData.__type === 'UnsupportedDocumentException') {
-        throw new Error('Document format not supported by AWS Textract. Try converting to JPG/PNG.');
-      }
-      throw new Error(`AWS Textract error: ${errorData.Message || responseText}`);
+      throw new Error(`AWS Textract: ${errorData.Message || responseText}`);
     } catch (e) {
-      throw new Error(`AWS Textract error (${response.status}): ${responseText}`);
+      throw new Error(`AWS Textract error (${response.status})`);
     }
   }
 
