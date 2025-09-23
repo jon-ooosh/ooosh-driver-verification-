@@ -1,5 +1,5 @@
 // File: src/DVLAProcessingPage.js
-// OOOSH Driver Verification - DVLA Processing & Final Validation
+// UPDATED to use centralized router and set DVLA dates
 // Handles both UK drivers (DVLA + POA) and Non-UK drivers (POA only)
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -34,7 +34,58 @@ const DVLAProcessingPage = () => {
   // Get driver email from URL params (passed from webhook)
   const urlParams = new URLSearchParams(window.location.search);
   const driverEmail = urlParams.get('email');
+  const jobId = urlParams.get('job');
   const isUKDriver = urlParams.get('uk') === 'true';
+
+  // Call centralized router to determine next step
+  const callRouter = useCallback(async (currentStepName) => {
+    console.log('🚀 DVLA page calling centralized router');
+    
+    try {
+      const routerResponse = await fetch('/.netlify/functions/get-next-step', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: driverEmail,
+          currentStep: currentStepName
+        })
+      });
+      
+      if (!routerResponse.ok) {
+        console.error('❌ Router call failed:', routerResponse.status);
+        return null;
+      }
+      
+      const routerData = await routerResponse.json();
+      console.log('✅ Router response:', routerData);
+      
+      return routerData.nextStep;
+      
+    } catch (error) {
+      console.error('❌ Error calling router:', error);
+      return null;
+    }
+  }, [driverEmail]);
+
+  // Navigate to next step using router result
+  const navigateToNext = useCallback((nextStep) => {
+    console.log(`🚦 DVLA navigating to: ${nextStep}`);
+    
+    // Map router steps to URL steps
+    const stepMapping = {
+      'poa-validation': 'poa-validation',
+      'signature': 'signature',
+      'dvla-check': 'dvla-processing',
+      'passport-upload': 'passport-upload'
+    };
+    
+    const urlStep = stepMapping[nextStep] || 'signature';
+    
+    // Navigate to next step
+    window.location.href = `/?step=${urlStep}&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+  }, [driverEmail, jobId]);
 
   const loadDriverData = useCallback(async () => {
     try {
@@ -56,11 +107,15 @@ const DVLAProcessingPage = () => {
         setDriverData(result.driver);
         console.log('✅ Driver data loaded:', result.driver);
         
-        // Determine next step based on driver type and existing data
-        if (isUKDriver && !result.driver.dvlaCheckStatus) {
-          setCurrentStep('dvla-upload');
+        // Use router to determine next step instead of local logic
+        const nextStep = await callRouter('dvla-processing');
+        
+        // If router says we shouldn't be here, navigate away
+        if (nextStep !== 'dvla-check') {
+          navigateToNext(nextStep);
         } else {
-          setCurrentStep('poa-validation');
+          // We should be on DVLA upload
+          setCurrentStep('dvla-upload');
         }
       } else {
         throw new Error('Driver not found in database');
@@ -72,7 +127,7 @@ const DVLAProcessingPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [driverEmail, isUKDriver]);
+  }, [driverEmail, callRouter, navigateToNext]);
 
   useEffect(() => {
     if (driverEmail) {
@@ -83,6 +138,45 @@ const DVLAProcessingPage = () => {
     }
   }, [driverEmail, loadDriverData]);
 
+  // Save DVLA validation date after successful processing
+  const saveDvlaDate = async () => {
+    console.log('💾 Saving DVLA validation date to Monday.com');
+    
+    try {
+      const today = new Date();
+      const validityDays = 30; // DVLA checks are valid for 30 days
+      
+      const dvlaValidUntil = new Date(today);
+      dvlaValidUntil.setDate(dvlaValidUntil.getDate() + validityDays);
+      const dvlaDateString = dvlaValidUntil.toISOString().split('T')[0];
+      
+      console.log('📅 Setting dvlaValidUntil:', dvlaDateString);
+      
+      // Update Monday.com with the DVLA validity date
+      const response = await fetch('/.netlify/functions/monday-integration', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'update-driver-board-a',
+          email: driverEmail,
+          updates: {
+            dvlaValidUntil: dvlaDateString
+          }
+        })
+      });
+      
+      if (response.ok) {
+        console.log('✅ DVLA date saved successfully');
+      } else {
+        console.error('❌ Failed to save DVLA date');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error saving DVLA date:', error);
+    }
+  };
  
 // handleFileUpload function, updated to process PDFs
 const handleFileUpload = async (fileType, file) => {
@@ -148,35 +242,38 @@ const handleFileUpload = async (fileType, file) => {
       console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
 
       // Check if DVLA validation actually passed
-  if (fileType === 'dvla' && processingResult.result) {
-    if (!processingResult.result.isValid) {
-      setError('❌ Invalid DVLA document. Please upload a valid DVLA check from gov.uk/view-driving-licence');
-      setLoading(false);
-      return; // Stop processing
-    }
-       // Clear any previous errors if validation passed
-    setError('');
-  }
+      if (fileType === 'dvla' && processingResult.result) {
+        if (!processingResult.result.isValid) {
+          setError('❌ Invalid DVLA document. Please upload a valid DVLA check from gov.uk/view-driving-licence');
+          setLoading(false);
+          return; // Stop processing
+        }
+        // Clear any previous errors if validation passed
+        setError('');
+        
+        // IMPORTANT: Save DVLA date after successful validation
+        await saveDvlaDate();
+      }
         
       // Display and validate DVLA results
-  if (fileType === 'dvla' && processingResult.result) {
-    const dvlaData = processingResult.result;
-    
-    // Check license ending matches Idenfy data
-    if (driverData?.licenseEnding && dvlaData.licenseEnding) {
-      if (driverData.licenseEnding !== dvlaData.licenseEnding) {
-        setError('⚠️ Licence number mismatch - manual review required');
+      if (fileType === 'dvla' && processingResult.result) {
+        const dvlaData = processingResult.result;
+        
+        // Check license ending matches Idenfy data
+        if (driverData?.licenseEnding && dvlaData.licenseEnding) {
+          if (driverData.licenseEnding !== dvlaData.licenseEnding) {
+            setError('⚠️ Licence number mismatch - manual review required');
+          }
+        }
+        
+        // Show results to user
+        console.log('DVLA Check Results:', {
+          name: dvlaData.driverName,
+          licenseEnding: dvlaData.licenseEnding,
+          points: dvlaData.totalPoints,
+          insuranceDecision: dvlaData.insuranceDecision
+        });
       }
-    }
-    
-    // Show results to user
-    console.log('DVLA Check Results:', {
-      name: dvlaData.driverName,
-      licenseEnding: dvlaData.licenseEnding,
-      points: dvlaData.totalPoints,
-      insuranceDecision: dvlaData.insuranceDecision
-    });
-  }
         // Store results
         setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
 
@@ -187,9 +284,15 @@ const handleFileUpload = async (fileType, file) => {
           [`${fileType}Status`]: processingResult.result.decision || 'Processed'
         });
 
-        // Move to next step
+        // Use router to determine next step after DVLA
         if (fileType === 'dvla') {
-          setCurrentStep('poa-validation');
+          const nextStep = await callRouter('dvla-complete');
+          if (nextStep) {
+            navigateToNext(nextStep);
+          } else {
+            // Fallback
+            setCurrentStep('poa-validation');
+          }
         } else {
           await performFinalValidation();
         }
@@ -203,6 +306,7 @@ const handleFileUpload = async (fileType, file) => {
     setLoading(false);
   }
 };
+  
   const performPOAValidation = async () => {
     try {
       setLoading(true);
@@ -303,6 +407,14 @@ const handleFileUpload = async (fileType, file) => {
 
       setCurrentStep('complete');
       console.log('✅ Final validation complete:', decision);
+      
+      // After final validation, use router to go to signature
+      setTimeout(async () => {
+        const nextStep = await callRouter('validation-complete');
+        if (nextStep) {
+          navigateToNext(nextStep);
+        }
+      }, 3000);
 
     } catch (error) {
       console.error('Final validation error:', error);
@@ -518,7 +630,7 @@ const handleFileUpload = async (fileType, file) => {
   return null;
 };
 
-// DVLA Upload Component
+// DVLA Upload Component (unchanged)
 const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
   const [dragActive, setDragActive] = useState(false);
 
@@ -595,7 +707,7 @@ const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
   );
 };
 
-// Verification Complete Component
+// Verification Complete Component (unchanged)
 const VerificationComplete = ({ decision, driverData, isUKDriver }) => {
   const getStatusColor = (status) => {
     switch (status) {
@@ -671,7 +783,7 @@ const VerificationComplete = ({ decision, driverData, isUKDriver }) => {
       )}
 
       <div className="text-center text-sm text-gray-500">
-        <p>Need help? Contact support at support@ooosh.com</p>
+        <p>Need help? Contact us info@oooshtours.co.uk/p>
       </div>
     </div>
   );
