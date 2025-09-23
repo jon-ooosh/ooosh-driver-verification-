@@ -1,5 +1,5 @@
 // File: src/POAValidationPage.js
-// POA validation results display page - reads pre-calculated results from webhook
+// UPDATED to use centralized router and set dates after validation
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader, Calendar } from 'lucide-react';
@@ -10,32 +10,137 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
 
-  const proceedToNext = useCallback((data) => {
-    const checkData = data || driverData;
+  // Use centralized router instead of local logic
+  const proceedToNext = useCallback(async () => {
+    console.log('🚀 POA Validation complete - calling centralized router');
     
-    // Check if UK driver based on stored data
-    const isUKDriver = 
-      checkData?.nationality === 'GB' || 
-      checkData?.nationality === 'UK' ||
-      checkData?.nationality === 'United Kingdom' ||
-      checkData?.licenseIssuedBy === 'DVLA' ||
-      checkData?.licenseIssuedBy?.includes('UK') ||
-      checkData?.licenseIssuedBy?.includes('United Kingdom');
-    
-    console.log('🚦 Routing decision:', { 
-      isUKDriver, 
-      nationality: checkData?.nationality,
-      issuedBy: checkData?.licenseIssuedBy 
-    });
-    
-    if (isUKDriver) {
-      // UK driver - go to DVLA check
-      window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
-    } else {
-      // Non-UK driver - go to passport upload
-      window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+    try {
+      // Call the centralized router
+      const routerResponse = await fetch('/.netlify/functions/get-next-step', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: driverEmail,
+          currentStep: 'poa-validation-complete'
+        })
+      });
+      
+      if (!routerResponse.ok) {
+        console.error('❌ Router call failed:', routerResponse.status);
+        // Fallback to DVLA for UK drivers
+        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+        return;
+      }
+      
+      const routerData = await routerResponse.json();
+      console.log('✅ Router response:', routerData);
+      
+      const nextStep = routerData.nextStep;
+      const reason = routerData.reason;
+      
+      console.log(`🚦 POA routing to: ${nextStep} (${reason})`);
+      
+      // Map router steps to URL steps
+      const stepMapping = {
+        'dvla-check': 'dvla-processing',
+        'passport-upload': 'passport-upload',
+        'signature': 'signature',
+        'poa-validation': 'poa-validation'  // In case POAs still need work
+      };
+      
+      const urlStep = stepMapping[nextStep] || 'signature';
+      
+      // Navigate to next step
+      window.location.href = `/?step=${urlStep}&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      
+    } catch (error) {
+      console.error('❌ Error calling router:', error);
+      // Fallback based on what we know
+      if (driverData?.licenseIssuedBy === 'DVLA') {
+        window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      } else {
+        window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+      }
     }
-  }, [driverData, driverEmail, jobId]);
+  }, [driverEmail, jobId, driverData]);
+
+  // Function to save POA validation dates after successful validation
+  const savePoaDates = useCallback(async (poa1Date, poa2Date) => {
+    console.log('💾 Saving POA validation dates to Monday.com');
+    
+    try {
+      // Calculate validity dates
+      const today = new Date();
+      const defaultValidityDays = 30;
+      const documentValidityDays = 90;
+      
+      // POA1 date calculation
+      let poa1ValidUntil;
+      if (poa1Date && poa1Date !== 'Not extracted') {
+        const docDate = new Date(poa1Date);
+        if (!isNaN(docDate.getTime())) {
+          // Document date + 90 days
+          docDate.setDate(docDate.getDate() + documentValidityDays);
+          poa1ValidUntil = docDate.toISOString().split('T')[0];
+        }
+      }
+      if (!poa1ValidUntil) {
+        // Default: today + 30 days
+        const defaultDate = new Date(today);
+        defaultDate.setDate(defaultDate.getDate() + defaultValidityDays);
+        poa1ValidUntil = defaultDate.toISOString().split('T')[0];
+      }
+      
+      // POA2 date calculation
+      let poa2ValidUntil;
+      if (poa2Date && poa2Date !== 'Not extracted') {
+        const docDate = new Date(poa2Date);
+        if (!isNaN(docDate.getTime())) {
+          // Document date + 90 days
+          docDate.setDate(docDate.getDate() + documentValidityDays);
+          poa2ValidUntil = docDate.toISOString().split('T')[0];
+        }
+      }
+      if (!poa2ValidUntil) {
+        // Default: today + 30 days
+        const defaultDate = new Date(today);
+        defaultDate.setDate(defaultDate.getDate() + defaultValidityDays);
+        poa2ValidUntil = defaultDate.toISOString().split('T')[0];
+      }
+      
+      console.log('📅 Calculated POA validity dates:', {
+        poa1ValidUntil,
+        poa2ValidUntil
+      });
+      
+      // Update Monday.com with the dates
+      const response = await fetch('/.netlify/functions/monday-integration', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'update-driver-board-a',
+          email: driverEmail,
+          updates: {
+            poa1ValidUntil: poa1ValidUntil,
+            poa2ValidUntil: poa2ValidUntil
+          }
+        })
+      });
+      
+      if (response.ok) {
+        console.log('✅ POA dates saved successfully');
+      } else {
+        console.error('❌ Failed to save POA dates');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error saving POA dates:', error);
+    }
+  }, [driverEmail]);
 
   const checkPoaValidationResults = useCallback(async () => {
     try {
@@ -65,7 +170,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         console.log('ℹ️ No POAs in this verification - skipping to next step');
         setLoading(false);
         // Auto-proceed after 2 seconds
-        setTimeout(() => proceedToNext(status), 2000);
+        setTimeout(() => proceedToNext(), 2000);
         return;
       }
       
@@ -108,9 +213,16 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       
       setValidationResult(validationResult);
       
-      // Auto-proceed after 3 seconds if validation passed
-      if (validationResult.approved) {
-        setTimeout(() => proceedToNext(status), 3000);
+      // IMPORTANT: Save POA dates ONLY if validation was successful
+      if (validationResult.approved && !validationResult.isDuplicate) {
+        console.log('✅ POA validation successful - saving dates');
+        await savePoaDates(
+          validationResult.poa1.documentDate, 
+          validationResult.poa2.documentDate
+        );
+        
+        // Auto-proceed after 3 seconds if validation passed
+        setTimeout(() => proceedToNext(), 3000);
       }
       
     } catch (err) {
@@ -119,7 +231,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     } finally {
       setLoading(false);
     }
-  }, [driverEmail, proceedToNext]);
+  }, [driverEmail, proceedToNext, savePoaDates]);
 
   useEffect(() => {
     checkPoaValidationResults();
@@ -287,7 +399,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
               onClick={() => proceedToNext()}
               className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700"
             >
-              Continue to {driverData?.nationality === 'GB' ? 'DVLA Check' : 'Next Step'}
+              Continue to Next Step
             </button>
             <p className="text-sm text-gray-500 text-center">
               Proceeding automatically...
