@@ -1,4 +1,4 @@
-// File: functions/monday-integration.js
+  // File: functions/monday-integration.js
 // COMPLETE VERSION with passport column support (date_mkvxy5t1)
 
 const fetch = require('node-fetch');
@@ -768,6 +768,8 @@ function formatBoardAColumnValues(data) {
   if (data.overallStatus) columnValues.color_mktrwatg = { label: data.overallStatus };
   if (data.lastUpdated) columnValues.date_mktrk8kv = { date: data.lastUpdated };
   if (data.idenfyCheckDate) columnValues.text_mkvv2z8p = data.idenfyCheckDate;
+  if (updates.poa1URL) columnValues.text_mkw34ksx = updates.poa1URL;
+  if (updates.poa2URL) columnValues.text_mkw3d9ye = updates.poa2URL;
 
   // DEBUGGING: Log final column values
   console.log('📋 Final column values for Monday.com:', Object.keys(columnValues));
@@ -894,6 +896,12 @@ function parseBoardAData(item) {
       case 'date_mktsbgpy': // License Next Check Due
         driver.licenseNextCheckDue = value?.date || '';
         break;
+      case 'text_mkw34ksx': // POA1 URL
+        driver.poa1URL = col.text || '';
+        break;
+      case 'text_mkw3d9ye': // POA2 URL
+        driver.poa2URL = col.text || '';
+      break;
       // Parse insurance questions with detailed logging
       case 'status': // Has Disability
         console.log('Disability column - value:', JSON.stringify(value), 'text:', col.text);
