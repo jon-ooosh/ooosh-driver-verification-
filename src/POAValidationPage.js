@@ -1,14 +1,26 @@
 // File: src/POAValidationPage.js
-// UPDATED to use centralized router and set dates after validation
+// UPDATED with client-side PDF processing for deferred documents
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader, Calendar } from 'lucide-react';
 
 const POAValidationPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(true);
+  const [processingPDFs, setProcessingPDFs] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [error, setError] = useState('');
   const [driverData, setDriverData] = useState(null);
+
+  // Load PDF.js for client-side conversion
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    };
+    document.head.appendChild(script);
+  }, []);
 
   // Use centralized router instead of local logic
   const proceedToNext = useCallback(async () => {
@@ -66,7 +78,73 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     }
   }, [driverEmail, jobId, driverData]);
 
-  // Function to save POA validation dates after successful validation
+  // Process a PDF document client-side
+  const processPDFDocument = useCallback(async (url, documentType) => {
+    console.log(`📄 Processing PDF from URL: ${url}`);
+    
+    try {
+      // Fetch the PDF
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch PDF');
+      
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Convert PDF to image using PDF.js
+      if (!window.pdfjsLib) {
+        throw new Error('PDF.js not loaded yet');
+      }
+      
+      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      
+      const scale = 2.0; // High quality
+      const viewport = page.getViewport({ scale });
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+      
+      // Convert canvas to base64
+      const imageData = canvas.toDataURL('image/png').split(',')[1];
+      
+      console.log('✅ PDF converted to image');
+      
+      // Process with document-processor
+      const processingResponse = await fetch('/.netlify/functions/document-processor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'poa',
+          imageData: imageData,
+          documentType: documentType
+        })
+      });
+      
+      if (!processingResponse.ok) {
+        throw new Error('Document processing failed');
+      }
+      
+      const result = await processingResponse.json();
+      
+      if (result.success && result.result) {
+        return result.result;
+      } else {
+        throw new Error('Invalid processing result');
+      }
+      
+    } catch (error) {
+      console.error(`Error processing PDF ${documentType}:`, error);
+      throw error;
+    }
+  }, []);
+
+  // Function to save POA validation dates after successful processing
   const savePoaDates = useCallback(async (poa1Date, poa2Date) => {
     console.log('💾 Saving POA validation dates to Monday.com');
     
@@ -147,7 +225,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       setLoading(true);
       console.log('🔍 Checking POA validation results for:', driverEmail);
       
-      // Fetch driver status - this now contains the validation RESULTS, not URLs
+      // Fetch driver status
       const statusResponse = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
       
       if (!statusResponse.ok) {
@@ -157,72 +235,112 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       const status = await statusResponse.json();
       setDriverData(status);
       
-      console.log('📊 POA validation results from Monday:', {
-        poaValidationStatus: status.poaValidationStatus,
-        poasProcessed: status.poasProcessed,
-        poaDuplicate: status.poaDuplicate,
-        poaCrossValidated: status.poaCrossValidated
+      console.log('📊 POA status from Monday:', {
+        poa1ValidUntil: status.poa1ValidUntil,
+        poa2ValidUntil: status.poa2ValidUntil,
+        poa1URL: status.poa1URL,
+        poa2URL: status.poa2URL
       });
       
-      // Check if POAs were even part of this verification
-      if (!status.poasProcessed || status.poasProcessed === 'No') {
-        // No POAs in this verification (e.g., license-only renewal)
-        console.log('ℹ️ No POAs in this verification - skipping to next step');
-        setLoading(false);
-        // Auto-proceed after 2 seconds
-        setTimeout(() => proceedToNext(), 2000);
-        return;
-      }
+      // NEW: Check if POAs need client-side processing
+      const needsPoa1Processing = !status.poa1ValidUntil && status.poa1URL;
+      const needsPoa2Processing = !status.poa2ValidUntil && status.poa2URL;
       
-      // Check if POAs are still being processed (webhook might still be running)
-      if (status.poasProcessed === 'Processing') {
-        console.log('⏳ POAs still being processed by webhook...');
-        // Retry in 3 seconds
-        setTimeout(() => checkPoaValidationResults(), 3000);
-        return;
-      }
-      
-      // Parse the validation results that webhook already calculated
-      const validationResult = {
-        isDuplicate: status.poaDuplicate === 'Yes',
-        approved: status.poaCrossValidated === 'Yes',
-        status: status.poaValidationStatus || 'Unknown',
-        poa1: {
-          providerName: status.poa1Provider || 'Unknown',
-          documentDate: status.poa1Date || 'Not extracted',
-          validUntil: status.poa1ValidUntil
-        },
-        poa2: {
-          providerName: status.poa2Provider || 'Unknown', 
-          documentDate: status.poa2Date || 'Not extracted',
-          validUntil: status.poa2ValidUntil
-        },
-        crossValidation: {
-          approved: status.poaCrossValidated === 'Yes',
-          issues: []
-        }
-      };
-      
-      // Build issues list for display
-      if (validationResult.isDuplicate) {
-        validationResult.crossValidation.issues.push('Same document uploaded twice');
-      }
-      if (!validationResult.approved && !validationResult.isDuplicate) {
-        validationResult.crossValidation.issues.push('Manual review required');
-      }
-      
-      setValidationResult(validationResult);
-      
-      // IMPORTANT: Save POA dates ONLY if validation was successful
-      if (validationResult.approved && !validationResult.isDuplicate) {
-        console.log('✅ POA validation successful - saving dates');
-        await savePoaDates(
-          validationResult.poa1.documentDate, 
-          validationResult.poa2.documentDate
-        );
+      if (needsPoa1Processing || needsPoa2Processing) {
+        console.log('🔄 POAs need client-side processing');
+        setProcessingPDFs(true);
         
-        // Auto-proceed after 3 seconds if validation passed
-        setTimeout(() => proceedToNext(), 3000);
+        try {
+          let poa1Result, poa2Result;
+          
+          // Process POA1 if needed
+          if (needsPoa1Processing) {
+            console.log('Processing POA1 PDF...');
+            poa1Result = await processPDFDocument(status.poa1URL, 'poa1');
+          } else if (status.poa1ValidUntil) {
+            // Already processed
+            poa1Result = {
+              providerName: status.poa1Provider || 'Unknown',
+              documentDate: status.poa1Date || 'Not extracted'
+            };
+          }
+          
+          // Process POA2 if needed
+          if (needsPoa2Processing) {
+            console.log('Processing POA2 PDF...');
+            poa2Result = await processPDFDocument(status.poa2URL, 'poa2');
+          } else if (status.poa2ValidUntil) {
+            // Already processed
+            poa2Result = {
+              providerName: status.poa2Provider || 'Unknown',
+              documentDate: status.poa2Date || 'Not extracted'
+            };
+          }
+          
+          // Check for duplicates
+          const isDuplicate = poa1Result?.providerName === poa2Result?.providerName;
+          
+          // Build validation result
+          const validationResult = {
+            isDuplicate: isDuplicate,
+            approved: !isDuplicate && poa1Result && poa2Result,
+            poa1: poa1Result || { providerName: 'Not processed', documentDate: 'Not extracted' },
+            poa2: poa2Result || { providerName: 'Not processed', documentDate: 'Not extracted' },
+            crossValidation: {
+              approved: !isDuplicate && poa1Result && poa2Result,
+              issues: isDuplicate ? ['Same document uploaded twice'] : []
+            }
+          };
+          
+          setValidationResult(validationResult);
+          
+          // Save dates if validation successful
+          if (validationResult.approved) {
+            await savePoaDates(
+              poa1Result.documentDate,
+              poa2Result.documentDate
+            );
+            
+            // Auto-proceed after 3 seconds
+            setTimeout(() => proceedToNext(), 3000);
+          }
+          
+        } catch (error) {
+          console.error('Error processing PDFs:', error);
+          setError('Failed to process documents. Please try again.');
+        } finally {
+          setProcessingPDFs(false);
+        }
+        
+      } else {
+        // POAs already processed or not needed
+        console.log('POAs already processed or not part of this verification');
+        
+        // Build validation result from existing data
+        const validationResult = {
+          isDuplicate: false,
+          approved: status.poa1ValidUntil && status.poa2ValidUntil,
+          poa1: {
+            providerName: status.poa1Provider || 'Unknown',
+            documentDate: status.poa1Date || 'Not extracted',
+            validUntil: status.poa1ValidUntil
+          },
+          poa2: {
+            providerName: status.poa2Provider || 'Unknown',
+            documentDate: status.poa2Date || 'Not extracted',
+            validUntil: status.poa2ValidUntil
+          },
+          crossValidation: {
+            approved: status.poa1ValidUntil && status.poa2ValidUntil,
+            issues: []
+          }
+        };
+        
+        setValidationResult(validationResult);
+        
+        if (validationResult.approved) {
+          setTimeout(() => proceedToNext(), 3000);
+        }
       }
       
     } catch (err) {
@@ -231,23 +349,25 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     } finally {
       setLoading(false);
     }
-  }, [driverEmail, proceedToNext, savePoaDates]);
+  }, [driverEmail, proceedToNext, savePoaDates, processPDFDocument]);
 
   useEffect(() => {
     checkPoaValidationResults();
   }, [checkPoaValidationResults]);
 
   // Loading state
-  if (loading) {
+  if (loading || processingPDFs) {
     return (
       <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
         <div className="text-center">
           <Loader className="h-12 w-12 text-purple-600 animate-spin mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Checking Address Validation
+            {processingPDFs ? 'Processing Documents' : 'Checking Address Validation'}
           </h2>
           <p className="text-gray-600">
-            Retrieving your validation results...
+            {processingPDFs 
+              ? 'Converting and analyzing your documents...' 
+              : 'Retrieving your validation results...'}
           </p>
         </div>
       </div>
@@ -295,7 +415,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     );
   }
 
-  // Results display
+  // Results display (unchanged)
   const isDuplicate = validationResult?.isDuplicate;
   const isApproved = validationResult?.crossValidation?.approved;
   const poa1 = validationResult?.poa1 || {};
@@ -354,9 +474,11 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
                   <p className="text-sm text-gray-600">
                     {poa1.providerName} - {poa1.documentDate}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    Valid until: {poa1.validUntil}
-                  </p>
+                  {poa1.validUntil && (
+                    <p className="text-xs text-gray-500">
+                      Valid until: {poa1.validUntil}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -369,9 +491,11 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
                   <p className="text-sm text-gray-600">
                     {poa2.providerName} - {poa2.documentDate}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    Valid until: {poa2.validUntil}
-                  </p>
+                  {poa2.validUntil && (
+                    <p className="text-xs text-gray-500">
+                      Valid until: {poa2.validUntil}
+                    </p>
+                  )}
                 </div>
               </div>
             </>
