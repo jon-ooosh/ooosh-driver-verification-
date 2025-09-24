@@ -484,11 +484,15 @@ useEffect(() => {
   }
 };
       
-  const handleInsuranceComplete = async (insuranceFormData) => {
+  // REPLACE the handleInsuranceComplete function in App.js (starting around line 625)
+// This is the ONLY change needed - everything else stays the same
+
+const handleInsuranceComplete = async (insuranceFormData) => {
   console.log('Insurance questionnaire completed:', insuranceFormData);
   setLoading(true);
   
   try {
+    // Save insurance data to Monday.com
     const response = await fetch('/.netlify/functions/monday-integration', {
       method: 'POST',
       headers: {
@@ -516,36 +520,61 @@ useEffect(() => {
       console.error('Failed to save insurance data to Monday.com Board A');
     }
     
-    // NEW CODE STARTS HERE - Check what documents are valid
-    const statusResponse = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+    // UPDATED: Use centralized router instead of local logic
+    console.log('🚀 Calling centralized router after insurance completion');
     
-    if (statusResponse.ok) {
-      const driverData = await statusResponse.json();
-      console.log('Driver status after insurance:', driverData);
+    const routerResponse = await fetch('/.netlify/functions/get-next-step', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: driverEmail,
+        currentStep: 'insurance-complete'
+      })
+    });
+    
+    if (routerResponse.ok) {
+      const routerData = await routerResponse.json();
+      console.log('✅ Router response:', routerData);
       
-      // Check if all documents are valid
-      const allValid = 
-        driverData.documents?.license?.valid &&
-        driverData.documents?.poa1?.valid &&
-        driverData.documents?.poa2?.valid &&
-        driverData.documents?.dvlaCheck?.valid;
+      const nextStep = routerData.nextStep;
+      const reason = routerData.reason;
       
-      if (allValid) {
-        console.log('✅ All documents valid - routing to signature');
-        setCurrentStep('complete'); // Change to 'signature' when you build that page
-      } else {
-        console.log('📄 Documents need verification - routing to upload');
-        setCurrentStep('document-upload');
+      console.log(`🚦 Insurance routing to: ${nextStep} (${reason})`);
+      
+      // Map router steps to App.js steps
+      switch(nextStep) {
+        case 'full-idenfy':
+        case 'selective-idenfy':
+          setCurrentStep('document-upload');
+          break;
+        case 'dvla-check':
+          // Navigate to DVLA processing page with URL params
+          window.location.href = `/?step=dvla-processing&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+          break;
+        case 'poa-validation':
+          window.location.href = `/?step=poa-validation&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+          break;
+        case 'passport-upload':
+          window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+          break;
+        case 'signature':
+          setCurrentStep('complete'); // Change to 'signature' when SignaturePage is built
+          break;
+        default:
+          setCurrentStep('document-upload'); // Fallback
       }
     } else {
-      setCurrentStep('document-upload'); // Default if can't check status
+      console.error('❌ Router call failed, using fallback');
+      setCurrentStep('document-upload'); // Fallback if router fails
     }
         
   } catch (err) {
-    console.error('Error saving insurance data to Monday.com:', err);
+    console.error('Error in insurance completion:', err);
     setCurrentStep('document-upload');  // Default on error
   } finally {
-    setLoading(false);  // Moved to finally block
+    setLoading(false);  // Always clear loading state
   }
 };
 
