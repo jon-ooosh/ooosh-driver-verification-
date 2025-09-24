@@ -1104,22 +1104,45 @@ async function processPoaDocumentsImmediately(email, fullWebhookData) {
     console.log('📋 Found both POA documents - processing for validation...');
     
     // Call document-processor for dual POA validation
-    const validationResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'dual-poa',
-        imageData: poa1Url,  // The function will fetch from URL
-        imageData2: poa2Url,
-        email: email
-      })
-    });
-    
-    if (!validationResponse.ok) {
-      console.error('❌ POA validation service error');
-      throw new Error('Document processor failed');
-    }
-    
+const validationResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    action: 'dual-poa',
+    imageData: poa1Url,  // The function will fetch from URL
+    imageData2: poa2Url,
+    email: email
+  })
+});
+
+if (!validationResponse.ok) {
+  console.error('❌ POA validation service error');
+  throw new Error('Document processor failed');
+}
+
+const validationResult = await validationResponse.json();
+
+// Check if PDFs were detected and deferred
+if (validationResult.result?.status === 'pending' || 
+    validationResult.error?.includes('PDF')) {
+  console.log('📄 PDFs detected - deferring to client-side processing');
+  
+  // Store URLs for later processing, don't set validity dates
+  await updatePoaValidationResults(email, {
+    poa1URL: poa1Url,
+    poa2URL: poa2Url,
+    poaValidationStatus: 'Pending',
+    poasProcessed: 'No'
+  });
+  
+  return {
+    success: true,
+    poasProcessed: false,
+    deferred: true,
+    reason: 'PDF documents deferred for client processing'
+  };
+}
+   
     const validationResult = await validationResponse.json();
     console.log('✅ POA validation complete:', {
       isDuplicate: validationResult.result?.isDuplicate,
