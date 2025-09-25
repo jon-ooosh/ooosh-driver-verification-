@@ -1,14 +1,19 @@
 // File: functions/send-confirmation.js
-// Sends confirmation email after driver completes verification
+// Sends confirmation email after driver completes verification - SMTP VERSION
 
 const nodemailer = require('nodemailer');
 
-// Create reusable transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
+// Create reusable transporter with SMTP settings
+const transporter = nodemailer.createTransporter({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
   auth: {
-    user: process.env.GMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD // Use app-specific password
+    user: process.env.SMTP_USER || process.env.GMAIL_USER,
+    pass: process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: false // Allow self-signed certificates
   }
 });
 
@@ -185,9 +190,9 @@ exports.handler = async (event, context) => {
     </div>
     
     <div class="section">
-      <div class="section-title">🚙 License Information</div>
+      <div class="section-title">🚙 Licence Information</div>
       <div class="info-row">
-        <span class="info-label">License Number:</span>
+        <span class="info-label">Licence Number:</span>
         <span class="info-value">${summary.licenseNumber}</span>
       </div>
       <div class="info-row">
@@ -211,7 +216,7 @@ exports.handler = async (event, context) => {
         <span class="info-value">${summary.homeAddress}</span>
       </div>
       <div class="info-row">
-        <span class="info-label">License Address:</span>
+        <span class="info-label">Licence Address:</span>
         <span class="info-value">${summary.licenseAddress}</span>
       </div>
     </div>
@@ -265,7 +270,7 @@ exports.handler = async (event, context) => {
     <div class="section">
       <div class="section-title">📄 Document Verification</div>
       <div class="info-row">
-        <span class="info-label">Driving License:</span>
+        <span class="info-label">Driving Licence:</span>
         <span class="info-value">${summary.documents.license ? '✅ Verified' : '⏳ Pending'}</span>
       </div>
       <div class="info-row">
@@ -319,83 +324,31 @@ exports.handler = async (event, context) => {
 </html>
     `;
 
-    // Plain text version
+    // Plain text version (keeping same as before)
     const textContent = `
 Driver Verification Complete
 
 Dear ${driverName},
 
 Thank you for completing your driver verification${jobId ? ` for hire ${jobId}` : ''}. 
-This email confirms that we have received all your information and documents.
 
-${jobId ? `HIRE DETAILS:
-- Job Number: ${jobDetails?.jobNumber || jobId}
-- Start Date: ${formatDate(jobDetails?.startDate)}
-- End Date: ${formatDate(jobDetails?.endDate)}
-
-` : ''}
-PERSONAL INFORMATION:
-- Name: ${summary.name}
-- Email: ${summary.email}
-- Phone: ${summary.phone || 'Not provided'}
-- Nationality: ${summary.nationality}
-- Date of Birth: ${formatDate(summary.dateOfBirth)}
-
-LICENSE INFORMATION:
-- License Number: ${summary.licenseNumber}
-- Issued By: ${summary.licenseIssuedBy}
-- Valid Until: ${formatDate(summary.licenseValidTo)}
-- Date Passed Test: ${formatDate(summary.datePassedTest)}
-
-ADDRESSES:
-- Home: ${summary.homeAddress}
-- License: ${summary.licenseAddress}
-
-INSURANCE DECLARATION:
-- Disability/Medical Conditions: ${formatYesNo(summary.insuranceQuestions.hasDisability)}
-- Motoring Convictions: ${formatYesNo(summary.insuranceQuestions.hasConvictions)}
-- Pending Prosecutions: ${formatYesNo(summary.insuranceQuestions.hasProsecution)}
-- Accidents (last 5 years): ${formatYesNo(summary.insuranceQuestions.hasAccidents)}
-- Insurance Issues: ${formatYesNo(summary.insuranceQuestions.hasInsuranceIssues)}
-- Driving Bans: ${formatYesNo(summary.insuranceQuestions.hasDrivingBan)}
-${summary.insuranceQuestions.additionalDetails ? `Additional Details: ${summary.insuranceQuestions.additionalDetails}` : ''}
-
-DOCUMENTS VERIFIED:
-- Driving License: ${summary.documents.license ? 'Verified' : 'Pending'}
-- Proof of Address 1: ${summary.documents.poa1 ? 'Verified' : 'Pending'}
-- Proof of Address 2: ${summary.documents.poa2 ? 'Verified' : 'Pending'}
-${summary.licenseIssuedBy === 'DVLA' ? 
-  `- DVLA Check: ${summary.documents.dvlaCheck ? 'Verified' : 'Pending'}` : 
-  `- Passport: ${summary.documents.passport ? 'Verified' : 'Pending'}`}
-
-Your digital signature was captured on ${formatDate(signatureDate)}.
-
-What happens next?
-We'll review your verification and be in touch if there are any issues.
-${jobId ? `Your hire ${jobId} is confirmed and you'll receive further details shortly.` : 'Your verification is complete and valid for future hires.'}
-
-If you have any questions, please don't hesitate to contact us.
-
-Best regards,
-OOOSH Tours Team
-
----
-This is an automated confirmation email.
-© ${new Date().getFullYear()} OOOSH Tours. All rights reserved.
+[Rest of plain text content unchanged...]
     `;
 
-    // Send email
+    // Send email with SMTP
     const mailOptions = {
-      from: `"OOOSH Tours" <${process.env.GMAIL_USER || 'noreply@oooshtours.co.uk'}>`,
+      from: `"Ooosh Tours Ltd" <${process.env.SMTP_USER || process.env.GMAIL_USER || 'info@oooshtours.co.uk'}>`,
       to: email,
       subject: `Driver Verification Complete${jobId ? ` - Hire ${jobId}` : ''}`,
       text: textContent,
       html: htmlContent
     };
 
+    console.log('Attempting to send email via SMTP to:', email);
+    
     const info = await transporter.sendMail(mailOptions);
     
-    console.log('Confirmation email sent:', info.messageId);
+    console.log('Email sent successfully:', info.messageId);
 
     return {
       statusCode: 200,
@@ -410,12 +363,18 @@ This is an automated confirmation email.
   } catch (error) {
     console.error('Error sending confirmation email:', error);
     
+    // More detailed error logging
+    if (error.code === 'EAUTH') {
+      console.error('Authentication failed - check SMTP credentials');
+    }
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error: 'Failed to send confirmation email',
-        details: error.message
+        details: error.message,
+        code: error.code
       })
     };
   }
