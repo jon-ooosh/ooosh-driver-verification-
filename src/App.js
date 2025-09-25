@@ -8,6 +8,7 @@ import DVLAProcessingPage from './DVLAProcessingPage';
 import POAValidationPage from './POAValidationPage';
 import PassportUploadPage from './PassportUploadPage';
 import ProcessingHub from './ProcessingHub';
+import SignaturePage from './SignaturePage';
 
 const DriverVerificationApp = () => {
   const [jobId, setJobId] = useState('');
@@ -180,6 +181,15 @@ useEffect(() => {
     setDriverEmail(decodeURIComponent(emailParam));
     if (jobParam) setJobId(jobParam);
     setCurrentStep('passport-upload');
+    return; // Stop processing other parameters
+  }
+  
+  // Handle direct navigation to signature page
+  if (stepParam === 'signature' && emailParam) {
+    console.log('🎯 Direct navigation to signature page');
+    setDriverEmail(decodeURIComponent(emailParam));
+    if (jobParam) setJobId(jobParam);
+    setCurrentStep('signature');
     return; // Stop processing other parameters
   }
   
@@ -560,7 +570,7 @@ const handleInsuranceComplete = async (insuranceFormData) => {
           window.location.href = `/?step=passport-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
           break;
         case 'signature':
-          setCurrentStep('complete'); // Change to 'signature' when SignaturePage is built
+          setCurrentStep('signature'); // Now using SignaturePage
           break;
         default:
           setCurrentStep('document-upload'); // Fallback
@@ -2043,6 +2053,7 @@ case 'dvla-processing':
      // REMOVED: case 'dvla-check': return renderDVLACheck();
      
      case 'processing': return renderProcessing();
+     case 'signature': return <SignaturePage driverEmail={driverEmail} jobId={jobId} />;
      case 'complete': return renderComplete();
      case 'rejected': return renderRejected();
      default: return renderLanding();
