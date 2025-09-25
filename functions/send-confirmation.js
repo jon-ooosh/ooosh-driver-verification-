@@ -1,7 +1,8 @@
 // File: functions/send-confirmation.js
 // Sends confirmation email after driver completes verification - SMTP VERSION
 
-const nodemailer = require('nodemailer');
+// const nodemailer = require('nodemailer');  // changed to below line as a test
+const nodemailer = require('../node_modules/nodemailer');
 
 // Create reusable transporter with SMTP settings
 const transporter = nodemailer.createTransporter({
