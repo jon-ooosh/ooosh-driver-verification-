@@ -754,6 +754,7 @@ function formatBoardAColumnValues(data) {
   if (data.dvlaValidUntil) columnValues.date_mktrmjfr = { date: data.dvlaValidUntil };
   if (data.passportValidUntil) columnValues.date_mkvxy5t1 = { date: data.passportValidUntil }; // PASSPORT ADDED
   if (data.licenseNextCheckDue) columnValues.date_mktsbgpy = { date: data.licenseNextCheckDue };
+  if (data.signatureDate) columnValues.date_mkw4apb7 = { date: data.signatureDate }; // SIGNATURE DATE ADDED
 
   // Insurance Questions (Yes/No status columns)
   if (data.hasDisability !== undefined) columnValues.status = { label: data.hasDisability ? 'Yes' : 'No' };
@@ -835,7 +836,8 @@ function parseBoardAData(item) {
     dvlaValidUntil: '',
     passportValidUntil: '',  // PASSPORT ADDED
     licenseNextCheckDue: '',
-    idenfyCheckDate: ''
+    idenfyCheckDate: '',
+    signatureDate: ''
   };
 
   item.column_values.forEach(col => {
@@ -895,6 +897,9 @@ function parseBoardAData(item) {
         break;
       case 'date_mktsbgpy': // License Next Check Due
         driver.licenseNextCheckDue = value?.date || '';
+        break;
+      case 'date_mkw4apb7': // Signature Date
+        driver.signatureDate = value?.date || '';
         break;
       case 'text_mkw34ksx': // POA1 URL
         driver.poa1URL = col.text || '';
