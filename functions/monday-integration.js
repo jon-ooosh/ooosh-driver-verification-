@@ -652,6 +652,8 @@ async function copyAToB(data) {
       driverName: driverA.driverName,
       email: driverA.email,
       phoneNumber: driverA.phoneNumber,
+      phoneCountry: driverA.phoneCountry, 
+      licenseValidFrom: driverA.licenseValidFrom,
       dateOfBirth: driverA.dateOfBirth,
       nationality: driverA.nationality,
       licenseNumber: driverA.licenseNumber,
@@ -865,6 +867,9 @@ function parseBoardAData(item) {
         break;
       case 'text_mktrrv38': // License Number
         driver.licenseNumber = col.text || '';
+        break;
+      case 'date_mktrmdx5': // License Valid From
+        driver.licenseValidFrom = value?.date || '';
         break;
       case 'text_mktrz69': // License Issued By
         driver.licenseIssuedBy = col.text || '';
