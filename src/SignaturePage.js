@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   CheckCircle, AlertCircle, Loader, RefreshCw, 
-  FileText, User, Calendar, Car, Shield, Mail, Check, X
+  FileText, User, Car, Shield, Mail, Check, X
 } from 'lucide-react';
 
 const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
