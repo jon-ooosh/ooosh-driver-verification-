@@ -782,10 +782,11 @@ function formatBoardAColumnValues(data) {
 function formatBoardBColumnValues(driverData) {
   const columnValues = {};
   
-  // Essential fields for Board B (14 fields)
+  // Essential fields for Board B (15 fields)
   if (driverData.driverName) columnValues.text8 = driverData.driverName;
   if (driverData.email) columnValues.email = { email: driverData.email, text: driverData.email };
   if (driverData.phoneNumber) columnValues.text9__1 = driverData.phoneNumber;
+  if (driverData.phoneCountry) columnValues.text_mktywe58 = driverData.phoneCountry; 
   if (driverData.dateOfBirth) columnValues.date45 = { date: driverData.dateOfBirth };
   if (driverData.nationality) columnValues.text_mktqjbpm = driverData.nationality;
   if (driverData.licenseNumber) columnValues.text6 = driverData.licenseNumber;
