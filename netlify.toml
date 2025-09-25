@@ -27,5 +27,3 @@
 # Function configuration
 [functions]
   directory = "functions"
-  node_bundler = "esbuild"
-  included_files = ["node_modules/**"]
