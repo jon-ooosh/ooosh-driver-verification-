@@ -383,11 +383,11 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
 
         {driverData && (
           <>
-            {/* Personal Information */}
+            {/* Your details*/}
             <div className="mb-6 bg-gray-50 rounded-lg p-4">
               <div className="flex items-center mb-3">
                 <User className="h-5 w-5 text-purple-600 mr-2" />
-                <h3 className="text-lg font-semibold">Personal Information</h3>
+                <h3 className="text-lg font-semibold">Your details</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div>
