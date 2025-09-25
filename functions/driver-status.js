@@ -118,6 +118,10 @@ async function getDriverStatusFromBoardA(email) {
       name: driver.driverName || null,
       phoneNumber: driver.phoneNumber || null,
       phoneCountry: driver.phoneCountry || null,
+      dateOfBirth: driver.dateOfBirth || null, 
+      licenseNumber: driver.licenseNumber || null, 
+      homeAddress: driver.homeAddress || null, 
+      licenseAddress: driver.licenseAddress || null,   
       licenseIssuedBy: driver.licenseIssuedBy || null, // CRITICAL FOR UK DETECTION
       nationality: driver.nationality || null,
       documents: documentStatus.documents,
