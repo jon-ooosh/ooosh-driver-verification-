@@ -143,7 +143,7 @@ exports.handler = async (event, context) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'sendConfirmation',
+        action: 'send-confirmation',
         email: email,
         subject: `Driver Verification Complete${jobId ? ` - Hire ${jobId}` : ''}`,
         htmlBody: htmlContent,
