@@ -1,22 +1,7 @@
 // File: functions/send-confirmation.js
-// Sends confirmation email after driver completes verification - SMTP VERSION
+// Sends confirmation email using Google Apps Script (same as verification emails)
 
-// const nodemailer = require('nodemailer');  // changed to below line as a test
-const nodemailer = require('../node_modules/nodemailer');
-
-// Create reusable transporter with SMTP settings
-const transporter = nodemailer.createTransporter({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || process.env.GMAIL_USER,
-    pass: process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false // Allow self-signed certificates
-  }
-});
+const fetch = require('node-fetch');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -63,319 +48,136 @@ exports.handler = async (event, context) => {
       });
     };
 
-    // Build the HTML email
+    // Build a simple HTML summary
     const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-      border-radius: 10px 10px 0 0;
-      text-align: center;
-    }
-    .content {
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 0 0 10px 10px;
-      padding: 30px;
-    }
-    .section {
-      margin-bottom: 25px;
-      padding: 15px;
-      background: #f8f9fa;
-      border-radius: 8px;
-    }
-    .section-title {
-      font-weight: bold;
-      color: #667eea;
-      margin-bottom: 10px;
-      font-size: 16px;
-      border-bottom: 2px solid #667eea;
-      padding-bottom: 5px;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 5px 0;
-      border-bottom: 1px solid #e0e0e0;
-    }
-    .info-label {
-      color: #666;
-    }
-    .info-value {
-      font-weight: 500;
-    }
-    .yes { color: #f97316; font-weight: bold; }
-    .no { color: #22c55e; font-weight: bold; }
-    .footer {
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 2px solid #e0e0e0;
-      text-align: center;
-      color: #666;
-      font-size: 12px;
-    }
-    .success-badge {
-      background: #22c55e;
-      color: white;
-      padding: 5px 15px;
-      border-radius: 20px;
-      display: inline-block;
-      margin: 10px 0;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>🚗 Driver Verification Complete</h1>
-    <p class="success-badge">✓ Successfully Verified</p>
-  </div>
-  
-  <div class="content">
-    <p>Dear ${driverName},</p>
-    
-    <p>Thank you for completing your driver verification${jobId ? ` for hire ${jobId}` : ''}. 
-    This email confirms that we have received all your information and documents.</p>
-    
-    ${jobDetails ? `
-    <div class="section">
-      <div class="section-title">📋 Hire Details</div>
-      <div class="info-row">
-        <span class="info-label">Job Number:</span>
-        <span class="info-value">${jobDetails.jobNumber}</span>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #667eea;">Driver Verification Complete</h2>
+        
+        <p>Dear ${driverName},</p>
+        
+        <p>Thank you for completing your driver verification${jobId ? ` for hire ${jobId}` : ''}.</p>
+        
+        ${jobDetails ? `
+        <h3>Hire Details</h3>
+        <ul>
+          <li>Job Number: ${jobDetails.jobNumber}</li>
+          <li>Start Date: ${formatDate(jobDetails.startDate)}</li>
+          <li>End Date: ${formatDate(jobDetails.endDate)}</li>
+        </ul>
+        ` : ''}
+        
+        <h3>Your Information</h3>
+        <ul>
+          <li>Name: ${summary.name}</li>
+          <li>Email: ${summary.email}</li>
+          <li>Phone: ${summary.phone || 'Not provided'}</li>
+          <li>Nationality: ${summary.nationality}</li>
+          <li>Date of Birth: ${formatDate(summary.dateOfBirth)}</li>
+        </ul>
+        
+        <h3>License Information</h3>
+        <ul>
+          <li>Licence Number: ${summary.licenseNumber}</li>
+          <li>Issued By: ${summary.licenseIssuedBy}</li>
+          <li>Valid Until: ${formatDate(summary.licenseValidTo)}</li>
+          <li>Date Passed Test: ${formatDate(summary.datePassedTest)}</li>
+        </ul>
+        
+        <h3>Addresses</h3>
+        <ul>
+          <li>Home Address: ${summary.homeAddress}</li>
+          <li>Licence Address: ${summary.licenseAddress}</li>
+        </ul>
+        
+        <h3>Insurance Declaration</h3>
+        <ul>
+          <li>Disability/Medical Conditions: <strong>${formatYesNo(summary.insuranceQuestions.hasDisability)}</strong></li>
+          <li>Motoring Convictions: <strong>${formatYesNo(summary.insuranceQuestions.hasConvictions)}</strong></li>
+          <li>Pending Prosecutions: <strong>${formatYesNo(summary.insuranceQuestions.hasProsecution)}</strong></li>
+          <li>Accidents (last 5 years): <strong>${formatYesNo(summary.insuranceQuestions.hasAccidents)}</strong></li>
+          <li>Insurance Issues: <strong>${formatYesNo(summary.insuranceQuestions.hasInsuranceIssues)}</strong></li>
+          <li>Driving Bans: <strong>${formatYesNo(summary.insuranceQuestions.hasDrivingBan)}</strong></li>
+        </ul>
+        ${summary.insuranceQuestions.additionalDetails ? `
+        <p><strong>Additional Details:</strong> ${summary.insuranceQuestions.additionalDetails}</p>
+        ` : ''}
+        
+        <h3>Documents Verified</h3>
+        <ul>
+          <li>Driving Licence: ${summary.documents.license ? '✅ Verified' : '⏳ Pending'}</li>
+          <li>Proof of Address 1: ${summary.documents.poa1 ? '✅ Verified' : '⏳ Pending'}</li>
+          <li>Proof of Address 2: ${summary.documents.poa2 ? '✅ Verified' : '⏳ Pending'}</li>
+          ${summary.licenseIssuedBy === 'DVLA' ? 
+            `<li>DVLA Check: ${summary.documents.dvlaCheck ? '✅ Verified' : '⏳ Pending'}</li>` : 
+            `<li>Passport: ${summary.documents.passport ? '✅ Verified' : '⏳ Pending'}</li>`
+          }
+        </ul>
+        
+        <p>Your digital signature was captured on <strong>${formatDate(signatureDate)}</strong></p>
+        
+        <p>If you have any questions, please don't hesitate to contact us.</p>
+        
+        <p>Thanks,<br>
+        <strong>Ooosh Tours</strong></p>
+        
+        <hr style="margin-top: 30px;">
+        <p style="font-size: 12px; color: #666;">
+          This is an automated confirmation email. 
+          <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf">View Terms & Conditions</a>
+        </p>
       </div>
-      <div class="info-row">
-        <span class="info-label">Start Date:</span>
-        <span class="info-value">${formatDate(jobDetails.startDate)}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">End Date:</span>
-        <span class="info-value">${formatDate(jobDetails.endDate)}</span>
-      </div>
-    </div>
-    ` : ''}
-    
-    <div class="section">
-      <div class="section-title">👤 Personal Information</div>
-      <div class="info-row">
-        <span class="info-label">Name:</span>
-        <span class="info-value">${summary.name}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Email:</span>
-        <span class="info-value">${summary.email}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Phone:</span>
-        <span class="info-value">${summary.phone || 'Not provided'}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Nationality:</span>
-        <span class="info-value">${summary.nationality}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Date of Birth:</span>
-        <span class="info-value">${formatDate(summary.dateOfBirth)}</span>
-      </div>
-    </div>
-    
-    <div class="section">
-      <div class="section-title">🚙 Licence Information</div>
-      <div class="info-row">
-        <span class="info-label">Licence Number:</span>
-        <span class="info-value">${summary.licenseNumber}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Issued By:</span>
-        <span class="info-value">${summary.licenseIssuedBy}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Valid Until:</span>
-        <span class="info-value">${formatDate(summary.licenseValidTo)}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Date Passed Test:</span>
-        <span class="info-value">${formatDate(summary.datePassedTest)}</span>
-      </div>
-    </div>
-    
-    <div class="section">
-      <div class="section-title">📍 Addresses</div>
-      <div class="info-row">
-        <span class="info-label">Home Address:</span>
-        <span class="info-value">${summary.homeAddress}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Licence Address:</span>
-        <span class="info-value">${summary.licenseAddress}</span>
-      </div>
-    </div>
-    
-    <div class="section">
-      <div class="section-title">🛡️ Insurance Declaration</div>
-      <div class="info-row">
-        <span class="info-label">Disability/Medical Conditions:</span>
-        <span class="${formatYesNo(summary.insuranceQuestions.hasDisability) === 'Yes' ? 'yes' : 'no'}">
-          ${formatYesNo(summary.insuranceQuestions.hasDisability)}
-        </span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Motoring Convictions:</span>
-        <span class="${formatYesNo(summary.insuranceQuestions.hasConvictions) === 'Yes' ? 'yes' : 'no'}">
-          ${formatYesNo(summary.insuranceQuestions.hasConvictions)}
-        </span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Pending Prosecutions:</span>
-        <span class="${formatYesNo(summary.insuranceQuestions.hasProsecution) === 'Yes' ? 'yes' : 'no'}">
-          ${formatYesNo(summary.insuranceQuestions.hasProsecution)}
-        </span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Accidents (last 5 years):</span>
-        <span class="${formatYesNo(summary.insuranceQuestions.hasAccidents) === 'Yes' ? 'yes' : 'no'}">
-          ${formatYesNo(summary.insuranceQuestions.hasAccidents)}
-        </span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Insurance Issues:</span>
-        <span class="${formatYesNo(summary.insuranceQuestions.hasInsuranceIssues) === 'Yes' ? 'yes' : 'no'}">
-          ${formatYesNo(summary.insuranceQuestions.hasInsuranceIssues)}
-        </span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Driving Bans:</span>
-        <span class="${formatYesNo(summary.insuranceQuestions.hasDrivingBan) === 'Yes' ? 'yes' : 'no'}">
-          ${formatYesNo(summary.insuranceQuestions.hasDrivingBan)}
-        </span>
-      </div>
-      ${summary.insuranceQuestions.additionalDetails ? `
-      <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 5px;">
-        <strong>Additional Details:</strong><br/>
-        ${summary.insuranceQuestions.additionalDetails}
-      </div>
-      ` : ''}
-    </div>
-    
-    <div class="section">
-      <div class="section-title">📄 Document Verification</div>
-      <div class="info-row">
-        <span class="info-label">Driving Licence:</span>
-        <span class="info-value">${summary.documents.license ? '✅ Verified' : '⏳ Pending'}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Proof of Address 1:</span>
-        <span class="info-value">${summary.documents.poa1 ? '✅ Verified' : '⏳ Pending'}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">Proof of Address 2:</span>
-        <span class="info-value">${summary.documents.poa2 ? '✅ Verified' : '⏳ Pending'}</span>
-      </div>
-      ${summary.licenseIssuedBy === 'DVLA' ? `
-      <div class="info-row">
-        <span class="info-label">DVLA Check:</span>
-        <span class="info-value">${summary.documents.dvlaCheck ? '✅ Verified' : '⏳ Pending'}</span>
-      </div>
-      ` : `
-      <div class="info-row">
-        <span class="info-label">Passport:</span>
-        <span class="info-value">${summary.documents.passport ? '✅ Verified' : '⏳ Pending'}</span>
-      </div>
-      `}
-    </div>
-    
-    <div class="section">
-      <div class="section-title">✍️ Digital Signature</div>
-      <p>Your digital signature was captured and saved on <strong>${formatDate(signatureDate)}</strong></p>
-    </div>
-    
-    <p style="margin-top: 20px;">
-      <strong>What happens next?</strong><br/>
-      We'll review your verification and be in touch if there are any issues. 
-      ${jobId ? `Your hire ${jobId} is confirmed and you'll receive further details shortly.` : 'Your verification is complete and valid for future hires.'}
-    </p>
-    
-    <p>If you have any questions, please don't hesitate to contact us.</p>
-    
-    <p>Best regards,<br/>
-    <strong>OOOSH Tours Team</strong></p>
-  </div>
-  
-  <div class="footer">
-    <p>This is an automated confirmation email. Please do not reply directly to this message.</p>
-    <p>© ${new Date().getFullYear()} OOOSH Tours. All rights reserved.</p>
-    <p>
-      <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" style="color: #667eea;">
-        View Terms & Conditions
-      </a>
-    </p>
-  </div>
-</body>
-</html>
     `;
 
-    // Plain text version (keeping same as before)
-    const textContent = `
-Driver Verification Complete
-
-Dear ${driverName},
-
-Thank you for completing your driver verification${jobId ? ` for hire ${jobId}` : ''}. 
-
-[Rest of plain text content unchanged...]
-    `;
-
-    // Send email with SMTP
-    const mailOptions = {
-      from: `"Ooosh Tours Ltd" <${process.env.SMTP_USER || process.env.GMAIL_USER || 'info@oooshtours.co.uk'}>`,
-      to: email,
-      subject: `Driver Verification Complete${jobId ? ` - Hire ${jobId}` : ''}`,
-      text: textContent,
-      html: htmlContent
-    };
-
-    console.log('Attempting to send email via SMTP to:', email);
+    // Call your Google Apps Script to send the email
+    const scriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
     
-    const info = await transporter.sendMail(mailOptions);
+    if (!scriptUrl) {
+      throw new Error('Google Apps Script URL not configured');
+    }
+
+    console.log('Sending confirmation email via Google Apps Script');
     
-    console.log('Email sent successfully:', info.messageId);
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'sendConfirmation',
+        email: email,
+        subject: `Driver Verification Complete${jobId ? ` - Hire ${jobId}` : ''}`,
+        htmlBody: htmlContent,
+        fromEmail: 'info@oooshtours.co.uk',
+        fromName: 'OOOSH Tours'
+      })
+    });
+
+    const result = await response.text();
+    console.log('Google Apps Script response:', result);
+
+    if (!response.ok) {
+      throw new Error(`Failed to send email via Google Apps Script: ${result}`);
+    }
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        messageId: info.messageId,
-        message: 'Confirmation email sent successfully'
+        message: 'Confirmation email sent successfully via Google Apps Script',
+        recipient: email
       })
     };
 
   } catch (error) {
     console.error('Error sending confirmation email:', error);
     
-    // More detailed error logging
-    if (error.code === 'EAUTH') {
-      console.error('Authentication failed - check SMTP credentials');
-    }
-    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         error: 'Failed to send confirmation email',
-        details: error.message,
-        code: error.code
+        details: error.message
       })
     };
   }
