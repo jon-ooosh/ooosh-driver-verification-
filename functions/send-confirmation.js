@@ -40,33 +40,36 @@ exports.handler = async (event, context) => {
 
     // Format date nicely
     const formatDate = (dateString) => {
-      if (!dateString) return 'Not set';
-      return new Date(dateString).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
+      if (!dateString || dateString === 'Invalid Date') return 'Not set';
+      try {
+        return new Date(dateString).toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+      } catch {
+        return 'Not set';
+      }
     };
 
-    // Build a simple HTML summary
+    // Build updated HTML email
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #667eea;">Driver Verification Complete</h2>
-        
         <p>Dear ${driverName},</p>
         
-        <p>Thank you for completing your driver verification${jobId ? ` for hire ${jobId}` : ''}.</p>
+        <p>Many thanks for completing your hire form for job ${jobId || '[Job ID]'}, which starts ${jobDetails ? formatDate(jobDetails.startDate) : '[Start Date]'}.</p>
         
-        ${jobDetails ? `
-        <h3>Hire Details</h3>
-        <ul>
-          <li>Job Number: ${jobDetails.jobNumber}</li>
-          <li>Start Date: ${formatDate(jobDetails.startDate)}</li>
-          <li>End Date: ${formatDate(jobDetails.endDate)}</li>
-        </ul>
-        ` : ''}
+        <p>Subject to any additional checks that may be required, you will be emailed a completed hire form once the hire has started and the vehicle booked out.</p>
         
-        <h3>Your Information</h3>
+        <p style="background-color: #fffbeb; padding: 15px; border-left: 4px solid #fbbf24; margin: 20px 0;">
+          <strong>It is important to note that until you have received that confirmation you are NOT insured and you must NOT drive the vehicle.</strong>
+        </p>
+        
+        <p>Please retain this email for your reference - a copy of some of your answers are recorded below for your reference. If you notice anything incorrect with your entered answers please let us know asap.</p>
+        
+        <p>In the meantime, please also review our driver T&Cs <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" style="color: #667eea;">here</a>.</p>
+        
+        <h3>Your details</h3>
         <ul>
           <li>Name: ${summary.name}</li>
           <li>Email: ${summary.email}</li>
@@ -75,7 +78,7 @@ exports.handler = async (event, context) => {
           <li>Date of Birth: ${formatDate(summary.dateOfBirth)}</li>
         </ul>
         
-        <h3>License Information</h3>
+        <h3>Licence details</h3>
         <ul>
           <li>Licence Number: ${summary.licenseNumber}</li>
           <li>Issued By: ${summary.licenseIssuedBy}</li>
@@ -89,7 +92,7 @@ exports.handler = async (event, context) => {
           <li>Licence Address: ${summary.licenseAddress}</li>
         </ul>
         
-        <h3>Insurance Declaration</h3>
+        <h3>Insurance declaration</h3>
         <ul>
           <li>Disability/Medical Conditions: <strong>${formatYesNo(summary.insuranceQuestions.hasDisability)}</strong></li>
           <li>Motoring Convictions: <strong>${formatYesNo(summary.insuranceQuestions.hasConvictions)}</strong></li>
@@ -99,7 +102,7 @@ exports.handler = async (event, context) => {
           <li>Driving Bans: <strong>${formatYesNo(summary.insuranceQuestions.hasDrivingBan)}</strong></li>
         </ul>
         ${summary.insuranceQuestions.additionalDetails ? `
-        <p><strong>Additional Details:</strong> ${summary.insuranceQuestions.additionalDetails}</p>
+        <p><strong>Additional details:</strong> ${summary.insuranceQuestions.additionalDetails}</p>
         ` : ''}
         
         <h3>Documents Verified</h3>
@@ -119,12 +122,6 @@ exports.handler = async (event, context) => {
         
         <p>Thanks,<br>
         <strong>Ooosh Tours</strong></p>
-        
-        <hr style="margin-top: 30px;">
-        <p style="font-size: 12px; color: #666;">
-          This is an automated confirmation email. 
-          <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf">View Terms & Conditions</a>
-        </p>
       </div>
     `;
 
@@ -143,12 +140,12 @@ exports.handler = async (event, context) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        action: 'send-confirmation',
+        action: 'send-confirmation',  // Using hyphenated format
         email: email,
-        subject: `Driver Verification Complete${jobId ? ` - Hire ${jobId}` : ''}`,
+        subject: `Hire form completed - Job ${jobId || ''}`,
         htmlBody: htmlContent,
         fromEmail: 'info@oooshtours.co.uk',
-        fromName: 'OOOSH Tours'
+        fromName: 'Ooosh Tours'
       })
     });
 
