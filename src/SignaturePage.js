@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   CheckCircle, AlertCircle, Loader, RefreshCw, 
-  FileText, User, Car, Shield, Mail, Check, X
+  FileText, User, Shield, Mail, Check, X
 } from 'lucide-react';
 
 const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
@@ -260,7 +260,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
       dateOfBirth: driverData.dateOfBirth || 'Not provided',
       licenseNumber: driverData.licenseNumber || 'Not provided',
       licenseIssuedBy: driverData.licenseIssuedBy || 'Not provided',
-      licenseValidTo: driverData.licenseValidTo || 'Not provided',
+      licenseValidTo: driverData.documents?.license?.expiryDate || driverData.licenseValidTo || 'Not provided',
       datePassedTest: driverData.datePassedTest || driverData.insuranceData?.datePassedTest || 'Not provided',
       homeAddress: driverData.homeAddress || 'Not provided',
       licenseAddress: driverData.licenseAddress || 'Not provided',
@@ -377,7 +377,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
         {/* Header */}
         <div className="text-center mb-6 border-b pb-4">
           <Shield className="h-12 w-12 text-purple-600 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900">Verification Summary & Signature</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Summary and declaration</h1>
           <p className="text-gray-600 mt-2">Please review your information and sign to confirm</p>
         </div>
 
@@ -413,7 +413,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
                   <span className="ml-2 font-medium">{formatDate(driverData.dateOfBirth)}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">License Number:</span>
+                  <span className="text-gray-600">Licence Number:</span>
                   <span className="ml-2 font-medium">{driverData.licenseNumber || 'Not provided'}</span>
                 </div>
                 <div className="md:col-span-2">
@@ -421,7 +421,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
                   <span className="ml-2 font-medium">{driverData.homeAddress || 'Not provided'}</span>
                 </div>
                 <div className="md:col-span-2">
-                  <span className="text-gray-600">License Address:</span>
+                  <span className="text-gray-600">Licence Address:</span>
                   <span className="ml-2 font-medium">{driverData.licenseAddress || 'Not provided'}</span>
                 </div>
               </div>
@@ -431,7 +431,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
             <div className="mb-6 bg-gray-50 rounded-lg p-4">
               <div className="flex items-center mb-3">
                 <Shield className="h-5 w-5 text-purple-600 mr-2" />
-                <h3 className="text-lg font-semibold">Insurance Declaration</h3>
+                <h3 className="text-lg font-semibold">Insurance declarations</h3>
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -487,11 +487,11 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
             <div className="mb-6 bg-gray-50 rounded-lg p-4">
               <div className="flex items-center mb-3">
                 <FileText className="h-5 w-5 text-purple-600 mr-2" />
-                <h3 className="text-lg font-semibold">Document Verification Status</h3>
+                <h3 className="text-lg font-semibold">Documents</h3>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-700">Driving License</span>
+                  <span className="text-gray-700">Driving Licence</span>
                   {driverData.documents?.license?.valid ? (
                     <span className="flex items-center text-green-600">
                       <Check className="h-4 w-4 mr-1" />
@@ -571,34 +571,19 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
               </div>
             </div>
 
-            {/* Job Details */}
-            {jobDetails && (
-              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center mb-3">
-                  <Car className="h-5 w-5 text-blue-600 mr-2" />
-                  <h3 className="text-lg font-semibold">Hire Details</h3>
-                </div>
-                <div className="text-sm text-gray-700">
-                  <p>Job Number: <strong>{jobDetails.jobNumber}</strong></p>
-                  <p>Start Date: <strong>{formatDate(jobDetails.startDate)}</strong></p>
-                  <p>End Date: <strong>{formatDate(jobDetails.endDate)}</strong></p>
-                </div>
-              </div>
-            )}
-
-            {/* Declaration Text */}
-            <div className="mb-6 bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-2">Declaration</h3>
-              <p className="text-sm text-gray-700">
-                By signing below, I confirm that:
-              </p>
-              <ul className="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1">
-                <li>All information I have provided is true and accurate</li>
-                <li>I have read and agree to the terms and conditions of hire</li>
-                <li>I understand that providing false information may invalidate insurance coverage</li>
-                <li>I am legally entitled to drive in the UK</li>
-              </ul>
-            </div>
+          {/* Declaration Text */}
+<div className="mb-6 bg-gray-50 rounded-lg p-4">
+  <h3 className="text-lg font-semibold mb-2">Declaration</h3>
+  <p className="text-sm text-gray-700">
+    <strong>By my signature, I acknowledge and confirm that:</strong>
+  </p>
+  <ul className="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1">
+    <li>All the information I have provided is true and accurate</li>
+    <li>I have read and agree to the <a href="https://www.oooshtours.co.uk/files/Ooosh_vehicle_hire_terms.pdf" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800 underline">terms and conditions of hire</a></li>
+    <li>If I provide false information this insurance may be invalidated</li>
+    <li>I am legally entitled to drive in the UK</li>
+  </ul>
+</div>
 
             {/* Signature Canvas */}
             <div className="mb-6">
