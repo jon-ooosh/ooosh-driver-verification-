@@ -232,16 +232,19 @@ function analyzeDocumentStatus(driver) {
     };
   }
 
-  // Check License Last Checked Status
-  if (driver.licenseNextCheckDue) {
-    const licenseCheckDue = new Date(driver.licenseNextCheckDue);
-    documents.licenseCheck = {
-      valid: licenseCheckDue > today,
-      nextCheckDue: driver.licenseNextCheckDue,
-      status: licenseCheckDue > today ? 'valid' : 'due',
-      type: 'License Verification'
-    };
-  }
+ // Check License last checked Status
+if (driver.licenseNextCheckDue && driver.licenseValidTo) {
+  const licenseExpiry = new Date(driver.licenseValidTo);
+  const licenseCheckDue = new Date(driver.licenseNextCheckDue);
+  documents.license = {
+    valid: licenseExpiry > today && licenseCheckDue > today,  // Both must be valid
+    expiryDate: driver.licenseValidTo,
+    type: 'Driving License',
+    status: licenseExpiry > today && licenseCheckDue > today ? 'valid' : 'expired'
+  };
+} else {
+  documents.license = { valid: false, status: 'required' };
+}
 
   const overallStatus = determineOverallStatus(documents, driver);
 
