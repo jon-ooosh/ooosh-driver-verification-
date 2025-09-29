@@ -1271,7 +1271,7 @@ const InsuranceQuestionnaire = () => {
           {isReturningDriver ? 'Update insurance questions' : 'Insurance questions'}
         </h2>
         {isReturningDriver && (
-          <p className="text-lg text-orange-600 mt-1">Please complete these questions again for this hire</p>
+          <p className="text-lg text-orange-600 mt-1">Please confirm your previous answers are still correct</p>
         )}
       </div>
 
