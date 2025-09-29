@@ -423,6 +423,29 @@ async function uploadFileBoardA(data) {
 
     console.log(`📊 Using column ID: ${columnId} for ${fileType}`);
 
+    // CLEAR EXISTING FILE FIRST (if any)
+console.log(`🧹 Clearing existing file in column ${columnId}...`);
+const clearMutation = `
+  mutation {
+    change_column_value(
+      item_id: ${driverId},
+      board_id: ${BOARD_A_ID},
+      column_id: "${columnId}",
+      value: "{\\"clear_all\\": true}"
+    ) {
+      id
+    }
+  }
+`;
+
+try {
+  await callMondayAPI(clearMutation);
+  console.log('✅ Column cleared successfully');
+} catch (clearError) {
+  console.warn('⚠️ Could not clear column (might be empty already):', clearError.message);
+  // Continue anyway - the column might already be empty
+}
+    
     // Create FormData for file upload
     const FormData = require('form-data');
     const formData = new FormData();
