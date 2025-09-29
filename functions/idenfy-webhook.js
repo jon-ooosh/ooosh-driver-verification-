@@ -1101,32 +1101,53 @@ async function processPoaDocumentsImmediately(email, fullWebhookData) {
       };
     }
     
-    console.log('📋 Found both POA documents - processing for validation...');
-  
-    const validationResult = await validationResponse.json();
-    console.log('✅ POA validation complete:', {
-      isDuplicate: validationResult.result?.isDuplicate,
-      crossValidationApproved: validationResult.result?.crossValidation?.approved
+   console.log('📋 Found both POA documents - checking if they are PDFs...');
+    
+    // Check if these are PDFs (they usually are from Idenfy Additional Steps)
+    const isPDF1 = poa1Url && (poa1Url.includes('.pdf') || poa1Url.includes('UTILITY_BILL'));
+    const isPDF2 = poa2Url && (poa2Url.includes('.pdf') || poa2Url.includes('POA2'));
+    
+    if (isPDF1 || isPDF2) {
+      console.log('📄 PDF POAs detected - deferring to client-side processing');
+      
+      // Store URLs for later client-side processing but don't set validity dates
+      await updatePoaValidationResults(email, {
+        poa1URL: poa1Url || '',
+        poa2URL: poa2Url || '',
+        poaValidationStatus: 'Pending_PDF_Processing',
+        poaValidationNotes: 'PDF documents require client-side processing',
+        lastUpdated: new Date().toISOString().split('T')[0]
+      });
+      
+      return {
+        success: true,
+        poasProcessed: false,
+        deferred: true,
+        reason: 'PDF documents deferred for client processing'
+      };
+    }
+    
+    // Only continue with OCR if we have non-PDF images
+    console.log('📋 Processing image POA documents for validation...');
+    
+    // Call document-processor for dual POA validation
+    const validationResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'dual-poa',
+        imageData: poa1Url,
+        imageData2: poa2Url,
+        email: email
+      })
     });
+
+    if (!validationResponse.ok) {
+      console.error('❌ POA validation service error');
+      throw new Error('Document processor failed');
+    }
     
-    // Extract validation data
-    const isDuplicate = validationResult.result?.isDuplicate || false;
-    const crossValidationApproved = validationResult.result?.crossValidation?.approved || false;
-    const poa1Data = validationResult.result?.poa1 || {};
-    const poa2Data = validationResult.result?.poa2 || {};
-    
-    // Calculate validity dates (90 days from document date or today)
-    const today = new Date();
-    const calculateValidUntil = (docDate) => {
-      if (docDate) {
-        const date = new Date(docDate);
-        date.setDate(date.getDate() + 90);
-        return date.toISOString().split('T')[0];
-      }
-      const fallback = new Date(today);
-      fallback.setDate(fallback.getDate() + 90);
-      return fallback.toISOString().split('T')[0];
-    };
+    const validationResult = await validationResponse.json();
     
     // Save validation results to Monday
     const updateData = {
