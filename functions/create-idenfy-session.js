@@ -178,7 +178,9 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       case 'poa2':
         // Single POA update
         requestBody.documents = []; // Empty array for no primary document
-        requestBody.additionalSteps = ['UTILITY_BILL']; // Array of strings
+       requestBody.additionalSteps = {
+    'UTILITY_BILL': null  // Object format, not array!
+  };
         requestBody.utilityBillMinCount = 1; // Just 1 POA
         requestBody.skipFaceMatching = true; // No selfie
         break;
@@ -186,9 +188,10 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       case 'poa_both':
   // POA-only re-upload using Additional Steps
   requestBody.documents = []; // No primary documents
-  requestBody.additionalSteps = ['UTILITY_BILL'];
-  requestBody.additionalStepsMinCount = 2; // Need 2 POAs
-  // Don't include skipFaceMatching when using additionalSteps alone
+  requestBody.additionalSteps = {
+    'UTILITY_BILL': null  // Object format, not array!
+  };
+  requestBody.utilityBillMinCount = 2; // Need 2 POAs
   break;
 
       case 'passport_only':
