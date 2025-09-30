@@ -266,7 +266,7 @@ const handleFileUpload = async (fileType, file) => {
             errorMessage += '• Make sure you uploaded the FULL PDF from gov.uk, not a screenshot\n';
           }
           
-          errorMessage += '\n✅ Please generate a fresh DVLA check and upload the complete PDF';
+          errorMessage += '\n Please generate a fresh DVLA check and upload the complete PDF';
           
           setError(errorMessage);
           setLoading(false);
