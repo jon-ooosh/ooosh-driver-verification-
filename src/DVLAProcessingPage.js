@@ -562,7 +562,7 @@ const handleFileUpload = async (fileType, file) => {
     >
         www.viewdrivingrecord.service.gov.uk</a></li>
      <li>Generate a check code</li>
-    <li>Download or save the PDF (click the "Print or save driving summary")</li>
+    <li>Download or save the PDF <b>(click the "Print or save driving summary")</b></li>
     <li>Document must be dated within last 30 days</li>
   </ol>
   <div className="mt-4 pt-4 border-t border-purple-300">
