@@ -241,13 +241,38 @@ const handleFileUpload = async (fileType, file) => {
     if (processingResult.success) {
       console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
 
-      // Check if DVLA validation actually passed
+     // Check if DVLA validation actually passed
       if (fileType === 'dvla' && processingResult.result) {
-        if (!processingResult.result.isValid) {
-          setError('❌ Invalid DVLA document. Please upload a valid DVLA check from gov.uk/view-driving-licence');
+        const dvlaResult = processingResult.result;
+        
+        if (!dvlaResult.isValid) {
+          // Build specific error message based on validation issues
+          let errorMessage = '❌ DVLA document validation failed:\n\n';
+          
+          if (dvlaResult.validationIssues && dvlaResult.validationIssues.length > 0) {
+            dvlaResult.validationIssues.forEach(issue => {
+              if (issue.includes('30 days')) {
+                errorMessage += '📅 Document is too old - must be generated within the last 30 days\n';
+              } else if (issue.includes('check code')) {
+                errorMessage += '🔍 Missing check code - please upload the FULL PDF document, not just a screenshot\n';
+              } else if (issue.includes('header')) {
+                errorMessage += '📋 Missing DVLA header - please upload the complete document\n';
+              } else {
+                errorMessage += `• ${issue}\n`;
+              }
+            });
+          } else {
+            errorMessage += '• Document appears incomplete or invalid\n';
+            errorMessage += '• Make sure you uploaded the FULL PDF from gov.uk, not a screenshot\n';
+          }
+          
+          errorMessage += '\n✅ Please generate a fresh DVLA check and upload the complete PDF';
+          
+          setError(errorMessage);
           setLoading(false);
-          return; // Stop processing
+          return;
         }
+        
         // Clear any previous errors if validation passed
         setError('');
         
@@ -477,12 +502,12 @@ const handleFileUpload = async (fileType, file) => {
   if (currentStep === 'dvla-upload') {
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
-        <div className="text-center mb-6">
-  <img src="https://www.oooshtours.co.uk/images/ooosh-tours-logo.png" 
-    alt="Ooosh Tours Ltd" 
-    className="mx-auto h-12 w-auto mb-4"
-  />
-  <h2 className="text-4xl font-bold text-gray-900">Upload your DVLA check</h2>
+       <div className="text-center mb-6">
+    <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+      <FileText className="h-8 w-8 text-blue-600" />
+    </div>
+    <h2 className="text-4xl font-bold text-gray-900">Upload your DVLA check</h2>
+  </div>me="text-4xl font-bold text-gray-900">Upload your DVLA check</h2>
   </div>
     
 {/* Progress Tracker */}
@@ -529,9 +554,12 @@ const handleFileUpload = async (fileType, file) => {
       <ChevronRight className="h-4 w-4 ml-1" />
     </a>
   </div>
-  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-300 rounded">
-    <p className="text-sm text-yellow-800">
-      ⚠️ <strong>Important:</strong> Upload the full PDF showing the green/orange header and check code, not just the code itself
+ <div className="mt-4 p-5 bg-red-50 border-2 border-red-400 rounded-lg shadow-sm">
+    <p className="text-xl font-bold text-red-900 mb-2">
+      ⚠️ IMPORTANT
+    </p>
+    <p className="text-lg text-red-800 leading-relaxed">
+      Upload the <strong>full PDF document</strong> showing the green/orange header and check code - not just a screenshot of the code itself!
     </p>
   </div>
 </div>
