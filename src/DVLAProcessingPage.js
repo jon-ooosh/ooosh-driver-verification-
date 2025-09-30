@@ -246,25 +246,28 @@ const handleFileUpload = async (fileType, file) => {
         const dvlaResult = processingResult.result;
         
         if (!dvlaResult.isValid) {
-          // Build specific error message based on validation issues
-          let errorMessage = '❌ DVLA document validation failed:\n\n';
+         // Build specific error message
+          const issues = [];
           
           if (dvlaResult.validationIssues && dvlaResult.validationIssues.length > 0) {
             dvlaResult.validationIssues.forEach(issue => {
               if (issue.includes('30 days')) {
-                errorMessage += '📅 Document is too old - must be generated within the last 30 days\n';
+                issues.push('Document is too old - must be generated within the last 30 days');
               } else if (issue.includes('check code')) {
-                errorMessage += '🔍 Missing check code - please upload the FULL PDF document, not just a screenshot\n';
+                issues.push('Missing check code - please upload the FULL PDF document, not just a screenshot');
               } else if (issue.includes('header')) {
-                errorMessage += '📋 Missing DVLA header - please upload the complete document\n';
+                issues.push('Missing DVLA header - please upload the complete document');
               } else {
-                errorMessage += `• ${issue}\n`;
+                issues.push(issue);
               }
             });
           } else {
-            errorMessage += '• Document appears incomplete or invalid\n';
-            errorMessage += '• Make sure you uploaded the FULL PDF from gov.uk, not a screenshot\n';
+            issues.push('Document appears incomplete or invalid');
+            issues.push('Make sure you upload the FULL PDF from gov.uk, not a screenshot');
           }
+          
+          // Set error as object for better rendering
+          setError({ issues });
           
           errorMessage += '\n Please generate a fresh DVLA check and upload the complete PDF';
           
@@ -279,8 +282,33 @@ const handleFileUpload = async (fileType, file) => {
         // IMPORTANT: Save DVLA date after successful validation
         await saveDvlaDate();
       }
-        
-      // Display and validate DVLA results
+        // Upload DVLA file to Monday.com
+        if (fileType === 'dvla' && imageData) {
+          console.log('📤 Uploading DVLA file to Monday.com...');
+          
+          const uploadResponse = await fetch('/.netlify/functions/monday-integration', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'upload-file-board-a',
+              email: driverEmail,
+              fileType: 'dvla',
+              fileData: imageData.split(',')[1], // Remove data URL prefix
+              filename: `dvla_${Date.now()}.png`,
+              contentType: 'image/png'
+            })
+          });
+          
+          const uploadResult = await uploadResponse.json();
+          if (uploadResult.success) {
+            console.log('✅ DVLA file uploaded to Monday.com');
+          } else {
+            console.error('❌ Failed to upload DVLA file:', uploadResult.error);
+          }
+        }
+      }
+
+    // Display and validate DVLA results
       if (fileType === 'dvla' && processingResult.result) {
         const dvlaData = processingResult.result;
         
@@ -689,6 +717,16 @@ const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
 
   return (
     <div className="space-y-4">
+      {loading && (
+        <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Loader className="animate-spin h-5 w-5 text-purple-600 mr-3" />
+            <p className="text-lg font-medium text-purple-900">Processing your DVLA document...</p>
+          </div>
+          <p className="text-sm text-purple-700 mt-2 ml-8">This may take a few seconds</p>
+        </div>
+      )}
+      
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
           dragActive 
@@ -720,12 +758,24 @@ const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
         />
       </div>
 
-      {error && (
+     {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex">
             <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
             <div className="ml-3">
-              <p className="text-base text-red-800">{error}</p>
+              {typeof error === 'string' ? (
+                <p className="text-base text-red-800">{error}</p>
+              ) : (
+                <>
+                  <p className="text-base font-semibold text-red-900 mb-2">DVLA document validation failed:</p>
+                  <ul className="list-disc list-inside space-y-1 text-base text-red-800 mb-3">
+                    {error.issues.map((issue, i) => (
+                      <li key={i}>{issue}</li>
+                    ))}
+                  </ul>
+                  <p className="text-base text-red-900 font-medium">Please generate a fresh DVLA check and upload the complete PDF</p>
+                </>
+              )}
             </div>
           </div>
         </div>
