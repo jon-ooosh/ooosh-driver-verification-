@@ -302,8 +302,7 @@ const handleFileUpload = async (fileType, file) => {
             console.error('❌ Failed to upload DVLA file:', uploadResult.error);
           }
         }
-      }
-
+          
     // Display and validate DVLA results
       if (fileType === 'dvla' && processingResult.result) {
         const dvlaData = processingResult.result;
