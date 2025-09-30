@@ -211,6 +211,22 @@ function calculateNextStep(driverData, currentStep) {
     };
   }
 
+  // 4.5 If currently on DVLA processing page (in-progress state)
+  if (currentStep === 'dvla-processing') {
+    if (analysis.dvlaOrPassport.valid) {
+      // DVLA check has been completed and is valid
+      return {
+        step: 'signature',
+        reason: 'DVLA check complete'
+      };
+    }
+    // Still needs DVLA check - keep them on the page
+    return {
+      step: 'dvla-check',
+      reason: 'DVLA check in progress'
+    };
+  }
+
   // 5. If coming from DVLA check
   if (currentStep === 'dvla-complete') {
     return {
