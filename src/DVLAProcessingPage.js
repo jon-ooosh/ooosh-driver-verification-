@@ -507,8 +507,7 @@ const handleFileUpload = async (fileType, file) => {
       <FileText className="h-8 w-8 text-blue-600" />
     </div>
     <h2 className="text-4xl font-bold text-gray-900">Upload your DVLA check</h2>
-  </div>me="text-4xl font-bold text-gray-900">Upload your DVLA check</h2>
-  </div>
+    </div>
     
 {/* Progress Tracker */}
 <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
