@@ -134,7 +134,9 @@ async function getDriverStatusFromBoardA(email) {
       poa1ValidUntil: driver.poa1ValidUntil || null,
       poa2ValidUntil: driver.poa2ValidUntil || null,
       dvlaValidUntil: driver.dvlaValidUntil || null,
-      passportValidUntil: driver.passportValidUntil || null  // NEW FIELD
+      passportValidUntil: driver.passportValidUntil || null,
+      poa1URL: driver.poa1URL || null,
+      poa2URL: driver.poa2URL || null
     };
 
   } catch (error) {
