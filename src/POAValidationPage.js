@@ -220,10 +220,16 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     }
   }, [driverEmail]);
 
-  const checkPoaValidationResults = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log('🔍 Checking POA validation results for:', driverEmail);
+ const checkPoaValidationResults = useCallback(async () => {
+    const MAX_ATTEMPTS = 20; // 40 seconds total (20 attempts × 2 seconds)
+    let attempts = 0;
+    
+    const pollForResults = async () => {
+      attempts++;
+      
+      try {
+        setLoading(true);
+        console.log(`🔍 Checking POA validation results for: ${driverEmail} (attempt ${attempts}/${MAX_ATTEMPTS})`);
       
       // Fetch driver status
       const statusResponse = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
@@ -343,13 +349,31 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         }
       }
       
-    } catch (err) {
-      console.error('❌ Error checking POA validation:', err);
-      setError(err.message || 'Failed to check POA validation results');
-    } finally {
-      setLoading(false);
-    }
-  }, [driverEmail, proceedToNext, savePoaDates, processPDFDocument]);
+   } catch (err) {
+          console.error('❌ Error checking POA validation:', err);
+          
+          // Retry if webhook might still be processing
+          if (attempts < MAX_ATTEMPTS && err.message.includes('not found')) {
+            console.log(`⏳ Retrying in 2 seconds... (${attempts}/${MAX_ATTEMPTS})`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return pollForResults();
+          }
+          
+          // Max attempts reached - show error with contact option
+          setError(
+            attempts >= MAX_ATTEMPTS 
+              ? 'Validation is taking longer than expected. Please contact support or try again.'
+              : err.message || 'Failed to check POA validation results'
+          );
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      // Start polling
+      await pollForResults();
+      
+    }, [driverEmail, proceedToNext, savePoaDates, processPDFDocument]);
 
   useEffect(() => {
     checkPoaValidationResults();
