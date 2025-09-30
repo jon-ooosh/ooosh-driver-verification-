@@ -268,10 +268,6 @@ const handleFileUpload = async (fileType, file) => {
           
           // Set error as object for better rendering
           setError({ issues });
-          
-          errorMessage += '\n Please generate a fresh DVLA check and upload the complete PDF';
-          
-          setError(errorMessage);
           setLoading(false);
           return;
         }
