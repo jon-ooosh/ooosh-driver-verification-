@@ -247,6 +247,20 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
 
     console.log('✅ Board A updated successfully');
 
+    // Step 3.5 Set license check date immediately to prevent timeout issues
+    await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: {
+          licenseNextCheckDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        }
+      })
+    });
+    console.log('✅ License check date set');
+
     // Step 4: Save documents to Monday.com with actual file upload
     await saveIdenfyDocumentsToMonday(email, fullWebhookData);
     
@@ -1052,6 +1066,26 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
       uploadResults: uploadResults,
       summary: `${successCount}/${uploadResults.length} documents uploaded`
     };
+
+    // Store POA URLs in text fields for client-side processing
+    if (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.additionalStepPdfUrls?.POA2) {
+      console.log('📝 Storing POA URLs in text fields...');
+      
+      await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-driver-board-a',
+          email: email,
+          updates: {
+            poa1URL: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || '',
+            poa2URL: fullWebhookData.additionalStepPdfUrls?.POA2 || ''
+          }
+        })
+      });
+      
+      console.log('✅ POA URLs stored');
+    }
     
   } catch (error) {
     console.error('❌ Error saving documents to Monday:', error);
