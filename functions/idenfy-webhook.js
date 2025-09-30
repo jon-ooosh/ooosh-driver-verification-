@@ -900,10 +900,33 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
   }
 }
 
-// Save Idenfy documents to Monday.com
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📸 Saving Idenfy documents to Monday.com...');
+    
+    // CRITICAL: Store POA URLs FIRST (before slow file uploads)
+    if (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.additionalStepPdfUrls?.POA2) {
+      console.log('📝 Storing POA URLs in text fields FIRST...');
+      
+      try {
+        await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-driver-board-a',
+            email: email,
+            updates: {
+              poa1URL: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || '',
+              poa2URL: fullWebhookData.additionalStepPdfUrls?.POA2 || ''
+            }
+          })
+        });
+        
+        console.log('✅ POA URLs stored successfully BEFORE file uploads');
+      } catch (urlError) {
+        console.error('⚠️ Failed to store URLs (continuing anyway):', urlError.message);
+      }
+    }
     
     // Map all possible document URLs - REMOVED SELFIE/FACE
     const documentMappings = [
@@ -1060,27 +1083,7 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     if (failCount > 0) {
       console.log('Failed uploads:', uploadResults.filter(r => !r.success));
     }
-    
-   // Store POA URLs in text fields for client-side processing BEFORE returning
-    if (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.additionalStepPdfUrls?.POA2) {
-      console.log('📝 Storing POA URLs in text fields...');
-      
-      await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update-driver-board-a',
-          email: email,
-          updates: {
-            poa1URL: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || '',
-            poa2URL: fullWebhookData.additionalStepPdfUrls?.POA2 || ''
-          }
-        })
-      });
-      
-      console.log('✅ POA URLs stored in text fields');
-    }
-    
+       
     return { 
       success: true, 
       uploadResults: uploadResults,
