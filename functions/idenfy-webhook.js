@@ -1061,13 +1061,7 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
       console.log('Failed uploads:', uploadResults.filter(r => !r.success));
     }
     
-    return { 
-      success: true, 
-      uploadResults: uploadResults,
-      summary: `${successCount}/${uploadResults.length} documents uploaded`
-    };
-
-    // Store POA URLs in text fields for client-side processing
+   // Store POA URLs in text fields for client-side processing BEFORE returning
     if (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.additionalStepPdfUrls?.POA2) {
       console.log('📝 Storing POA URLs in text fields...');
       
@@ -1084,8 +1078,14 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
         })
       });
       
-      console.log('✅ POA URLs stored');
+      console.log('✅ POA URLs stored in text fields');
     }
+    
+    return { 
+      success: true, 
+      uploadResults: uploadResults,
+      summary: `${successCount}/${uploadResults.length} documents uploaded`
+    };
     
   } catch (error) {
     console.error('❌ Error saving documents to Monday:', error);
