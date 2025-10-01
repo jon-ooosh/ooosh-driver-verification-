@@ -1425,3 +1425,14 @@ async function processPoaValidation(idenfyData, fullWebhookData) {
     return { success: false, error: error.message };
   }
 }
+// Track webhook processing to prevent duplicates
+async function checkRecentProcessing(scanRef) {
+  // For now, just check if we processed this in the last 5 minutes
+  // In future, could check Monday.com for scanRef history
+  return null; // Allow all processing for now
+}
+
+async function markWebhookProcessing(scanRef) {
+  // Future: Store scanRef in database with timestamp
+  console.log(`📝 Webhook processing marked: ${scanRef}`);
+}
