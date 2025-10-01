@@ -247,7 +247,7 @@ const checkPoaValidationResults = useCallback(async () => {
         
         // Track processing attempts to avoid infinite loops
         const processingAttemptKey = `poa_processing_${driverEmail}`;
-        let processingAttempts = parseInt(sessionStorage.getItem(processingAttemptKey) || '0');
+        let processingAttempts = parseInt(localStorage.getItem(processingAttemptKey) || '0');
         
         // Check if POAs need client-side processing
         const needsPoa1Processing = !status.poa1ValidUntil && status.poa1URL;
@@ -280,7 +280,7 @@ const checkPoaValidationResults = useCallback(async () => {
             
             // Increment attempt counter
             processingAttempts++;
-            sessionStorage.setItem(processingAttemptKey, processingAttempts.toString());
+            localStorage.setItem(processingAttemptKey, processingAttempts.toString());
           
           if (needsPoa1Processing || needsPoa2Processing) {
             console.log('🔄 POAs need client-side processing');
