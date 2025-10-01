@@ -245,10 +245,6 @@ const checkPoaValidationResults = useCallback(async () => {
           poa2URL: status.poa2URL
         });
         
-        // Track processing attempts to avoid infinite loops
-        const processingAttemptKey = `poa_processing_${driverEmail}`;
-        let processingAttempts = parseInt(localStorage.getItem(processingAttemptKey) || '0');
-        
         // Check if POAs need client-side processing
         const needsPoa1Processing = !status.poa1ValidUntil && status.poa1URL;
         const needsPoa2Processing = !status.poa2ValidUntil && status.poa2URL;
@@ -257,34 +253,35 @@ const checkPoaValidationResults = useCallback(async () => {
         if (status.poa1URL || status.poa2URL) {
           console.log('✅ POA URLs found, proceeding with processing');
           
-          // Check if we've already tried processing too many times
-          if (processingAttempts >= 2) {
-            console.log('⚠️ Max processing attempts reached, stopping loop');
-            setValidationResult({
-              isDuplicate: false,
-              approved: false,
-              poa1: { providerName: 'Processing Error', documentDate: 'Max attempts reached' },
-              poa2: { providerName: 'Processing Error', documentDate: 'Max attempts reached' },
-              crossValidation: {
-                approved: false,
-                issues: ['Processing timed out - manual review required']
-              }
-            });
-            setLoading(false);
-            return; // Exit retry loop
-          }
+          // Track processing attempts to avoid infinite loops
+          const processingAttemptKey = `poa_processing_${driverEmail}`;
+          let processingAttempts = parseInt(localStorage.getItem(processingAttemptKey) || '0');
           
           if (needsPoa1Processing || needsPoa2Processing) {
             console.log('🔄 POAs need client-side processing');
+            
+            // Check if we've already tried processing too many times
+            if (processingAttempts >= 2) {
+              console.log('⚠️ Max processing attempts reached, stopping loop');
+              setValidationResult({
+                isDuplicate: false,
+                approved: false,
+                poa1: { providerName: 'Processing Error', documentDate: 'Max attempts reached' },
+                poa2: { providerName: 'Processing Error', documentDate: 'Max attempts reached' },
+                crossValidation: {
+                  approved: false,
+                  issues: ['Processing timed out - manual review required']
+                }
+              });
+              setLoading(false);
+              return; // Exit retry loop
+            }
+            
             setProcessingPDFs(true);
             
             // Increment attempt counter
             processingAttempts++;
             localStorage.setItem(processingAttemptKey, processingAttempts.toString());
-          
-          if (needsPoa1Processing || needsPoa2Processing) {
-            console.log('🔄 POAs need client-side processing');
-            setProcessingPDFs(true);
             
             try {
               let poa1Result, poa2Result;
@@ -328,6 +325,9 @@ const checkPoaValidationResults = useCallback(async () => {
               
               setValidationResult(validationResult);
               setLoading(false);
+              
+              // Clear processing attempts on success
+              localStorage.removeItem(processingAttemptKey);
               
               // Save dates if validation successful
               if (validationResult.approved) {
