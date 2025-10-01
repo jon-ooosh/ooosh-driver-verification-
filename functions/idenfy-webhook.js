@@ -36,9 +36,32 @@ exports.handler = async (event, context) => {
     }
 
     console.log('📨 Webhook body:', event.body.substring(0, 500) + '...');
-    const webhookData = JSON.parse(event.body);
+   const webhookData = JSON.parse(event.body);
 
     const { clientId, scanRef, status, data, platform, final } = webhookData;
+
+    // CRITICAL: Prevent duplicate webhook processing
+    // Check if we've already processed this scanRef recently (within 5 minutes)
+    const processingKey = `webhook_processed_${scanRef}`;
+    const lastProcessed = await checkRecentProcessing(scanRef);
+    
+    if (lastProcessed) {
+      console.log(`⚠️ Duplicate webhook detected for scanRef: ${scanRef}`);
+      console.log(`   Last processed: ${lastProcessed.timestamp}`);
+      console.log(`   Returning success to prevent Idenfy retry loop`);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          message: 'Webhook already processed',
+          scanRef: scanRef,
+          previousProcessing: lastProcessed.timestamp
+        })
+      };
+    }
+    
+    // Mark this webhook as being processed
+    await markWebhookProcessing(scanRef);
 
     if (!clientId || !scanRef || !status) {
       console.log('❌ Missing required webhook data');
