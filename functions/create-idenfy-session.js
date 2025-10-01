@@ -275,7 +275,7 @@ async function updateDriverVerificationStatus(email, jobId, updates) {
     });
 
     if (response.ok) {
-      console.log('Driver verification status updated in Google Sheets');
+      console.log('Driver verification status logged');
     } else {
       console.error('Failed to update driver verification status');
     }
