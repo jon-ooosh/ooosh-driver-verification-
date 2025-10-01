@@ -1126,14 +1126,28 @@ async function processPoaDocumentsImmediately(email, fullWebhookData) {
   try {
     console.log('🔍 Checking for POA documents to process...');
     
-    // Extract POA URLs from webhook data
-    const poa1Url = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
-                    fullWebhookData.fileUrls?.UTILITY_BILL ||
-                    fullWebhookData.fileUrls?.POA1;
+   // Extract POA URLs from webhook data (handle array format)
+    const utilityBills = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL;
+    let poa1Url, poa2Url;
     
-    const poa2Url = fullWebhookData.additionalStepPdfUrls?.POA2 || 
-                    fullWebhookData.fileUrls?.POA2 ||
-                    fullWebhookData.fileUrls?.BANK_STATEMENT;
+    if (Array.isArray(utilityBills)) {
+      poa1Url = utilityBills[0] || null;
+      poa2Url = utilityBills[1] || null;
+    } else {
+      poa1Url = utilityBills || 
+                fullWebhookData.fileUrls?.UTILITY_BILL ||
+                fullWebhookData.fileUrls?.POA1;
+      
+      poa2Url = fullWebhookData.additionalStepPdfUrls?.POA2 || 
+                fullWebhookData.fileUrls?.POA2 ||
+                fullWebhookData.fileUrls?.BANK_STATEMENT;
+    }
+    
+    console.log('📋 POA URLs extracted:', { 
+      hasPoa1: !!poa1Url, 
+      hasPoa2: !!poa2Url,
+      wasArray: Array.isArray(utilityBills)
+    });
     
     // No POAs? That's fine - might be license-only revalidation
     if (!poa1Url && !poa2Url) {
