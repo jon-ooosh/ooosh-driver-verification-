@@ -904,8 +904,31 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📸 Saving Idenfy documents to Monday.com...');
     
+    // 🔍 DEBUG: Log what Idenfy actually sends
+    console.log('🔍 RAW additionalStepPdfUrls:', 
+      JSON.stringify(fullWebhookData.additionalStepPdfUrls, null, 2));
+    console.log('🔍 RAW fileUrls:', 
+      JSON.stringify(fullWebhookData.fileUrls, null, 2));
+    
     // CRITICAL: Store POA URLs FIRST (before slow file uploads)
-    if (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.additionalStepPdfUrls?.POA2) {
+    // Handle both array and object formats from Idenfy
+    const utilityBills = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL;
+    let poa1Url = '';
+    let poa2Url = '';
+    
+    if (Array.isArray(utilityBills)) {
+      console.log('📋 Idenfy sent UTILITY_BILL as ARRAY:', utilityBills.length, 'items');
+      poa1Url = utilityBills[0] || '';
+      poa2Url = utilityBills[1] || '';
+    } else if (utilityBills) {
+      console.log('📋 Idenfy sent UTILITY_BILL as single value');
+      poa1Url = utilityBills;
+      poa2Url = fullWebhookData.additionalStepPdfUrls?.POA2 || '';
+    }
+    
+    console.log('📍 Extracted URLs:', { poa1Url: !!poa1Url, poa2Url: !!poa2Url });
+    
+    if (poa1Url || poa2Url) {
       console.log('📝 Storing POA URLs in text fields FIRST...');
       
       try {
@@ -916,8 +939,8 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
             action: 'update-driver-board-a',
             email: email,
             updates: {
-              poa1URL: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || '',
-              poa2URL: fullWebhookData.additionalStepPdfUrls?.POA2 || ''
+              poa1URL: poa1Url,
+              poa2URL: poa2Url
             }
           })
         });
@@ -940,17 +963,19 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
         fileType: 'license_back',
         url: fullWebhookData.fileUrls?.BACK
       },
-      {
+     {
         idenfyField: 'UTILITY_BILL',
         fileType: 'poa1',
-        url: fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
-             fullWebhookData.fileUrls?.UTILITY_BILL
+        url: Array.isArray(utilityBills) ? utilityBills[0] : 
+             (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+              fullWebhookData.fileUrls?.UTILITY_BILL)
       },
       {
         idenfyField: 'POA2',
         fileType: 'poa2',
-        url: fullWebhookData.additionalStepPdfUrls?.POA2 || 
-             fullWebhookData.fileUrls?.POA2
+        url: Array.isArray(utilityBills) ? utilityBills[1] : 
+             (fullWebhookData.additionalStepPdfUrls?.POA2 || 
+              fullWebhookData.fileUrls?.POA2)
       }
     ];
     
