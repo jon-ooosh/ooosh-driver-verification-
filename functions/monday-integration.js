@@ -793,9 +793,10 @@ function formatBoardAColumnValues(data) {
   if (data.additionalDetails) columnValues.long_text_mktr1a66 = data.additionalDetails;
   if (data.overallStatus) columnValues.color_mktrwatg = { label: data.overallStatus };
   if (data.lastUpdated) columnValues.date_mktrk8kv = { date: data.lastUpdated };
-  if (data.idenfyCheckDate) columnValues.text_mkvv2z8p = data.idenfyCheckDate;
+  if (data.idenfyCheckDate) columnValues.text_mkvv2z8p = data.idenfyCheckDate; // WEBHOOK TIMESTAMP - for ProcessingHub detection
   if (data.poa1URL) columnValues.text_mkw34ksx = data.poa1URL;
   if (data.poa2URL) columnValues.text_mkw3d9ye = data.poa2URL;
+  if (data.idenfyScanRef) columnValues.text_mkwbn8bx = data.idenfyScanRef; // Idenfy Scan Reference - for deduplication
 
   // DEBUGGING: Log final column values
   console.log('📋 Final column values for Monday.com:', Object.keys(columnValues));
