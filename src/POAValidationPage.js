@@ -78,68 +78,94 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     }
   }, [driverEmail, jobId, driverData]);
 
-  // Process a PDF document client-side
-  const processPDFDocument = useCallback(async (url, documentType) => {
-    console.log(`📄 Processing PDF from URL: ${url}`);
+ // Process a document (PDF or image) client-side
+  const processDocument = useCallback(async (url, documentType) => {
+    console.log(`📄 Processing document from URL: ${url}`);
     
     try {
-      // Fetch the PDF
+      // Fetch the document
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch PDF');
+      if (!response.ok) throw new Error('Failed to fetch document');
       
       const arrayBuffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Convert PDF to image using PDF.js
-      if (!window.pdfjsLib) {
-        throw new Error('PDF.js not loaded yet');
+      // Check file type from magic bytes
+      const isPNG = uint8Array[0] === 0x89 && uint8Array[1] === 0x50 && 
+                    uint8Array[2] === 0x4E && uint8Array[3] === 0x47;
+      const isJPEG = uint8Array[0] === 0xFF && uint8Array[1] === 0xD8;
+      const isPDF = uint8Array[0] === 0x25 && uint8Array[1] === 0x50 && 
+                    uint8Array[2] === 0x44 && uint8Array[3] === 0x46;
+      
+      let imageData;
+      
+      if (isPNG || isJPEG) {
+        // Already an image - convert to base64 directly
+        console.log(`✅ Document is already an image (${isPNG ? 'PNG' : 'JPEG'})`);
+        imageData = btoa(String.fromCharCode.apply(null, uint8Array));
+        
+      } else if (isPDF) {
+        // PDF needs conversion using PDF.js
+        console.log('📄 Document is PDF, converting to image...');
+        
+        if (!window.pdfjsLib) {
+          throw new Error('PDF.js not loaded yet');
+        }
+        
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        
+        const scale = 2.0;
+        const viewport = page.getViewport({ scale });
+        
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        // Convert canvas to base64
+        imageData = canvas.toDataURL('image/png').split(',')[1];
+        console.log('✅ PDF converted to image');
+        
+      } else {
+        throw new Error('Unknown file type - not PNG, JPEG, or PDF');
       }
       
-      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-      
-      const scale = 2.0; // High quality
-      const viewport = page.getViewport({ scale });
-      
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
-      
-      // Convert canvas to base64
-      const imageData = canvas.toDataURL('image/png').split(',')[1];
-      
-      console.log('✅ PDF converted to image');
-      
       // Process with document-processor
+      console.log('🔄 Sending to document-processor for OCR...');
       const processingResponse = await fetch('/.netlify/functions/document-processor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'poa',
           imageData: imageData,
-          documentType: documentType
+          documentType: documentType,
+          fileType: 'image'
         })
       });
       
       if (!processingResponse.ok) {
+        const errorText = await processingResponse.text();
+        console.error('Document processor error:', errorText);
         throw new Error('Document processing failed');
       }
       
       const result = await processingResponse.json();
       
       if (result.success && result.result) {
+        console.log('✅ OCR extraction successful:', result.result);
         return result.result;
       } else {
         throw new Error('Invalid processing result');
       }
       
     } catch (error) {
-      console.error(`Error processing PDF ${documentType}:`, error);
+      console.error(`❌ Error processing document ${documentType}:`, error);
       throw error;
     }
   }, []);
@@ -256,13 +282,13 @@ const checkPoaValidationResults = useCallback(async () => {
             // Process POA1 if URL exists
             if (status.poa1URL) {
               console.log('📄 Processing POA1 from URL...');
-              poa1Result = await processPDFDocument(status.poa1URL, 'poa1');
+              poa1Result = await processDocument(status.poa1URL, 'poa1');
             }
             
             // Process POA2 if URL exists
             if (status.poa2URL) {
               console.log('📄 Processing POA2 from URL...');
-              poa2Result = await processPDFDocument(status.poa2URL, 'poa2');
+              poa2Result = await processDocument(status.poa2URL, 'poa2');
             }
             
             // Check for duplicates
