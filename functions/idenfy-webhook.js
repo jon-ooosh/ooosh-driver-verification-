@@ -941,26 +941,31 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     // First check additionalStepPdfUrls (PDF uploads via Additional Steps)
     const utilityBills = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL;
     
-    if (Array.isArray(utilityBills)) {
-      console.log('📋 Found UTILITY_BILL as ARRAY in additionalStepPdfUrls:', utilityBills.length, 'items');
-      poa1Url = utilityBills[0] || '';
-      poa2Url = utilityBills[1] || '';
-    } else if (utilityBills) {
-      console.log('📋 Found UTILITY_BILL as single value in additionalStepPdfUrls');
-      poa1Url = utilityBills;
-      poa2Url = fullWebhookData.additionalStepPdfUrls?.POA2 || '';
-    }
-    
-    // If not found in additionalStepPdfUrls, check fileUrls (image uploads)
-    if (!poa1Url && fullWebhookData.fileUrls?.UTILITY_BILL) {
-      console.log('📋 Found UTILITY_BILL in fileUrls (image upload)');
-      poa1Url = fullWebhookData.fileUrls.UTILITY_BILL;
-    }
-    
-    if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
-      console.log('📋 Found POA2 in fileUrls (image upload)');
-      poa2Url = fullWebhookData.fileUrls.POA2;
-    }
+   if (Array.isArray(utilityBills)) {
+  console.log('📋 Found UTILITY_BILL as ARRAY in additionalStepPdfUrls:', utilityBills.length, 'items');
+  poa1Url = utilityBills[0] || '';
+  poa2Url = utilityBills[1] || '';
+} else if (utilityBills) {
+  console.log('📋 Found UTILITY_BILL as single value in additionalStepPdfUrls');
+  poa1Url = utilityBills;
+}
+
+// Check for POA2 in additionalStepPdfUrls independently
+if (!poa2Url && fullWebhookData.additionalStepPdfUrls?.POA2) {
+  console.log('📋 Found POA2 in additionalStepPdfUrls (PDF upload)');
+  poa2Url = fullWebhookData.additionalStepPdfUrls.POA2;
+}
+
+// If not found in additionalStepPdfUrls, check fileUrls (image uploads)
+if (!poa1Url && fullWebhookData.fileUrls?.UTILITY_BILL) {
+  console.log('📋 Found UTILITY_BILL in fileUrls (image upload)');
+  poa1Url = fullWebhookData.fileUrls.UTILITY_BILL;
+}
+
+if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
+  console.log('📋 Found POA2 in fileUrls (image upload)');
+  poa2Url = fullWebhookData.fileUrls.POA2;
+}
     
     console.log('📍 Extracted URLs:', { poa1Url: !!poa1Url, poa2Url: !!poa2Url });
     
