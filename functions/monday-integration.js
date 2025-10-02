@@ -861,9 +861,10 @@ function parseBoardAData(item) {
     poa1ValidUntil: '',
     poa2ValidUntil: '',
     dvlaValidUntil: '',
-    passportValidUntil: '',  // PASSPORT ADDED
+    passportValidUntil: '', 
     licenseNextCheckDue: '',
     idenfyCheckDate: '',
+    idenfyScanRef: '',
     signatureDate: ''
   };
 
@@ -979,6 +980,9 @@ function parseBoardAData(item) {
       case 'text_mkvv2z8p': // Idenfy Check Date
         console.log('📍 FOUND idenfyCheckDate field! Value:', col.text); 
         driver.idenfyCheckDate = col.text || '';
+        break;
+      case 'text_mkwbn8bx': // Idenfy Scan Reference
+        driver.idenfyScanRef = col.text || '';
         break;
     }
   });
