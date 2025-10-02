@@ -221,15 +221,16 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   }, [driverEmail]);
 
 const checkPoaValidationResults = useCallback(async () => {
-    const MAX_ATTEMPTS = 20;
+    const MAX_ATTEMPTS = 20; // For waiting for URLs from webhook
     
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        setLoading(true);
-        console.log(`🔍 Checking POA validation results for: ${driverEmail} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+        console.log(`🔍 Checking for POA URLs: ${driverEmail} (attempt ${attempt}/${MAX_ATTEMPTS})`);
         
-        // Fetch driver status
-        const statusResponse = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}`);
+        // Fetch driver status with cache buster
+        const statusResponse = await fetch(
+          `/.netlify/functions/driver-status?email=${encodeURIComponent(driverEmail)}&t=${Date.now()}`
+        );
         
         if (!statusResponse.ok) {
           throw new Error('Failed to fetch driver status');
@@ -238,158 +239,88 @@ const checkPoaValidationResults = useCallback(async () => {
         const status = await statusResponse.json();
         setDriverData(status);
         
-        console.log('📊 POA status from Monday:', {
-          poa1ValidUntil: status.poa1ValidUntil,
-          poa2ValidUntil: status.poa2ValidUntil,
-          poa1URL: status.poa1URL,
-          poa2URL: status.poa2URL
+        console.log('📊 POA URLs from Monday:', {
+          poa1URL: status.poa1URL ? 'Present' : 'Missing',
+          poa2URL: status.poa2URL ? 'Present' : 'Missing'
         });
         
-        // Check if POAs need client-side processing
-        const needsPoa1Processing = !status.poa1ValidUntil && status.poa1URL;
-        const needsPoa2Processing = !status.poa2ValidUntil && status.poa2URL;
-        
-        // If we have URLs, proceed with processing
+        // Check if we have the URLs we need (webhook has completed)
         if (status.poa1URL || status.poa2URL) {
-          console.log('✅ POA URLs found, proceeding with processing');
+          console.log('✅ POA URLs found, processing documents...');
+          setLoading(false);
+          setProcessingPDFs(true);
           
-          // Track processing attempts to avoid infinite loops
-          const processingAttemptKey = `poa_processing_${driverEmail}`;
-          let processingAttempts = parseInt(localStorage.getItem(processingAttemptKey) || '0');
-          
-          if (needsPoa1Processing || needsPoa2Processing) {
-            console.log('🔄 POAs need client-side processing');
+          try {
+            let poa1Result, poa2Result;
             
-            // Check if we've already tried processing too many times
-            if (processingAttempts >= 2) {
-              console.log('⚠️ Max processing attempts reached, stopping loop');
-              setValidationResult({
-                isDuplicate: false,
-                approved: false,
-                poa1: { providerName: 'Processing Error', documentDate: 'Max attempts reached' },
-                poa2: { providerName: 'Processing Error', documentDate: 'Max attempts reached' },
-                crossValidation: {
-                  approved: false,
-                  issues: ['Processing timed out - manual review required']
-                }
-              });
-              setLoading(false);
-              return; // Exit retry loop
+            // Process POA1 if URL exists
+            if (status.poa1URL) {
+              console.log('📄 Processing POA1 from URL...');
+              poa1Result = await processPDFDocument(status.poa1URL, 'poa1');
             }
             
-            setProcessingPDFs(true);
-            
-            // Increment attempt counter
-            processingAttempts++;
-            localStorage.setItem(processingAttemptKey, processingAttempts.toString());
-            
-            try {
-              let poa1Result, poa2Result;
-              
-              // Process POA1 if needed
-              if (needsPoa1Processing) {
-                console.log('Processing POA1 PDF...');
-                poa1Result = await processPDFDocument(status.poa1URL, 'poa1');
-              } else if (status.poa1ValidUntil) {
-                poa1Result = {
-                  providerName: status.poa1Provider || 'Unknown',
-                  documentDate: status.poa1Date || 'Not extracted'
-                };
-              }
-              
-              // Process POA2 if needed
-              if (needsPoa2Processing) {
-                console.log('Processing POA2 PDF...');
-                poa2Result = await processPDFDocument(status.poa2URL, 'poa2');
-              } else if (status.poa2ValidUntil) {
-                poa2Result = {
-                  providerName: status.poa2Provider || 'Unknown',
-                  documentDate: status.poa2Date || 'Not extracted'
-                };
-              }
-              
-              // Check for duplicates
-              const isDuplicate = poa1Result?.providerName === poa2Result?.providerName;
-              
-              // Build validation result
-              const validationResult = {
-                isDuplicate: isDuplicate,
-                approved: !isDuplicate && poa1Result && poa2Result,
-                poa1: poa1Result || { providerName: 'Not processed', documentDate: 'Not extracted' },
-                poa2: poa2Result || { providerName: 'Not processed', documentDate: 'Not extracted' },
-                crossValidation: {
-                  approved: !isDuplicate && poa1Result && poa2Result,
-                  issues: isDuplicate ? ['Same document uploaded twice'] : []
-                }
-              };
-              
-              setValidationResult(validationResult);
-              setLoading(false);
-              
-              // Clear processing attempts on success
-              localStorage.removeItem(processingAttemptKey);
-              
-              // Save dates if validation successful
-              if (validationResult.approved) {
-                await savePoaDates(poa1Result.documentDate, poa2Result.documentDate);
-                setTimeout(() => proceedToNext(), 3000);
-              }
-              
-              return; // Exit retry loop - we're done
-              
-            } catch (error) {
-              console.error('Error processing PDFs:', error);
-              setError('Failed to process documents. Please try again.');
-              setLoading(false);
-              return;
-            } finally {
-              setProcessingPDFs(false);
+            // Process POA2 if URL exists
+            if (status.poa2URL) {
+              console.log('📄 Processing POA2 from URL...');
+              poa2Result = await processPDFDocument(status.poa2URL, 'poa2');
             }
-          } else {
-            // POAs already processed
+            
+            // Check for duplicates
+            const isDuplicate = poa1Result?.providerName && poa2Result?.providerName && 
+                               poa1Result.providerName === poa2Result.providerName;
+            
+            // Build validation result
             const validationResult = {
-              isDuplicate: false,
-              approved: status.poa1ValidUntil && status.poa2ValidUntil,
-              poa1: {
-                providerName: status.poa1Provider || 'Unknown',
-                documentDate: status.poa1Date || 'Not extracted',
-                validUntil: status.poa1ValidUntil
-              },
-              poa2: {
-                providerName: status.poa2Provider || 'Unknown',
-                documentDate: status.poa2Date || 'Not extracted',
-                validUntil: status.poa2ValidUntil
-              },
+              isDuplicate: isDuplicate,
+              approved: !isDuplicate && poa1Result && poa2Result,
+              poa1: poa1Result || { providerName: 'Not processed', documentDate: 'Not extracted' },
+              poa2: poa2Result || { providerName: 'Not processed', documentDate: 'Not extracted' },
               crossValidation: {
-                approved: status.poa1ValidUntil && status.poa2ValidUntil,
-                issues: []
+                approved: !isDuplicate && poa1Result && poa2Result,
+                issues: isDuplicate ? ['Same document uploaded twice'] : []
               }
             };
             
             setValidationResult(validationResult);
+            setProcessingPDFs(false);
             setLoading(false);
             
+            // Save dates to Monday.com if validation successful
             if (validationResult.approved) {
+              console.log('💾 Saving POA dates to Monday.com...');
+              await savePoaDates(poa1Result.documentDate, poa2Result.documentDate);
+              console.log('✅ POA validation complete, proceeding to next step in 3 seconds');
               setTimeout(() => proceedToNext(), 3000);
+            } else if (isDuplicate) {
+              console.log('⚠️ Duplicate documents detected - user needs to re-upload');
             }
             
-            return; // Exit retry loop
+            return; // Exit - processing complete
+            
+          } catch (error) {
+            console.error('❌ Error processing POA documents:', error);
+            setProcessingPDFs(false);
+            setError('Failed to process documents. Please contact support.');
+            setLoading(false);
+            return; // Exit on error
           }
         }
         
-        // No URLs found yet - retry if we have attempts left
+        // URLs not found yet - wait and retry if we have attempts left
         if (attempt < MAX_ATTEMPTS) {
-          console.log(`⏳ No URLs found yet, retrying in 2 seconds... (${attempt}/${MAX_ATTEMPTS})`);
+          console.log(`⏳ URLs not ready yet, waiting 2 seconds... (${attempt}/${MAX_ATTEMPTS})`);
+          setLoading(true);
           await new Promise(resolve => setTimeout(resolve, 2000));
         } else {
-          // Max attempts reached
-          console.error('❌ Max attempts reached, no POA URLs found');
-          setError('Validation is taking longer than expected. Please contact support or try again.');
+          // Max attempts reached - webhook likely timed out
+          console.error('❌ Max attempts reached, POA URLs never arrived from webhook');
+          setError('Document processing is taking longer than expected. Please contact support at 01273 911382 or try again.');
           setLoading(false);
+          return;
         }
         
       } catch (err) {
-        console.error('❌ Error checking POA validation:', err);
+        console.error('❌ Error in POA validation check:', err);
         
         if (attempt < MAX_ATTEMPTS) {
           console.log(`⏳ Error occurred, retrying in 2 seconds... (${attempt}/${MAX_ATTEMPTS})`);
@@ -397,6 +328,7 @@ const checkPoaValidationResults = useCallback(async () => {
         } else {
           setError(err.message || 'Failed to check POA validation results');
           setLoading(false);
+          return;
         }
       }
     }
