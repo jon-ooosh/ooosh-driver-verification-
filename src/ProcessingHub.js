@@ -130,14 +130,14 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
           
           console.log(`⏰ Webhook timestamp is ${minutesAgo.toFixed(1)} minutes old`);
           
-          // If timestamp is recent (within 5 minutes), consider webhook received
-          if (minutesAgo >= 0 && minutesAgo < 5) {
+          // If timestamp is recent (within 65 minutes), consider webhook received
+          if (minutesAgo >= 0 && minutesAgo < 65) {
             console.log('✅ Recent webhook detected!');
             webhookReceived = true;
           } else if (minutesAgo < 0) {
             console.log('⚠️ Timestamp is in the future - possible timezone issue');
-            // Still accept it if it's not too far in the future (1 minute tolerance)
-            if (minutesAgo > -1) {
+            // Still accept it if it's not too far in the future (65 minute tolerance)
+            if (minutesAgo > -65) {
               webhookReceived = true;
             }
           } else {
@@ -151,14 +151,7 @@ const ProcessingHub = ({ driverEmail, jobId, sessionType }) => {
           }
         }
       }
-      
-      // For testing - allow override
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('forceRoute') === 'true') {
-        console.log('⚠️ DEBUG: forceRoute=true, bypassing wait');
-        webhookReceived = true;
-      }
-      
+               
       if (webhookReceived) {
         console.log('🎉 Webhook confirmed! Waiting for data to populate...');
         setDriverData(data);
