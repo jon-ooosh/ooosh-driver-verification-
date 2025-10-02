@@ -358,7 +358,7 @@ const checkPoaValidationResults = useCallback(async () => {
         }
       }
     }
-  }, [driverEmail, proceedToNext, savePoaDates, processPDFDocument]);
+  }, [driverEmail, proceedToNext, savePoaDates, processDocument]);
 
   useEffect(() => {
     checkPoaValidationResults();
