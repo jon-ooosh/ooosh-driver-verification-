@@ -102,7 +102,14 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       if (isPNG || isJPEG) {
         // Already an image - convert to base64 directly
         console.log(`✅ Document is already an image (${isPNG ? 'PNG' : 'JPEG'})`);
-        imageData = btoa(String.fromCharCode.apply(null, uint8Array));
+       // Convert large arrays in chunks to avoid stack overflow
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.subarray(i, i + chunkSize);
+          binary += String.fromCharCode.apply(null, chunk);
+        }
+        imageData = btoa(binary);
         
       } else if (isPDF) {
         // PDF needs conversion using PDF.js
