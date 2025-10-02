@@ -929,9 +929,105 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
   }
 }
 
+// Check which files need uploading based on existence AND validity dates
+async function checkWhichFilesNeeded(email) {
+  try {
+    console.log('🔍 Checking which files need uploading for:', email);
+    
+    // Get driver data from Monday.com
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'find-driver-board-a',
+        email: email
+      })
+    });
+    
+    if (!response.ok) {
+      console.log('📋 Driver not found - will upload all files');
+      return {
+        needFront: true,
+        needBack: true,
+        needPOA1: true,
+        needPOA2: true,
+        needDVLA: true,
+        needPassport: true
+      };
+    }
+    
+    const result = await response.json();
+    const driver = result.driver;
+    
+    if (!driver) {
+      console.log('📋 No driver data - will upload all files');
+      return {
+        needFront: true,
+        needBack: true,
+        needPOA1: true,
+        needPOA2: true,
+        needDVLA: true,
+        needPassport: true
+      };
+    }
+    
+    const today = new Date();
+    
+    // Helper function to check if date is still valid
+    const isStillValid = (dateString) => {
+      if (!dateString) return false;
+      const validUntil = new Date(dateString);
+      return validUntil > today;
+    };
+    
+    // Check each file type
+    const filesNeeded = {
+      // License: Use licenseNextCheckDue for both front and back
+      needFront: !isStillValid(driver.licenseNextCheckDue),
+      needBack: !isStillValid(driver.licenseNextCheckDue),
+      
+      // POAs: Each has its own validity date
+      needPOA1: !isStillValid(driver.poa1ValidUntil),
+      needPOA2: !isStillValid(driver.poa2ValidUntil),
+      
+      // DVLA: Has its own validity date
+      needDVLA: !isStillValid(driver.dvlaValidUntil),
+      
+      // Passport: Has its own validity date
+      needPassport: !isStillValid(driver.passportValidUntil)
+    };
+    
+    console.log('📊 File upload requirements:', filesNeeded);
+    console.log('📅 Validity dates:', {
+      licenseNextCheckDue: driver.licenseNextCheckDue,
+      poa1ValidUntil: driver.poa1ValidUntil,
+      poa2ValidUntil: driver.poa2ValidUntil,
+      dvlaValidUntil: driver.dvlaValidUntil,
+      passportValidUntil: driver.passportValidUntil
+    });
+    
+    return filesNeeded;
+    
+  } catch (error) {
+    console.error('❌ Error checking file requirements:', error);
+    // On error, assume we need all files (fail safe)
+    return {
+      needFront: true,
+      needBack: true,
+      needPOA1: true,
+      needPOA2: true,
+      needDVLA: true,
+      needPassport: true
+    };
+  }
+}
+
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
     console.log('📸 Saving Idenfy documents to Monday.com...');
+    
+    // SMART CHECK: Which files actually need uploading?
+    const filesNeeded = await checkWhichFilesNeeded(email);
     
     // 🔍 DEBUG: Log what Idenfy actually sends
     console.log('🔍 RAW additionalStepPdfUrls:', 
@@ -998,27 +1094,31 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
       }
     }
     
-    // Map all possible document URLs - REMOVED SELFIE/FACE
+ // Map all possible document URLs with smart filtering
     const documentMappings = [
       {
         idenfyField: 'FRONT',
         fileType: 'license_front',
-        url: fullWebhookData.fileUrls?.FRONT
+        url: fullWebhookData.fileUrls?.FRONT,
+        needed: filesNeeded.needFront
       },
       {
         idenfyField: 'BACK',
         fileType: 'license_back',
-        url: fullWebhookData.fileUrls?.BACK
+        url: fullWebhookData.fileUrls?.BACK,
+        needed: filesNeeded.needBack
       },
      {
         idenfyField: 'UTILITY_BILL',
         fileType: 'poa1',
-        url: poa1Url
+        url: poa1Url,
+        needed: filesNeeded.needPOA1
       },
       {
         idenfyField: 'POA2',
         fileType: 'poa2',
-        url: poa2Url
+        url: poa2Url,
+        needed: filesNeeded.needPOA2
       }
     ];
     
@@ -1029,6 +1129,19 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         console.log(`⏭️ Skipping ${mapping.idenfyField} - no URL provided`);
         continue;
       }
+      
+      if (!mapping.needed) {
+        console.log(`✅ Skipping ${mapping.idenfyField} - file still valid, no upload needed`);
+        uploadResults.push({ 
+          field: mapping.idenfyField, 
+          success: true, 
+          skipped: true,
+          reason: 'File still valid' 
+        });
+        continue;
+      }
+      
+      console.log(`📤 Processing ${mapping.idenfyField} - file needed (expired or missing)`);
       
       console.log(`📤 Processing ${mapping.idenfyField} from URL: ${mapping.url.substring(0, 50)}...`);
       
