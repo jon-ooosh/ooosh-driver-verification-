@@ -40,27 +40,30 @@ exports.handler = async (event, context) => {
 
     const { clientId, scanRef, status, data, platform, final } = webhookData;
 
-    // CRITICAL: Prevent duplicate webhook processing
+// CRITICAL: Prevent duplicate webhook processing
     // Check if we've already processed this scanRef recently (within 5 minutes)
-    const processingKey = `webhook_processed_${scanRef}`;
     const lastProcessed = await checkRecentProcessing(scanRef);
     
-    if (lastProcessed) {
-      console.log(`⚠️ Duplicate webhook detected for scanRef: ${scanRef}`);
-      console.log(`   Last processed: ${lastProcessed.timestamp}`);
-      console.log(`   Returning success to prevent Idenfy retry loop`);
+    if (lastProcessed && lastProcessed.isDuplicate) {
+      console.log(`⚠️ DUPLICATE WEBHOOK - Idenfy retry detected!`);
+      console.log(`   ScanRef: ${scanRef}`);
+      console.log(`   Previously processed: ${lastProcessed.minutesAgo} minutes ago`);
+      console.log(`   Original timestamp: ${lastProcessed.timestamp}`);
+      console.log(`   ✅ Returning 200 OK to prevent further retries`);
+      
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({ 
-          message: 'Webhook already processed',
+          message: 'Webhook already processed - duplicate prevented',
           scanRef: scanRef,
-          previousProcessing: lastProcessed.timestamp
+          previousProcessing: lastProcessed.timestamp,
+          minutesAgo: lastProcessed.minutesAgo
         })
       };
     }
     
-    // Mark this webhook as being processed
+    // Mark this webhook as being processed (logging only)
     await markWebhookProcessing(scanRef);
 
     if (!clientId || !scanRef || !status) {
@@ -828,13 +831,16 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       }
     }
     
-    // Build update data with all available fields
+ // Build update data with all available fields
     const updateData = {
       // CRITICAL: Always include email
       email: email,
 
       // WEBHOOK TIMESTAMP - for ProcessingHub detection
       idenfyCheckDate: fullWebhookData.checkDate || new Date().toISOString(),
+      
+      // SCAN REFERENCE - for deduplication
+      idenfyScanRef: fullWebhookData.scanRef || 'unknown',
       
       // Names
       driverName: idenfyResult.fullName || 
@@ -1439,14 +1445,93 @@ async function processPoaValidation(idenfyData, fullWebhookData) {
     return { success: false, error: error.message };
   }
 }
+
 // Track webhook processing to prevent duplicates
 async function checkRecentProcessing(scanRef) {
-  // For now, just check if we processed this in the last 5 minutes
-  // In future, could check Monday.com for scanRef history
-  return null; // Allow all processing for now
+  try {
+    console.log(`🔍 Checking if scanRef already processed: ${scanRef}`);
+    
+    // Query Monday.com Board A for this scanRef
+    const query = `
+      query {
+        items_page_by_column_values (
+          board_id: 9798399405,
+          columns: [
+            {
+              column_id: "text_mkwbn8bx",
+              column_values: ["${scanRef}"]
+            }
+          ],
+          limit: 1
+        ) {
+          items {
+            id
+            name
+            column_values {
+              id
+              text
+              value
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`
+      },
+      body: JSON.stringify({ query })
+    });
+
+    const result = await response.json();
+    
+    if (result.data?.items_page_by_column_values?.items?.length > 0) {
+      const item = result.data.items_page_by_column_values.items[0];
+      
+      // Find the idenfyCheckDate column to check timing
+      const idenfyCheckDateCol = item.column_values.find(col => col.id === 'text_mkvv2z8p');
+      
+      if (idenfyCheckDateCol?.text) {
+        const lastProcessedTime = new Date(idenfyCheckDateCol.text);
+        const now = new Date();
+        const minutesAgo = (now - lastProcessedTime) / (1000 * 60);
+        
+        console.log(`📊 ScanRef found! Last processed ${minutesAgo.toFixed(1)} minutes ago`);
+        
+        // If processed within last 5 minutes, consider it a duplicate
+        if (minutesAgo < 5) {
+          console.log(`⚠️ DUPLICATE DETECTED - processed ${minutesAgo.toFixed(1)} minutes ago`);
+          return {
+            isDuplicate: true,
+            timestamp: idenfyCheckDateCol.text,
+            minutesAgo: minutesAgo.toFixed(1)
+          };
+        } else {
+          console.log(`✅ Old processing (${minutesAgo.toFixed(1)} min ago) - allowing reprocessing`);
+          return null;
+        }
+      } else {
+        // ScanRef exists but no timestamp - allow processing
+        console.log(`⚠️ ScanRef found but no timestamp - allowing processing`);
+        return null;
+      }
+    }
+    
+    console.log(`✅ ScanRef not found - this is a new verification`);
+    return null;
+    
+  } catch (error) {
+    console.error('❌ Error checking recent processing:', error);
+    // On error, allow processing to continue (fail open)
+    return null;
+  }
 }
 
 async function markWebhookProcessing(scanRef) {
-  // Future: Store scanRef in database with timestamp
-  console.log(`📝 Webhook processing marked: ${scanRef}`);
+  // ScanRef will be stored during updateBoardAWithIdenfyResults
+  // This function is now just for logging
+  console.log(`📝 Webhook processing will store scanRef: ${scanRef}`);
 }
