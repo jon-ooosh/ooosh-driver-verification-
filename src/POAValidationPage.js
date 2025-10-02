@@ -1,7 +1,7 @@
 // File: src/POAValidationPage.js
 // UPDATED with client-side PDF processing for deferred documents
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader, Calendar } from 'lucide-react';
 
 const POAValidationPage = ({ driverEmail, jobId }) => {
