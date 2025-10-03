@@ -322,7 +322,7 @@ const checkPoaValidationResults = useCallback(async () => {
             const isDuplicate = poa1Result?.providerName && poa2Result?.providerName && 
                                poa1Result.providerName === poa2Result.providerName;
             
-            // Build validation result
+           // Build validation result
             const validationResult = {
               isDuplicate: isDuplicate,
               approved: !isDuplicate && poa1Result && poa2Result,
@@ -338,14 +338,33 @@ const checkPoaValidationResults = useCallback(async () => {
             setProcessingPDFs(false);
             setLoading(false);
             
-            // Save dates to Monday.com if validation successful
+            // Handle different outcomes
             if (validationResult.approved) {
               console.log('💾 Saving POA dates to Monday.com...');
               await savePoaDates(poa1Result.documentDate, poa2Result.documentDate);
               console.log('✅ POA validation complete, proceeding to next step in 3 seconds');
               setTimeout(() => proceedToNext(), 3000);
             } else if (isDuplicate) {
-              console.log('⚠️ Duplicate documents detected - user needs to re-upload');
+              console.log('⚠️ Duplicate documents detected - flagging for review');
+              
+              // Set status to Stuck for manual review
+              try {
+                await fetch('/.netlify/functions/monday-integration', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'update-driver-board-a',
+                    email: driverEmail,
+                    updates: {
+                      overallStatus: 'Stuck',
+                      additionalDetails: 'Duplicate POA documents detected - same source uploaded twice. Requires manual review or re-upload.'
+                    }
+                  })
+                });
+                console.log('✅ Status set to Stuck for manual review');
+              } catch (error) {
+                console.error('❌ Failed to update status:', error);
+              }
             }
             
             return; // Exit - processing complete
@@ -539,27 +558,67 @@ const checkPoaValidationResults = useCallback(async () => {
         </div>
       </div>
 
-      {/* Action buttons */}
+    {/* Action buttons */}
       <div className="flex flex-col space-y-3">
         {isDuplicate ? (
           <>
-            <p className="text-red-600 font-medium mb-2">
-              Please upload two different proof of address documents
-            </p>
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ Duplicate documents detected</h3>
+              <p className="text-red-800 mb-3">
+                It looks like you've uploaded the same document twice OR two documents from the same provider. We need two DIFFERENT proof of address documents from DIFFERENT sources.
+              </p>
+            </div>
+            
             <button
-              onClick={() => window.location.href = `/?step=document-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}&type=additional`}
-              className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700"
+              onClick={() => {
+                console.log('🔄 Redirecting to Idenfy for POA re-upload');
+                window.location.href = `/?step=document-upload&email=${encodeURIComponent(driverEmail)}&job=${jobId}&poaOnly=true`;
+              }}
+              className="w-full bg-red-600 text-white py-3 px-4 rounded-md hover:bg-red-700 font-semibold"
             >
-              Upload Different Documents
+              Upload new documents
             </button>
-          </>
+            
+            <button
+              onClick={async () => {
+                console.log('⚠️ User bypassing duplicate check - flagging for manual review');
+                
+                // Set status to "Stuck" for manual review
+                try {
+                  await fetch('/.netlify/functions/monday-integration', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'update-driver-board-a',
+                      email: driverEmail,
+                      updates: {
+                        overallStatus: 'Stuck',
+                        additionalDetails: 'Driver claims POA documents are NOT duplicates despite system detection. Manual review required.'
+                      }
+                    })
+                  });
+                  
+                  console.log('✅ Flagged for manual review, proceeding to next step');
+                  proceedToNext();
+                  
+                } catch (error) {
+                  console.error('❌ Failed to flag for review:', error);
+                  // Proceed anyway
+                  proceedToNext();
+                }
+              }}
+              className="w-full bg-orange-500 text-white py-3 px-4 rounded-md hover:bg-orange-600 text-sm"
+            >
+              These ARE different documents - proceed with rest of verification and we will manually review.
+            </button>
+            </>
         ) : isApproved ? (
           <>
             <button
               onClick={() => proceedToNext()}
               className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700"
             >
-              Continue to Next Step
+              Continue to next step
             </button>
             <p className="text-sm text-gray-500 text-center">
               Proceeding automatically...
