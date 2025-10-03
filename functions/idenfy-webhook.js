@@ -41,26 +41,40 @@ exports.handler = async (event, context) => {
     const { clientId, scanRef, status, data, platform, final } = webhookData;
 
 // CRITICAL: Prevent duplicate webhook processing
-    // Check if we've already processed this scanRef recently (within 5 minutes)
+    // BUT allow file completion on retries
     const lastProcessed = await checkRecentProcessing(scanRef);
     
     if (lastProcessed && lastProcessed.isDuplicate) {
       console.log(`⚠️ DUPLICATE WEBHOOK - Idenfy retry detected!`);
       console.log(`   ScanRef: ${scanRef}`);
       console.log(`   Previously processed: ${lastProcessed.minutesAgo} minutes ago`);
-      console.log(`   Original timestamp: ${lastProcessed.timestamp}`);
-      console.log(`   ✅ Returning 200 OK to prevent further retries`);
       
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ 
-          message: 'Webhook already processed - duplicate prevented',
-          scanRef: scanRef,
-          previousProcessing: lastProcessed.timestamp,
-          minutesAgo: lastProcessed.minutesAgo
-        })
-      };
+      // Check if we need to complete file uploads
+      const clientInfo = parseClientId(clientId);
+      if (clientInfo) {
+        console.log(`🔍 Checking if file uploads need completion...`);
+        const filesNeeded = await checkWhichFilesNeeded(clientInfo.email);
+        
+        const anyFilesNeeded = Object.values(filesNeeded).some(needed => needed === true);
+        
+        if (anyFilesNeeded) {
+          console.log(`📁 Files still needed - completing upload:`, filesNeeded);
+          // Don't return - let it continue to upload missing files
+          console.log(`⏭️ Allowing webhook to continue for file completion`);
+        } else {
+          console.log(`✅ All files already uploaded - safe to skip`);
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ 
+              message: 'Webhook already processed - all files complete',
+              scanRef: scanRef,
+              previousProcessing: lastProcessed.timestamp,
+              minutesAgo: lastProcessed.minutesAgo
+            })
+          };
+        }
+      }
     }
     
     // Mark this webhook as being processed (logging only)
@@ -273,30 +287,11 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
 
     console.log('✅ Board A updated successfully');
 
-    // Step 3.5 Set license check date immediately to prevent timeout issues
-    await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'update-driver-board-a',
-        email: email,
-        updates: {
-          licenseNextCheckDue: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        }
-      })
-    });
-    console.log('✅ License check date set');
-
-   // Step 4: Save documents to Monday.com - don't await file uploads (non-blocking)
-    // URLs are stored immediately, files upload in background
-    saveIdenfyDocumentsToMonday(email, fullWebhookData)
-      .then(() => console.log('✅ All file uploads completed'))
-      .catch(err => console.error('⚠️ Some file uploads failed:', err.message));
+   // Step 4: Save documents to Monday.com with actual file upload
+    await saveIdenfyDocumentsToMonday(email, fullWebhookData);
     
-    // Step 4.5: Process POA documents - also non-blocking
-    processPoaDocumentsImmediately(email, fullWebhookData)
-      .then(result => console.log('✅ POA processing complete'))
-      .catch(err => console.error('⚠️ POA processing issues:', err.message));
+    // Step 4.5: Process POA documents immediately if present
+    const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
     console.log('📊 POA processing result:', {
       processed: poaProcessingResult.poasProcessed,
       approved: poaProcessingResult.approved,
@@ -1476,15 +1471,16 @@ async function updateDocumentValidityDates(email, webhookData) {
       return result.toISOString().split('T')[0];
     };
     
-    // Don't update POA dates here as they're handled in processPoaDocumentsImmediately
-    // Only update DVLA and license check dates
+    // Set validity dates AFTER file uploads complete
+    // This way retry webhooks know which files still need uploading
     const updates = {
-      // Include email to avoid the error
       email: email,
       
-      // DVLA and license check dates
-      dvlaValidUntil: addDays(today, 90),  // DVLA check valid for 90 days
+      // License validity (set after license files upload)
       licenseNextCheckDue: addDays(today, 90),
+      
+      // DVLA validity (set after DVLA file uploads if applicable)
+      dvlaValidUntil: addDays(today, 90),
       
       lastUpdated: today.toISOString().split('T')[0]
     };
