@@ -129,6 +129,7 @@ async function getDriverStatusFromBoardA(email) {
       boardAId: driver.id,
       lastUpdated: driver.lastUpdated || null,
       idenfyCheckDate: driver.idenfyCheckDate || null,
+      idenfyScanRef: driver.scanRef || null,  
       // Include raw date fields for router
       licenseNextCheckDue: driver.licenseNextCheckDue || null,
       poa1ValidUntil: driver.poa1ValidUntil || null,
@@ -348,6 +349,7 @@ function createNewDriverStatus(email) {
     poa1ValidUntil: null,
     poa2ValidUntil: null,
     dvlaValidUntil: null,
-    passportValidUntil: null
+    passportValidUntil: null,
+    idenfyScanRef: null
   };
 }
