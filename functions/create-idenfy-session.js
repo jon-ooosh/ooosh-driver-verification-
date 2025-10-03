@@ -197,6 +197,11 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       case 'passport_only':
         // Passport for non-UK drivers - reuse face from previous verification
         requestBody.documents = ['PASSPORT'];
+         requestBody.additionalSteps = {
+          "ALL": {
+            "ALL": {}
+          }
+        };
               
         // Use existing face reference from license verification (stored in Monday.com)
         // This prevents requiring a new selfie since we already have face data
