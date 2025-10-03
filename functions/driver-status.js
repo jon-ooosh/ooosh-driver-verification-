@@ -129,7 +129,7 @@ async function getDriverStatusFromBoardA(email) {
       boardAId: driver.id,
       lastUpdated: driver.lastUpdated || null,
       idenfyCheckDate: driver.idenfyCheckDate || null,
-      idenfyScanRef: driver.scanRef || null,  
+      idenfyScanRef: driver.idenfyScanRef || null,  
       // Include raw date fields for router
       licenseNextCheckDue: driver.licenseNextCheckDue || null,
       poa1ValidUntil: driver.poa1ValidUntil || null,
