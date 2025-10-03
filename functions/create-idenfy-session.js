@@ -195,10 +195,43 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   break;
 
       case 'passport_only':
-        // Passport for non-UK drivers
+        // Passport for non-UK drivers - reuse face from previous verification
         requestBody.documents = ['PASSPORT'];
-        requestBody.additionalSteps = []; // No POAs needed
-        requestBody.skipFaceMatching = true; // No selfie if already verified
+        
+        // CRITICAL: Override dashboard settings to disable POA collection
+        // Empty object explicitly disables additional steps per Idenfy docs
+        requestBody.additionalSteps = {
+          "ALL": {
+            "ALL": {}
+          }
+        };
+        
+        // Use existing face reference from license verification (stored in Monday.com)
+        // This prevents requiring a new selfie since we already have face data
+        if (email) {
+          try {
+            // Fetch the original scanRef from Monday.com
+            const statusResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
+            if (statusResponse.ok) {
+              const driverData = await statusResponse.json();
+              const originalScanRef = driverData.idenfyScanRef; // From text_mkwbn8bx
+              
+              if (originalScanRef) {
+                console.log('🔗 Reusing face data from original verification:', originalScanRef);
+                requestBody.faceAuthScanRef = originalScanRef;
+                // Don't set skipFaceMatching - let Idenfy use the reference instead
+              } else {
+                console.log('⚠️ No original scanRef found, will require new selfie');
+                requestBody.skipFaceMatching = true;
+              }
+            }
+          } catch (error) {
+            console.log('⚠️ Could not fetch original scanRef:', error.message);
+            requestBody.skipFaceMatching = true;
+          }
+        } else {
+          requestBody.skipFaceMatching = true;
+        }
         break;
 
       default:
