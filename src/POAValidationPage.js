@@ -260,7 +260,8 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
   }, [driverEmail]);
 
 const checkPoaValidationResults = useCallback(async () => {
-    const MAX_ATTEMPTS = 20; // For waiting for URLs from webhook
+    const MAX_ATTEMPTS = 20;
+    let alreadyProcessed = false; // Track if we've processed in THIS function call
     
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -284,14 +285,17 @@ const checkPoaValidationResults = useCallback(async () => {
         });
         
         // Check if we have the URLs we need (webhook has completed)
-       if (status.poa1URL || status.poa2URL) {
+        if (status.poa1URL || status.poa2URL) {
           console.log('✅ POA URLs found, checking if already processed...');
           
-          // Check if we've already processed these documents
-          if (processedDocsRef.current.poa1 && processedDocsRef.current.poa2) {
-            console.log('⏭️ Documents already processed - skipping duplicate processing');
-            return; // Exit early - already done
+          // Check both ref (across renders) AND local flag (within this loop)
+          if (alreadyProcessed || (processedDocsRef.current.poa1 && processedDocsRef.current.poa2)) {
+            console.log('⏭️ Documents already processed - exiting loop completely');
+            return; // Exit the entire function
           }
+          
+          // Mark as being processed NOW to prevent loop re-entry
+          alreadyProcessed = true;
           
           setLoading(false);
           setProcessingPDFs(true);
