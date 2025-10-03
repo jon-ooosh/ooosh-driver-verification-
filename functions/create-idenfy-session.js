@@ -197,15 +197,7 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       case 'passport_only':
         // Passport for non-UK drivers - reuse face from previous verification
         requestBody.documents = ['PASSPORT'];
-        
-        // CRITICAL: Override dashboard settings to disable POA collection
-        // Empty object explicitly disables additional steps per Idenfy docs
-        requestBody.additionalSteps = {
-          "ALL": {
-            "ALL": {}
-          }
-        };
-        
+              
         // Use existing face reference from license verification (stored in Monday.com)
         // This prevents requiring a new selfie since we already have face data
         if (email) {
