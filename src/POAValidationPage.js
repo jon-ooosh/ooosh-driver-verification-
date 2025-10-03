@@ -382,11 +382,11 @@ const checkPoaValidationResults = useCallback(async () => {
           }
         }
         
-        // URLs not found yet - wait and retry if we have attempts left
+       // URLs not found yet - wait and retry if we have attempts left
         if (attempt < MAX_ATTEMPTS) {
-          console.log(`⏳ URLs not ready yet, waiting 2 seconds... (${attempt}/${MAX_ATTEMPTS})`);
+          console.log(`⏳ URLs not ready yet, waiting 3 seconds... (${attempt}/${MAX_ATTEMPTS})`);
           setLoading(true);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 3000));
         } else {
           // Max attempts reached - webhook likely timed out
           console.error('❌ Max attempts reached, POA URLs never arrived from webhook');
@@ -398,9 +398,9 @@ const checkPoaValidationResults = useCallback(async () => {
       } catch (err) {
         console.error('❌ Error in POA validation check:', err);
         
-        if (attempt < MAX_ATTEMPTS) {
-          console.log(`⏳ Error occurred, retrying in 2 seconds... (${attempt}/${MAX_ATTEMPTS})`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+       if (attempt < MAX_ATTEMPTS) {
+          console.log(`⏳ Error occurred, retrying in 3 seconds... (${attempt}/${MAX_ATTEMPTS})`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
         } else {
           setError(err.message || 'Failed to check POA validation results');
           setLoading(false);
