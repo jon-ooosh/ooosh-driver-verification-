@@ -90,20 +90,47 @@ exports.handler = async (event, context) => {
     // Process based on type
     switch (processType) {
       case 'poa':
+        // ✅ CHECK IF ALREADY PROCESSED - Skip if validity date exists
+        const email = JSON.parse(event.body).email;
+        if (email) {
+          try {
+            const statusCheck = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
+            if (statusCheck.ok) {
+              const driverData = await statusCheck.json();
+              
+              // Check if this specific POA already has a validity date
+              const alreadyProcessed = documentType === 'poa1' 
+                ? (driverData.documents?.poa1?.validUntil || driverData.poa1ValidUntil)
+                : (driverData.documents?.poa2?.validUntil || driverData.poa2ValidUntil);
+              
+              if (alreadyProcessed) {
+                console.log(`⏭️ ${documentType.toUpperCase()} already processed (validity date exists) - skipping OCR`);
+                return {
+                  statusCode: 200,
+                  headers,
+                  body: JSON.stringify({
+                    success: true,
+                    result: {
+                      documentType: documentType,
+                      extractionSuccess: true,
+                      note: 'Already processed - cached result',
+                      validUntil: alreadyProcessed
+                    }
+                  })
+                };
+              }
+            }
+          } catch (error) {
+            console.log('⚠️ Could not check processing status, proceeding with OCR:', error.message);
+            // Continue with processing if check fails - don't block on this
+          }
+        }
+        
         result = await testSinglePoaExtraction(processedImageData, documentType, licenseAddress);
         break;
       case 'dvla':
         result = await testDvlaExtractionWithTextract(processedImageData);
         break;
-      case 'dual-poa':
-        if (!processedImageData2) {
-          throw new Error('dual-poa requires both imageData and imageData2');
-        }
-        result = await testDualPoaCrossValidation(processedImageData, processedImageData2, licenseAddress);
-        break;
-      default:
-        throw new Error('Invalid action/testType. Use "poa", "dvla", or "dual-poa"');
-    }
 
     return {
       statusCode: 200,
