@@ -287,11 +287,16 @@ async function processEnhancedVerificationResult(email, jobId, scanRef, status, 
     });
     console.log('✅ License check date set');
 
-    // Step 4: Save documents to Monday.com with actual file upload
-    await saveIdenfyDocumentsToMonday(email, fullWebhookData);
+   // Step 4: Save documents to Monday.com - don't await file uploads (non-blocking)
+    // URLs are stored immediately, files upload in background
+    saveIdenfyDocumentsToMonday(email, fullWebhookData)
+      .then(() => console.log('✅ All file uploads completed'))
+      .catch(err => console.error('⚠️ Some file uploads failed:', err.message));
     
-    // Step 4.5: Process POA documents immediately if present
-    const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
+    // Step 4.5: Process POA documents - also non-blocking
+    processPoaDocumentsImmediately(email, fullWebhookData)
+      .then(result => console.log('✅ POA processing complete'))
+      .catch(err => console.error('⚠️ POA processing issues:', err.message));
     console.log('📊 POA processing result:', {
       processed: poaProcessingResult.poasProcessed,
       approved: poaProcessingResult.approved,
