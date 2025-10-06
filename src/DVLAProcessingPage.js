@@ -275,11 +275,7 @@ const handleFileUpload = async (fileType, file) => {
         // Clear any previous errors if validation passed
         setError('');
         
-        // IMPORTANT: Save DVLA date after successful validation
-        await saveDvlaDate();
-      }
-       
-      // IMPORTANT: Save DVLA date after successful validation
+        // IMPORTANT: Save DVLA date and insurance data after successful validation
         await saveDvlaDate();
         
         // Extract and save DVLA insurance data
@@ -307,40 +303,41 @@ const handleFileUpload = async (fileType, file) => {
           totalExcess: calculatedExcess
         });
         
-        // Upload DVLA file to Monday.com
-        if (fileType === 'dvla' && imageData) {
-          console.log('📤 Uploading DVLA file to Monday.com...');
-          
-          const uploadResponse = await fetch('/.netlify/functions/monday-integration', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'upload-file-board-a',
-              email: driverEmail,
-              fileType: 'dvla',
-              fileData: imageData.split(',')[1],
-              filename: `dvla_${Date.now()}.png`,
-              contentType: 'image/png'
-            })
-          });
-          
-          const uploadResult = await uploadResponse.json();
-          if (uploadResult.success) {
-            console.log('✅ DVLA file uploaded to Monday.com');
-          } else {
-            console.error('❌ Failed to upload DVLA file:', uploadResult.error);
-          }
-        }
-        
         // Update Monday.com with insurance data
         await updateDriverData({
           dvlaPoints: dvlaResult.totalPoints || 0,
           dvlaEndorsements: endorsementCodes,
           dvlaCalculatedExcess: calculatedExcess
         });
+      }
+        
+      // Upload DVLA file to Monday.com
+      if (fileType === 'dvla' && imageData) {
+        console.log('📤 Uploading DVLA file to Monday.com...');
+        
+        const uploadResponse = await fetch('/.netlify/functions/monday-integration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'upload-file-board-a',
+            email: driverEmail,
+            fileType: 'dvla',
+            fileData: imageData.split(',')[1],
+            filename: `dvla_${Date.now()}.png`,
+            contentType: 'image/png'
+          })
+        });
+        
+        const uploadResult = await uploadResponse.json();
+        if (uploadResult.success) {
+          console.log('✅ DVLA file uploaded to Monday.com');
+        } else {
+          console.error('❌ Failed to upload DVLA file:', uploadResult.error);
+        }
+      }
           
-        // Display and validate DVLA results
-      if (fileType === 'dvla' && processingResult.result) {
+      // Display and validate DVLA results
+        if (fileType === 'dvla' && processingResult.result) {
         const dvlaData = processingResult.result;
         
         // Check license ending matches Idenfy data
