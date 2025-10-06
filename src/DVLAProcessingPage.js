@@ -278,6 +278,35 @@ const handleFileUpload = async (fileType, file) => {
         // IMPORTANT: Save DVLA date after successful validation
         await saveDvlaDate();
       }
+       
+      // IMPORTANT: Save DVLA date after successful validation
+        await saveDvlaDate();
+        
+        // Extract and save DVLA insurance data
+        const dvlaResult = processingResult.result;
+        
+        // Format endorsements with points
+        let endorsementCodes = 'None';
+        if (dvlaResult.endorsements && dvlaResult.endorsements.length > 0) {
+          endorsementCodes = dvlaResult.endorsements
+            .map(e => `${e.code} (${e.points} pts)`)
+            .join(', ');
+        }
+        
+        // Calculate total excess: base £1,000 + additional + VAT
+        const baseExcess = 1000;
+        const additionalExcess = dvlaResult.insuranceDecision?.excess || 0;
+        const totalBeforeVat = baseExcess + additionalExcess;
+        const totalWithVat = totalBeforeVat * 1.2;
+        const calculatedExcess = `£${totalWithVat.toLocaleString('en-GB')}`;
+        
+        console.log('💾 Saving DVLA insurance data:', {
+          points: dvlaResult.totalPoints || 0,
+          endorsements: endorsementCodes,
+          additionalExcess: additionalExcess,
+          totalExcess: calculatedExcess
+        });
+        
         // Upload DVLA file to Monday.com
         if (fileType === 'dvla' && imageData) {
           console.log('📤 Uploading DVLA file to Monday.com...');
@@ -289,7 +318,7 @@ const handleFileUpload = async (fileType, file) => {
               action: 'upload-file-board-a',
               email: driverEmail,
               fileType: 'dvla',
-              fileData: imageData.split(',')[1], // Remove data URL prefix
+              fileData: imageData.split(',')[1],
               filename: `dvla_${Date.now()}.png`,
               contentType: 'image/png'
             })
@@ -302,8 +331,15 @@ const handleFileUpload = async (fileType, file) => {
             console.error('❌ Failed to upload DVLA file:', uploadResult.error);
           }
         }
+        
+        // Update Monday.com with insurance data
+        await updateDriverData({
+          dvlaPoints: dvlaResult.totalPoints || 0,
+          dvlaEndorsements: endorsementCodes,
+          dvlaCalculatedExcess: calculatedExcess
+        });
           
-    // Display and validate DVLA results
+        // Display and validate DVLA results
       if (fileType === 'dvla' && processingResult.result) {
         const dvlaData = processingResult.result;
         
