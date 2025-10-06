@@ -533,7 +533,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
     </div>
     
     <div className="flex items-center justify-between">
-      <span className="text-gray-700">Proof of Address 1</span>
+      <span className="text-gray-700">Proof of address 1</span>
       {driverData.documents?.poa1?.valid ? (
         <span className="flex items-center text-green-600">
           <Check className="h-4 w-4 mr-1" />
@@ -548,7 +548,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
     </div>
     
     <div className="flex items-center justify-between">
-      <span className="text-gray-700">Proof of Address 2</span>
+      <span className="text-gray-700">Proof of address 2</span>
       {driverData.documents?.poa2?.valid ? (
         <span className="flex items-center text-green-600">
           <Check className="h-4 w-4 mr-1" />
@@ -565,7 +565,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
     {/* Conditional: DVLA Check OR Passport based on license issuer */}
     {driverData.licenseIssuedBy === 'DVLA' ? (
       <div className="flex items-center justify-between">
-        <span className="text-gray-700">DVLA Check</span>
+        <span className="text-gray-700">DVLA check</span>
         {driverData.documents?.dvlaCheck?.valid ? (
           <span className="flex items-center text-green-600">
             <Check className="h-4 w-4 mr-1" />
