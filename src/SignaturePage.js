@@ -249,39 +249,42 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
     }
   };
 
-  const generateSummary = () => {
-    if (!driverData) return {};
-    
-    return {
-      name: driverData.name || driverData.driverName || 'Not provided',
-      email: driverEmail,
-      phone: `${driverData.phoneCountry || ''} ${driverData.phoneNumber || ''}`,
-      nationality: driverData.nationality || 'Not provided',
-      dateOfBirth: driverData.dateOfBirth || 'Not provided',
-      licenseNumber: driverData.licenseNumber || 'Not provided',
-      licenseIssuedBy: driverData.licenseIssuedBy || 'Not provided',
-      licenseValidTo: driverData.documents?.license?.expiryDate || driverData.licenseValidTo || 'Not provided',
-      datePassedTest: driverData.datePassedTest || driverData.insuranceData?.datePassedTest || 'Not provided',
-      homeAddress: driverData.homeAddress || 'Not provided',
-      licenseAddress: driverData.licenseAddress || 'Not provided',
-      insuranceQuestions: {
-        hasDisability: driverData.hasDisability || driverData.insuranceData?.hasDisability || false,
-        hasConvictions: driverData.hasConvictions || driverData.insuranceData?.hasConvictions || false,
-        hasProsecution: driverData.hasProsecution || driverData.insuranceData?.hasProsecution || false,
-        hasAccidents: driverData.hasAccidents || driverData.insuranceData?.hasAccidents || false,
-        hasInsuranceIssues: driverData.hasInsuranceIssues || driverData.insuranceData?.hasInsuranceIssues || false,
-        hasDrivingBan: driverData.hasDrivingBan || driverData.insuranceData?.hasDrivingBan || false,
-        additionalDetails: driverData.additionalDetails || driverData.insuranceData?.additionalDetails || ''
-      },
-      documents: {
-        license: driverData.documents?.license?.valid || false,
-        poa1: driverData.documents?.poa1?.valid || false,
-        poa2: driverData.documents?.poa2?.valid || false,
-        dvlaCheck: driverData.documents?.dvlaCheck?.valid || false,
-        passport: driverData.documents?.passport?.valid || false
-      }
-    };
+ const generateSummary = () => {
+  if (!driverData) return {};
+  
+  return {
+    name: driverData.name || driverData.driverName || 'Not provided',
+    email: driverEmail,
+    phone: `${driverData.phoneCountry || ''} ${driverData.phoneNumber || ''}`,
+    nationality: driverData.nationality || 'Not provided',
+    dateOfBirth: driverData.dateOfBirth || 'Not provided',
+    licenseNumber: driverData.licenseNumber || 'Not provided',
+    licenseIssuedBy: driverData.licenseIssuedBy || 'Not provided',
+    licenseValidTo: driverData.documents?.license?.expiryDate || driverData.licenseValidTo || 'Not provided',
+    datePassedTest: driverData.datePassedTest || driverData.insuranceData?.datePassedTest || 'Not provided',
+    homeAddress: driverData.homeAddress || 'Not provided',
+    licenseAddress: driverData.licenseAddress || 'Not provided',
+    dvlaPoints: driverData.dvlaPoints,
+    dvlaEndorsements: driverData.dvlaEndorsements,
+    dvlaCalculatedExcess: driverData.dvlaCalculatedExcess,
+    insuranceQuestions: {
+      hasDisability: driverData.hasDisability || driverData.insuranceData?.hasDisability || false,
+      hasConvictions: driverData.hasConvictions || driverData.insuranceData?.hasConvictions || false,
+      hasProsecution: driverData.hasProsecution || driverData.insuranceData?.hasProsecution || false,
+      hasAccidents: driverData.hasAccidents || driverData.insuranceData?.hasAccidents || false,
+      hasInsuranceIssues: driverData.hasInsuranceIssues || driverData.insuranceData?.hasInsuranceIssues || false,
+      hasDrivingBan: driverData.hasDrivingBan || driverData.insuranceData?.hasDrivingBan || false,
+      additionalDetails: driverData.additionalDetails || driverData.insuranceData?.additionalDetails || ''
+    },
+    documents: {
+      license: driverData.documents?.license?.valid || false,
+      poa1: driverData.documents?.poa1?.valid || false,
+      poa2: driverData.documents?.poa2?.valid || false,
+      dvlaCheck: driverData.documents?.dvlaCheck?.valid || false,
+      passport: driverData.documents?.passport?.valid || driverData.documents?.passportCheck?.valid || false
+    }
   };
+};
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Not set';
