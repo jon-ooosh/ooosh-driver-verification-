@@ -789,6 +789,11 @@ function formatBoardAColumnValues(data) {
   if (data.hasInsuranceIssues !== undefined) columnValues.color_mktrpe6q = { label: data.hasInsuranceIssues ? 'Yes' : 'No' };
   if (data.hasDrivingBan !== undefined) columnValues.color_mktr2t8a = { label: data.hasDrivingBan ? 'Yes' : 'No' };
 
+  // DVLA Insurance Data
+  if (data.dvlaPoints !== undefined) columnValues.text_mkwfhvve = String(data.dvlaPoints);
+  if (data.dvlaEndorsements) columnValues.text_mkwf6e1n = data.dvlaEndorsements;
+  if (data.dvlaCalculatedExcess !== undefined) columnValues.text_mkwf6595 = data.dvlaCalculatedExcess;
+
   // Additional details and status
   if (data.additionalDetails) columnValues.long_text_mktr1a66 = data.additionalDetails;
   if (data.overallStatus) columnValues.color_mktrwatg = { label: data.overallStatus };
@@ -865,7 +870,10 @@ function parseBoardAData(item) {
     licenseNextCheckDue: '',
     idenfyCheckDate: '',
     idenfyScanRef: '',
-    signatureDate: ''
+    signatureDate: '',
+    dvlaPoints: 0,              
+    dvlaEndorsements: '', 
+    dvlaCalculatedExcess: ''
   };
 
   item.column_values.forEach(col => {
@@ -983,6 +991,15 @@ function parseBoardAData(item) {
         break;
       case 'text_mkwbn8bx': // Idenfy Scan Reference
         driver.idenfyScanRef = col.text || '';
+        break;
+      case 'text_mkwfhvve': // DVLA Points
+        driver.dvlaPoints = col.text ? parseInt(col.text) : 0;
+        break;
+      case 'text_mkwf6e1n': // DVLA Endorsements
+        driver.dvlaEndorsements = col.text || '';
+        break;
+      case 'text_mkwf6595': // DVLA Calculated Excess
+        driver.dvlaCalculatedExcess = col.text || '';
         break;
     }
   });
