@@ -741,6 +741,13 @@ async function copyAToB(data) {
 
 // Format data for Board A columns - Ensure email is always included
 function formatBoardAColumnValues(data) {
+  console.log('🔍 formatBoardAColumnValues called with data keys:', Object.keys(data));
+  console.log('🔍 Insurance data present?', {
+    dvlaPoints: data.dvlaPoints,
+    dvlaEndorsements: data.dvlaEndorsements,
+    dvlaCalculatedExcess: data.dvlaCalculatedExcess
+  });
+  
   const columnValues = {};
 
   // CRITICAL: Always include email field
