@@ -428,148 +428,171 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
             </div>
 
             {/* Insurance Questions */}
-            <div className="mb-6 bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center mb-3">
-                <Shield className="h-5 w-5 text-purple-600 mr-2" />
-                <h3 className="text-lg font-semibold">Insurance declarations</h3>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Date Passed Test:</span>
-                  <span className="font-medium">{formatDate(driverData.datePassedTest || driverData.insuranceData?.datePassedTest)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Any disability/medical conditions affecting driving?</span>
-                  <span className={`font-medium ${formatYesNo(driverData.hasDisability || driverData.insuranceData?.hasDisability) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatYesNo(driverData.hasDisability || driverData.insuranceData?.hasDisability)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Any motoring convictions?</span>
-                  <span className={`font-medium ${formatYesNo(driverData.hasConvictions || driverData.insuranceData?.hasConvictions) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatYesNo(driverData.hasConvictions || driverData.insuranceData?.hasConvictions)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Any pending prosecutions?</span>
-                  <span className={`font-medium ${formatYesNo(driverData.hasProsecution || driverData.insuranceData?.hasProsecution) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatYesNo(driverData.hasProsecution || driverData.insuranceData?.hasProsecution)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Any accidents in last 5 years?</span>
-                  <span className={`font-medium ${formatYesNo(driverData.hasAccidents || driverData.insuranceData?.hasAccidents) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatYesNo(driverData.hasAccidents || driverData.insuranceData?.hasAccidents)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Any insurance issues?</span>
-                  <span className={`font-medium ${formatYesNo(driverData.hasInsuranceIssues || driverData.insuranceData?.hasInsuranceIssues) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatYesNo(driverData.hasInsuranceIssues || driverData.insuranceData?.hasInsuranceIssues)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Any driving bans?</span>
-                  <span className={`font-medium ${formatYesNo(driverData.hasDrivingBan || driverData.insuranceData?.hasDrivingBan) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
-                    {formatYesNo(driverData.hasDrivingBan || driverData.insuranceData?.hasDrivingBan)}
-                  </span>
-                </div>
-                {(driverData.additionalDetails || driverData.insuranceData?.additionalDetails) && (
-                  <div className="mt-3 pt-3 border-t">
-                    <span className="text-gray-600">Additional Details:</span>
-                    <p className="mt-1 text-sm">{driverData.additionalDetails || driverData.insuranceData?.additionalDetails}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+<div className="mb-6 bg-gray-50 rounded-lg p-4">
+  <div className="flex items-center mb-3">
+    <Shield className="h-5 w-5 text-purple-600 mr-2" />
+    <h3 className="text-lg font-semibold">Insurance declarations</h3>
+  </div>
+  <div className="space-y-2 text-sm">
+    <div className="flex justify-between">
+      <span>Date Passed Test:</span>
+      <span className="font-medium">{formatDate(driverData.datePassedTest || driverData.insuranceData?.datePassedTest)}</span>
+    </div>
+    
+    {/* DVLA Check Results - UK drivers only */}
+    {driverData.licenseIssuedBy === 'DVLA' && (driverData.dvlaPoints !== undefined || driverData.dvlaEndorsements || driverData.dvlaCalculatedExcess) && (
+      <div className="mt-3 pt-3 border-t border-gray-300">
+        <div className="flex justify-between">
+          <span>Licence Points:</span>
+          <span className="font-medium">
+            {driverData.dvlaPoints === 0 ? 'Clean licence' : `${driverData.dvlaPoints} points`}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Endorsements:</span>
+          <span className="font-medium">{driverData.dvlaEndorsements || 'None'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Insurance Excess:</span>
+          <span className="font-medium">{driverData.dvlaCalculatedExcess || '£1,200'}</span>
+        </div>
+      </div>
+    )}
+    
+    <div className="mt-3 pt-3 border-t border-gray-300">
+      <div className="flex justify-between">
+        <span>Any disability/medical conditions affecting driving?</span>
+        <span className={`font-medium ${formatYesNo(driverData.hasDisability || driverData.insuranceData?.hasDisability) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
+          {formatYesNo(driverData.hasDisability || driverData.insuranceData?.hasDisability)}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span>Any motoring convictions?</span>
+        <span className={`font-medium ${formatYesNo(driverData.hasConvictions || driverData.insuranceData?.hasConvictions) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
+          {formatYesNo(driverData.hasConvictions || driverData.insuranceData?.hasConvictions)}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span>Any pending prosecutions?</span>
+        <span className={`font-medium ${formatYesNo(driverData.hasProsecution || driverData.insuranceData?.hasProsecution) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
+          {formatYesNo(driverData.hasProsecution || driverData.insuranceData?.hasProsecution)}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span>Any accidents in last 5 years?</span>
+        <span className={`font-medium ${formatYesNo(driverData.hasAccidents || driverData.insuranceData?.hasAccidents) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
+          {formatYesNo(driverData.hasAccidents || driverData.insuranceData?.hasAccidents)}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span>Any insurance issues?</span>
+        <span className={`font-medium ${formatYesNo(driverData.hasInsuranceIssues || driverData.insuranceData?.hasInsuranceIssues) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
+          {formatYesNo(driverData.hasInsuranceIssues || driverData.insuranceData?.hasInsuranceIssues)}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span>Any driving bans?</span>
+        <span className={`font-medium ${formatYesNo(driverData.hasDrivingBan || driverData.insuranceData?.hasDrivingBan) === 'Yes' ? 'text-orange-600' : 'text-green-600'}`}>
+          {formatYesNo(driverData.hasDrivingBan || driverData.insuranceData?.hasDrivingBan)}
+        </span>
+      </div>
+    </div>
+    
+    {(driverData.additionalDetails || driverData.insuranceData?.additionalDetails) && (
+      <div className="mt-3 pt-3 border-t">
+        <span className="text-gray-600">Additional Details:</span>
+        <p className="mt-1 text-sm">{driverData.additionalDetails || driverData.insuranceData?.additionalDetails}</p>
+      </div>
+    )}
+  </div>
+</div>
 
-            {/* Document Status */}
-            <div className="mb-6 bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center mb-3">
-                <FileText className="h-5 w-5 text-purple-600 mr-2" />
-                <h3 className="text-lg font-semibold">Documents</h3>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-700">Driving Licence</span>
-                  {driverData.documents?.license?.valid ? (
-                    <span className="flex items-center text-green-600">
-                      <Check className="h-4 w-4 mr-1" />
-                      Verified
-                    </span>
-                  ) : (
-                    <span className="flex items-center text-orange-600">
-                      <X className="h-4 w-4 mr-1" />
-                      Pending
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-700">Proof of Address 1</span>
-                  {driverData.documents?.poa1?.valid ? (
-                    <span className="flex items-center text-green-600">
-                      <Check className="h-4 w-4 mr-1" />
-                      Verified
-                    </span>
-                  ) : (
-                    <span className="flex items-center text-orange-600">
-                      <X className="h-4 w-4 mr-1" />
-                      Pending
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-700">Proof of Address 2</span>
-                  {driverData.documents?.poa2?.valid ? (
-                    <span className="flex items-center text-green-600">
-                      <Check className="h-4 w-4 mr-1" />
-                      Verified
-                    </span>
-                  ) : (
-                    <span className="flex items-center text-orange-600">
-                      <X className="h-4 w-4 mr-1" />
-                      Pending
-                    </span>
-                  )}
-                </div>
-                
-                {driverData.licenseIssuedBy === 'DVLA' && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700">DVLA Check</span>
-                    {driverData.documents?.dvlaCheck?.valid ? (
-                      <span className="flex items-center text-green-600">
-                        <Check className="h-4 w-4 mr-1" />
-                        Verified
-                      </span>
-                    ) : (
-                      <span className="flex items-center text-orange-600">
-                        <X className="h-4 w-4 mr-1" />
-                        Pending
-                      </span>
-                    )}
-                  </div>
-                )}
-                
-                {driverData.licenseIssuedBy !== 'DVLA' && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700">Passport</span>
-                    {driverData.documents?.passport?.valid ? (
-                      <span className="flex items-center text-green-600">
-                        <Check className="h-4 w-4 mr-1" />
-                        Verified
-                      </span>
-                    ) : (
-                      <span className="flex items-center text-orange-600">
-                        <X className="h-4 w-4 mr-1" />
-                        Pending
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* Document Status */}
+<div className="mb-6 bg-gray-50 rounded-lg p-4">
+  <div className="flex items-center mb-3">
+    <FileText className="h-5 w-5 text-purple-600 mr-2" />
+    <h3 className="text-lg font-semibold">Documents</h3>
+  </div>
+  <div className="space-y-2">
+    <div className="flex items-center justify-between">
+      <span className="text-gray-700">Driving Licence</span>
+      {driverData.documents?.license?.valid ? (
+        <span className="flex items-center text-green-600">
+          <Check className="h-4 w-4 mr-1" />
+          Verified
+        </span>
+      ) : (
+        <span className="flex items-center text-orange-600">
+          <X className="h-4 w-4 mr-1" />
+          Pending
+        </span>
+      )}
+    </div>
+    
+    <div className="flex items-center justify-between">
+      <span className="text-gray-700">Proof of Address 1</span>
+      {driverData.documents?.poa1?.valid ? (
+        <span className="flex items-center text-green-600">
+          <Check className="h-4 w-4 mr-1" />
+          Verified
+        </span>
+      ) : (
+        <span className="flex items-center text-orange-600">
+          <X className="h-4 w-4 mr-1" />
+          Pending
+        </span>
+      )}
+    </div>
+    
+    <div className="flex items-center justify-between">
+      <span className="text-gray-700">Proof of Address 2</span>
+      {driverData.documents?.poa2?.valid ? (
+        <span className="flex items-center text-green-600">
+          <Check className="h-4 w-4 mr-1" />
+          Verified
+        </span>
+      ) : (
+        <span className="flex items-center text-orange-600">
+          <X className="h-4 w-4 mr-1" />
+          Pending
+        </span>
+      )}
+    </div>
+    
+    {/* Conditional: DVLA Check OR Passport based on license issuer */}
+    {driverData.licenseIssuedBy === 'DVLA' ? (
+      <div className="flex items-center justify-between">
+        <span className="text-gray-700">DVLA Check</span>
+        {driverData.documents?.dvlaCheck?.valid ? (
+          <span className="flex items-center text-green-600">
+            <Check className="h-4 w-4 mr-1" />
+            Verified
+          </span>
+        ) : (
+          <span className="flex items-center text-orange-600">
+            <X className="h-4 w-4 mr-1" />
+            Pending
+          </span>
+        )}
+      </div>
+    ) : (
+      <div className="flex items-center justify-between">
+        <span className="text-gray-700">Passport</span>
+        {driverData.documents?.passportCheck?.valid || driverData.documents?.passport?.valid ? (
+          <span className="flex items-center text-green-600">
+            <Check className="h-4 w-4 mr-1" />
+            Verified
+          </span>
+        ) : (
+          <span className="flex items-center text-orange-600">
+            <X className="h-4 w-4 mr-1" />
+            Pending
+          </span>
+        )}
+      </div>
+    )}
+  </div>
+</div>
 
           {/* Declaration Text */}
 <div className="mb-6 bg-gray-50 rounded-lg p-4">
