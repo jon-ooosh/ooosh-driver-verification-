@@ -131,7 +131,8 @@ exports.handler = async (event, context) => {
       case 'dvla':
         result = await testDvlaExtractionWithTextract(processedImageData);
         break;
-
+    }
+    
     return {
       statusCode: 200,
       headers,
