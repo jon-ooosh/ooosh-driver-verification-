@@ -147,19 +147,62 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
 
     console.log('🔑 Creating Idenfy session with client ID:', clientId);
 
+    // NEW: Fetch existing driver data for COMPARE validation (revalidations only)
+    let firstName = null;
+    let lastName = null;
+    let dateOfBirth = null;
+    
+    if (verificationType !== 'full') {  // Only for revalidations, not new drivers
+      try {
+        console.log('🔍 Fetching existing driver data for COMPARE validation...');
+        const driverResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
+        
+        if (driverResponse.ok) {
+          const driverData = await driverResponse.json();
+          
+          if (driverData.name) {
+            // Split full name into firstName and lastName
+            const nameParts = driverData.name.trim().split(' ');
+            firstName = nameParts[0];
+            lastName = nameParts.slice(1).join(' ') || nameParts[0]; // If only one name, use it for both
+            
+            console.log('✅ Using COMPARE validation:', { firstName, lastName });
+          }
+          
+          if (driverData.dateOfBirth) {
+            dateOfBirth = driverData.dateOfBirth;
+            console.log('✅ Adding DOB for validation:', dateOfBirth);
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ Could not fetch driver data for COMPARE (continuing anyway):', error.message);
+      }
+    }
+
     // Base configuration
     const requestBody = {
-  clientId: clientId,
-  successUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}`,
-  errorUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}&error=true`,
-  unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}&unverified=true`,
+      clientId: clientId,
+      successUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}`,
+      errorUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}&error=true`,
+      unverifiedUrl: `https://ooosh-driver-verification.netlify.app/?step=processing-hub&job=${jobId}&email=${encodeURIComponent(email)}&sessionType=${verificationType}&unverified=true`,
       locale: 'en',
       expiryTime: 3600,
       sessionLength: 1800,
       tokenType: 'IDENTIFICATION',
       showInstructions: true
     };
+    
+    // Add COMPARE data if available
+    if (firstName && lastName) {
+      requestBody.firstName = firstName;
+      requestBody.lastName = lastName;
+    }
+    
+    if (dateOfBirth) {
+      requestBody.dateOfBirth = dateOfBirth;
+    }
 
+    
     // Configure based on verification type
   switch (verificationType) {
      case 'full':
@@ -171,8 +214,7 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   }
 };
   break;
-    
-        
+            
     case 'license':
     case 'license_only': 
   // JUST license, no POAs
