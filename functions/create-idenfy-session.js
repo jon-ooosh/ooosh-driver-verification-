@@ -173,10 +173,14 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   break;
     
         case 'license_only':
-        // JUST license, no POAs
-        requestBody.documents = ['DRIVER_LICENSE'];
-        requestBody.additionalSteps = []; // Empty array to exclude POAs
-        break;
+  // JUST license, no POAs
+  requestBody.documents = ['DRIVER_LICENSE'];
+  requestBody.additionalSteps = {
+    "ALL": {
+      "ALL": {}
+    }
+  };
+  break;
 
       case 'poa1':
       case 'poa2':
