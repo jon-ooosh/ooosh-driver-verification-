@@ -166,8 +166,11 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   // Standard flow: Driver license + 2 POAs
   requestBody.documents = ['DRIVER_LICENSE'];
   requestBody.additionalSteps = {
-    "UTILITY_BILL": 2
+    "ALL": {
+      "ALL": ["UTILITY_BILL"]
+    }
   };
+  requestBody.utilityBillMinCount = 2;  
   break;
 
       case 'license_only':
