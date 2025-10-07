@@ -172,7 +172,9 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
 };
   break;
     
-        case 'license_only':
+        
+    case 'license':
+    case 'license_only': 
   // JUST license, no POAs
   requestBody.documents = ['DRIVER_LICENSE'];
   requestBody.additionalSteps = {
