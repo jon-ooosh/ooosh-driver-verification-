@@ -104,7 +104,7 @@ const PassportUploadPage = ({ driverEmail, jobId }) => {
         </button>
 
         <p className="text-sm text-gray-500 mt-4">
-          This typically takes 2-3 minutes to complete
+          
         </p>
       </div>
     </div>
