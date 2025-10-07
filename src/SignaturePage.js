@@ -86,48 +86,51 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
   }, [driverEmail, jobId]);
 
   // Initialize canvas
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  }, []);
+useEffect(() => {
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;  // CHANGED: Increased from 2 to 3
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.imageSmoothingEnabled = true;  // ADDED: Enable smoothing
+  ctx.imageSmoothingQuality = 'high';  // ADDED: High quality smoothing
+}, []);
 
-  // Handle drawing
-  const startDrawing = (e) => {
-    setIsDrawing(true);
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const ctx = canvas.getContext('2d');
-    
-    const x = e.type.includes('mouse') ? e.clientX - rect.left : e.touches[0].clientX - rect.left;
-    const y = e.type.includes('mouse') ? e.clientY - rect.top : e.touches[0].clientY - rect.top;
-    
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    minDrawingLength.current = 0;
-  };
+// Handle drawing
+const startDrawing = (e) => {
+  e.preventDefault();  // ADDED: Prevent default touch behavior
+  setIsDrawing(true);
+  const canvas = canvasRef.current;
+  const rect = canvas.getBoundingClientRect();
+  const ctx = canvas.getContext('2d');
+  
+  const x = e.type.includes('mouse') ? e.clientX - rect.left : e.touches[0].clientX - rect.left;
+  const y = e.type.includes('mouse') ? e.clientY - rect.top : e.touches[0].clientY - rect.top;
+  
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  minDrawingLength.current = 0;
+};
 
-  const draw = (e) => {
-    if (!isDrawing) return;
-    e.preventDefault();
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const ctx = canvas.getContext('2d');
-    
-    const x = e.type.includes('mouse') ? e.clientX - rect.left : e.touches[0].clientX - rect.left;
-    const y = e.type.includes('mouse') ? e.clientY - rect.top : e.touches[0].clientY - rect.top;
-    
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    minDrawingLength.current += 2; // Track drawing length
-    setHasDrawn(true);
-  };
+const draw = (e) => {
+  if (!isDrawing) return;
+  e.preventDefault();
+  
+  const canvas = canvasRef.current;
+  const rect = canvas.getBoundingClientRect();
+  const ctx = canvas.getContext('2d');
+  
+  const x = e.type.includes('mouse') ? e.clientX - rect.left : e.touches[0].clientX - rect.left;
+  const y = e.type.includes('mouse') ? e.clientY - rect.top : e.touches[0].clientY - rect.top;
+  
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  minDrawingLength.current += 2;
+  setHasDrawn(true);
+};
 
   const stopDrawing = () => {
     if (isDrawing) {
@@ -516,7 +519,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
     <FileText className="h-5 w-5 text-purple-600 mr-2" />
     <h3 className="text-lg font-semibold">Documents</h3>
   </div>
-  <div className="space-y-2">
+  <div className="space-y-2 text-sm"> 
     <div className="flex items-center justify-between">
       <span className="text-gray-700">Driving Licence</span>
       {driverData.documents?.license?.valid ? (
@@ -620,7 +623,7 @@ const SignaturePage = ({ driverEmail: propEmail, jobId: propJobId }) => {
                   width={600}
                   height={200}
                   className="w-full cursor-crosshair touch-none"
-                  style={{ maxWidth: '100%', height: 'auto' }}
+                  style={{ maxWidth: '100%', height: 'auto', touchAction: 'none' }}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
