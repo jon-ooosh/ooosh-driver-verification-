@@ -162,14 +162,12 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
 
     // Configure based on verification type
     switch (verificationType) {
-     case 'full':
-  // Standard flow: Driver license + 2 POAs
-  requestBody.documents = ['DRIVER_LICENSE'];
-  requestBody.additionalSteps = {
-    "ALL": {
-      "ALL": ["UTILITY_BILL"]
-    }
-  };
+     requestBody.additionalSteps = {
+  "ALL": {
+    "ALL": ["UTILITY_BILL", "POA2"]
+  }
+};
+        
   requestBody.utilityBillMinCount = 2;  
   break;
 
