@@ -137,7 +137,11 @@ async function getDriverStatusFromBoardA(email) {
       dvlaValidUntil: driver.dvlaValidUntil || null,
       passportValidUntil: driver.passportValidUntil || null,
       poa1URL: driver.poa1URL || null,
-      poa2URL: driver.poa2URL || null
+      poa2URL: driver.poa2URL || null,
+      // DVLA insurance data
+      dvlaPoints: driver.dvlaPoints || 0,
+      dvlaEndorsements: driver.dvlaEndorsements || null,
+      dvlaCalculatedExcess: driver.dvlaCalculatedExcess || null
     };
 
   } catch (error) {
