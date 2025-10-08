@@ -179,6 +179,15 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       }
     }
 
+    // ADD THIS LOG HERE:
+    console.log('🧪 COMPARE data collected:', { 
+      firstName, 
+      lastName, 
+      dateOfBirth, 
+      verificationType,
+      willAddToRequest: !!(firstName && lastName)
+    });
+
     // Base configuration
     const requestBody = {
       clientId: clientId,
@@ -284,14 +293,8 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
         requestBody.documents = ['DRIVER_LICENSE'];
     }
 
-    console.log(`📋 Idenfy session config for ${verificationType}:`, JSON.stringify({
-      clientId: clientId,
-      documents: requestBody.documents,
-      additionalSteps: requestBody.additionalSteps,
-      utilityBillMinCount: requestBody.utilityBillMinCount,
-      skipFaceMatching: requestBody.skipFaceMatching
-    }, null, 2));
-
+    console.log(`📋 Full Idenfy request body for ${verificationType}:`, JSON.stringify(requestBody, null, 2));
+     
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
       headers: {
