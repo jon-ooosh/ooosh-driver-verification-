@@ -1093,8 +1093,14 @@ const handleDVLAUpload = async (dvlaFile) => {
   };
 
  // COMPLETE Insurance Questionnaire Component 
-
 const InsuranceQuestionnaire = () => {
+  // ========== TEMPORARY DEBUG LOGS ==========
+  console.log('🐛 InsuranceQuestionnaire rendered');
+  console.log('🐛 driverStatus available?', !!driverStatus);
+  console.log('🐛 driverStatus.documents?', driverStatus?.documents);
+  console.log('🐛 Full driverStatus:', JSON.stringify(driverStatus, null, 2));
+  // ==========================================
+  
   const [formData, setFormData] = useState({
     datePassedTest: '', // NEW FIELD
     hasDisability: null,
