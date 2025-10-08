@@ -147,46 +147,34 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
 
     console.log('🔑 Creating Idenfy session with client ID:', clientId);
 
-    // NEW: Fetch existing driver data for COMPARE validation (revalidations only)
+    // Fetch existing driver data for COMPARE validation (revalidations only)
     let firstName = null;
     let lastName = null;
     let dateOfBirth = null;
     
     if (verificationType !== 'full') {  // Only for revalidations, not new drivers
       try {
-        console.log('🔍 Fetching existing driver data for COMPARE validation...');
+        console.log('🔍 Fetching driver data for COMPARE validation...');
         const driverResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
         
         if (driverResponse.ok) {
           const driverData = await driverResponse.json();
           
-          if (driverData.name) {
-            // Split full name into firstName and lastName
-            const nameParts = driverData.name.trim().split(' ');
-            firstName = nameParts[0];
-            lastName = nameParts.slice(1).join(' ') || nameParts[0]; // If only one name, use it for both
-            
-            console.log('✅ Using COMPARE validation:', { firstName, lastName });
-          }
+          // Use stored firstName/lastName directly - no parsing needed!
+          firstName = driverData.firstName;
+          lastName = driverData.lastName;
+          dateOfBirth = driverData.dateOfBirth;
           
-          if (driverData.dateOfBirth) {
-            dateOfBirth = driverData.dateOfBirth;
-            console.log('✅ Adding DOB for validation:', dateOfBirth);
+          if (firstName && lastName) {
+            console.log('✅ COMPARE data loaded:', { firstName, lastName, dateOfBirth });
+          } else {
+            console.log('⚠️ No firstName/lastName in driver record - COMPARE skipped');
           }
         }
       } catch (error) {
-        console.log('⚠️ Could not fetch driver data for COMPARE (continuing anyway):', error.message);
+        console.log('⚠️ Could not fetch driver data (continuing anyway):', error.message);
       }
     }
-
-    // ADD THIS LOG HERE:
-    console.log('🧪 COMPARE data collected:', { 
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-      verificationType,
-      willAddToRequest: !!(firstName && lastName)
-    });
 
     // Base configuration
     const requestBody = {
