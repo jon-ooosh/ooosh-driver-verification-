@@ -888,13 +888,15 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       
       lastUpdated: new Date().toISOString().split('T')[0]
     };
+
+    console.log('📊 Raw updateData BEFORE filtering:', Object.keys(updateData).filter(k => updateData[k]).length, 'fields with values');
     
-    // Remove empty fields (except email)
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key] === '' && key !== 'email') {
-        delete updateData[key];
-      }
-    });
+    // Remove empty/null/undefined fields (except email)
+      Object.keys(updateData).forEach(key => {
+      if ((updateData[key] === '' || updateData[key] === null || updateData[key] === undefined) && key !== 'email') {
+    delete updateData[key];
+  }
+});
 
     // Log what we're sending
     console.log('📤 Updating Monday.com with:', {
