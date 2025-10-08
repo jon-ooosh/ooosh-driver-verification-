@@ -842,10 +842,12 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       // SCAN REFERENCE - for deduplication
       idenfyScanRef: fullWebhookData.scanRef || 'unknown',
       
-      // Names
+      // Names - Store separately for COMPARE validation
+      firstName: idenfyData.docFirstName || idenfyResult.firstName || null,
+      lastName: idenfyData.docLastName || idenfyResult.lastName || null,
       driverName: idenfyResult.fullName || 
-                  idenfyData.fullName || 
-                  `${idenfyData.docFirstName || ''} ${idenfyData.docLastName || ''}`.trim(),
+              idenfyData.fullName || 
+              `${idenfyData.docFirstName || ''} ${idenfyData.docLastName || ''}`.trim(),
       
       // Personal Info
       dateOfBirth: idenfyData.docDob,
