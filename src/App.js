@@ -1292,9 +1292,15 @@ const InsuranceQuestionnaire = () => {
       </div>
 
       <div className="space-y-6">
-       {/* Progress Tracker */}
+     {/* Progress Tracker */}
         <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
           <h3 className="text-2xl font-medium text-purple-900 mb-3">Verification Progress</h3>
+                    {!driverStatus?.documents ? (
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+              <p className="text-sm text-gray-600">Loading verification status...</p>
+            </div>
+          ) : (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -1385,6 +1391,7 @@ const InsuranceQuestionnaire = () => {
               <span className="text-sm text-gray-500">Required</span>
             </div>
           </div>
+            )}
         </div>
 
         {/* NEW: Date Passed Test Section */}
