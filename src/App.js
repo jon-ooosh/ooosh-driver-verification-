@@ -844,6 +844,16 @@ const handleDVLAUpload = async (dvlaFile) => {
     }
   };
 
+  // Helper function to determine UK driver vs non-UK driver label
+  const getDocVerificationLabel = (driverStatus) => {
+    const isUK = driverStatus?.licenseIssuedBy?.includes('UK') || 
+                 driverStatus?.licenseIssuedBy?.includes('DVLA') ||
+                 driverStatus?.licenseIssuedBy?.includes('GB') ||
+                 driverStatus?.nationality === 'GB' ||
+                 driverStatus?.nationality === 'United Kingdom';
+    return isUK ? 'DVLA check' : 'Passport';
+  };
+
   // Helper function to get document status text
   const getDocumentStatus = (doc) => {
     if (!doc) return 'Required';
@@ -965,7 +975,7 @@ const handleDVLAUpload = async (dvlaFile) => {
                     <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
                   )}
                   <span className={`text-lg ${driverStatus?.documents?.dvlaCheck?.valid ? 'text-green-700' : 'text-gray-600'}`}>
-                    DVLA check
+                    {getDocVerificationLabel(driverStatus)}
                   </span>
                 </div>
                 <span className={`text-sm ${driverStatus?.documents?.dvlaCheck?.valid ? 'text-green-600' : driverStatus?.documents?.dvlaCheck?.expiryDate ? 'text-orange-600' : 'text-gray-500'}`}>
@@ -1276,7 +1286,7 @@ const InsuranceQuestionnaire = () => {
       </div>
 
       <div className="space-y-6">
-        {/* Progress Tracker */}
+       {/* Progress Tracker */}
         <div className="bg-purple-50 border-2 border-purple-200 p-4 mb-6">
           <h3 className="text-2xl font-medium text-purple-900 mb-3">Verification Progress</h3>
           <div className="space-y-2">
@@ -1303,31 +1313,63 @@ const InsuranceQuestionnaire = () => {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-lg text-gray-600">Driving licence</span>
+                {driverStatus?.documents?.license?.valid ? (
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                ) : (
+                  <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                )}
+                <span className={`text-lg ${driverStatus?.documents?.license?.valid ? 'text-green-700' : 'text-gray-600'}`}>
+                  Driving licence
+                </span>
               </div>
-              <span className="text-sm text-gray-500">Required</span>
+              <span className={`text-sm ${driverStatus?.documents?.license?.valid ? 'text-green-600' : 'text-gray-500'}`}>
+                {getDocumentStatus(driverStatus?.documents?.license)}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-lg text-gray-600">Proof of address 1</span>
+                {driverStatus?.documents?.poa1?.valid ? (
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                ) : (
+                  <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                )}
+                <span className={`text-lg ${driverStatus?.documents?.poa1?.valid ? 'text-green-700' : 'text-gray-600'}`}>
+                  Proof of address 1
+                </span>
               </div>
-              <span className="text-sm text-gray-500">Required</span>
+              <span className={`text-sm ${driverStatus?.documents?.poa1?.valid ? 'text-green-600' : driverStatus?.documents?.poa1?.expiryDate ? 'text-orange-600' : 'text-gray-500'}`}>
+                {getDocumentStatus(driverStatus?.documents?.poa1)}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-lg text-gray-600">Proof of address 2</span>
+                {driverStatus?.documents?.poa2?.valid ? (
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                ) : (
+                  <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                )}
+                <span className={`text-lg ${driverStatus?.documents?.poa2?.valid ? 'text-green-700' : 'text-gray-600'}`}>
+                  Proof of address 2
+                </span>
               </div>
-              <span className="text-sm text-gray-500">Required</span>
+              <span className={`text-sm ${driverStatus?.documents?.poa2?.valid ? 'text-green-600' : driverStatus?.documents?.poa2?.expiryDate ? 'text-orange-600' : 'text-gray-500'}`}>
+                {getDocumentStatus(driverStatus?.documents?.poa2)}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
-                <span className="text-lg text-gray-600">DVLA check</span>
+                {driverStatus?.documents?.dvlaCheck?.valid ? (
+                  <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
+                ) : (
+                  <div className="h-5 w-5 border-2 border-gray-300 rounded-full mr-3"></div>
+                )}
+                <span className={`text-lg ${driverStatus?.documents?.dvlaCheck?.valid ? 'text-green-700' : 'text-gray-600'}`}>
+                  {getDocVerificationLabel(driverStatus)}
+                </span>
               </div>
-              <span className="text-sm text-gray-500">Required</span>
+              <span className={`text-sm ${driverStatus?.documents?.dvlaCheck?.valid ? 'text-green-600' : driverStatus?.documents?.dvlaCheck?.expiryDate ? 'text-orange-600' : 'text-gray-500'}`}>
+                {getDocumentStatus(driverStatus?.documents?.dvlaCheck)}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
