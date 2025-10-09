@@ -914,16 +914,19 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
     };
     
     // Set validity dates based on what was just verified
-    updateData.licenseNextCheckDue = addDays(today, 90);
-    
-    // Only set DVLA validity if this is a UK driver and NOT a license-only revalidation
-    const isUKDriver = idenfyData.authority === 'DVLA' || idenfyData.docIssuingCountry === 'GB';
-    const hasPoaData = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.fileUrls?.UTILITY_BILL;
-    
-    // CRITICAL: Only update dvlaValidUntil during FULL verification (with POAs), not license-only
-    if (isUKDriver && hasPoaData) {
-      updateData.dvlaValidUntil = addDays(today, 90);
-    }
+updateData.licenseNextCheckDue = addDays(today, 90);
+
+// Determine verification type
+const isPassportVerification = idenfyData.docType === 'PASSPORT';
+
+// Set passport validity if this is a passport verification
+if (isPassportVerification) {
+  updateData.passportValidUntil = addDays(today, 90);
+  console.log('📘 Passport validity set to:', updateData.passportValidUntil);
+}
+
+// NOTE: DVLA validity is set separately in DVLAProcessingPage.js when DVLA check completes
+// Do NOT set dvlaValidUntil here during license verification
 
     console.log('📊 Final updateData fields:', Object.keys(updateData).length, 'fields');
     console.log('📋 Fields being updated:', Object.keys(updateData).join(', '));
