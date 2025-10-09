@@ -244,38 +244,53 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   break;
 
       case 'passport_only':
-        // Passport for non-UK drivers - reuse face from previous verification
-        requestBody.documents = ['PASSPORT'];
-          requestBody.additionalSteps = [];
-              
-        // Use existing face reference from license verification (stored in Monday.com)
-        // This prevents requiring a new selfie since we already have face data
-        if (email) {
-          try {
-            // Fetch the original scanRef from Monday.com
-            const statusResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
-            if (statusResponse.ok) {
-              const driverData = await statusResponse.json();
-              const originalScanRef = driverData.idenfyScanRef; // From text_mkwbn8bx
-              
-              if (originalScanRef) {
-                console.log('🔗 Reusing face data from original verification:', originalScanRef);
-                requestBody.faceAuthScanRef = originalScanRef;
-                // Don't set skipFaceMatching - let Idenfy use the reference instead
-              } else {
-                console.log('⚠️ No original scanRef found, will require new selfie');
-                requestBody.skipFaceMatching = true;
-              }
-            }
-          } catch (error) {
-            console.log('⚠️ Could not fetch original scanRef:', error.message);
-            requestBody.skipFaceMatching = true;
-          }
+  // Passport for non-UK drivers - use COMPARE validation
+  requestBody.documents = ['PASSPORT'];
+  
+  // CRITICAL: Same as license_only - explicitly disable POAs
+  requestBody.additionalSteps = {
+    "ALL": {
+      "ALL": {}
+    }
+  };
+  
+  // Add COMPARE data to validate passport matches license records
+  if (email) {
+    try {
+      console.log('🔍 Fetching driver data for COMPARE validation...');
+      const statusResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
+      
+      if (statusResponse.ok) {
+        const driverData = await statusResponse.json();
+        
+        // Use stored firstName/lastName for COMPARE validation
+        if (driverData.firstName && driverData.lastName) {
+          requestBody.firstName = driverData.firstName;
+          requestBody.lastName = driverData.lastName;
+          console.log('✅ COMPARE data loaded for passport validation:', {
+            firstName: driverData.firstName,
+            lastName: driverData.lastName
+          });
         } else {
-          requestBody.skipFaceMatching = true;
+          console.log('⚠️ No firstName/lastName in driver record - COMPARE skipped');
         }
-        break;
-
+        
+        // Also add DOB if available for extra validation
+        if (driverData.dateOfBirth) {
+          requestBody.dateOfBirth = driverData.dateOfBirth;
+          console.log('✅ DOB added for COMPARE validation');
+        }
+      }
+    } catch (error) {
+      console.log('⚠️ Could not fetch driver data for COMPARE:', error.message);
+    }
+  }
+  
+  // Skip face matching since we're not reusing face data
+  requestBody.skipFaceMatching = true;
+  console.log('📸 Face matching disabled for passport-only verification');
+  break;
+      
       default:
         // Default to full verification
         requestBody.documents = ['DRIVER_LICENSE'];
