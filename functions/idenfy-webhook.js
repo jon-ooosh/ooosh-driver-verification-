@@ -300,8 +300,10 @@ if (hasOnlyAdditionalSteps) {
       isDuplicate: poaProcessingResult.isDuplicate
     });
 
-    // Step 5: Validity dates now set within updateBoardAWithIdenfyResults (removed separate call)
-    console.log('✅ Validity dates set within main Board A update');
+   // Step 5: NOW update validity dates as final confirmation
+    console.log('📅 Setting validity dates as final step...');
+    await setValidityDatesAfterVerification(email, data);
+    console.log('✅ Validity dates updated - verification complete');
 
     // Step 6: Determine next step (modify existing logic)
     let nextStep = 'complete';
@@ -905,25 +907,8 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
                                   poaAddress;
     }
     
-    // ADD VALIDITY DATES HERE 
-    const today = new Date();
-    const addDays = (date, days) => {
-      const result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result.toISOString().split('T')[0];
-    };
-    
-    // Set validity dates based on what was just verified
-updateData.licenseNextCheckDue = addDays(today, 90);
-
-// Determine verification type
-const isPassportVerification = idenfyData.docType === 'PASSPORT';
-
-// Set passport validity if this is a passport verification
-if (isPassportVerification) {
-  updateData.passportValidUntil = addDays(today, 90);
-  console.log('📘 Passport validity set to:', updateData.passportValidUntil);
-}
+   // NOTE: Validity dates are now set AFTER identity data confirms updated
+    // This prevents race conditions with webhook retries
 
 // NOTE: DVLA validity is set separately in DVLAProcessingPage.js when DVLA check completes
 // Do NOT set dvlaValidUntil here during license verification
@@ -965,6 +950,58 @@ if (isPassportVerification) {
   } catch (error) {
     console.error('❌ Error updating Board A with Idenfy results:', error);
     return { success: false, error: error.message };
+  }
+}
+
+// Set validity dates AFTER identity data is confirmed updated
+async function setValidityDatesAfterVerification(email, idenfyData) {
+  try {
+    const today = new Date();
+    const addDays = (date, days) => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result.toISOString().split('T')[0];
+    };
+    
+    const updates = {
+      email: email,
+      licenseNextCheckDue: addDays(today, 90),
+      lastUpdated: today.toISOString().split('T')[0]
+    };
+    
+    // Set passport validity if this was a passport verification
+    const isPassportVerification = idenfyData.docType === 'PASSPORT';
+    if (isPassportVerification) {
+      updates.passportValidUntil = addDays(today, 90);
+      console.log('📘 Passport validity set to:', updates.passportValidUntil);
+    }
+    
+    console.log('📅 Final validity dates:', {
+      licenseNextCheckDue: updates.licenseNextCheckDue,
+      passportValidUntil: updates.passportValidUntil || 'N/A'
+    });
+    
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: updates
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to update validity dates:', errorText);
+      throw new Error(`Validity date update failed: ${response.status}`);
+    }
+    
+    console.log('✅ Validity dates confirmed updated');
+    
+  } catch (error) {
+    console.error('❌ Error setting validity dates:', error);
+    throw error;
   }
 }
 
