@@ -373,7 +373,8 @@ function parseDvlaFromText(text) {
     categories: [],
     isValid: true,
     issues: [],
-    confidence: 'medium'
+    confidence: 'medium',
+    rawText: text
   };
 
   // Extract license ending
@@ -611,43 +612,79 @@ function calculateInsuranceDecision(dvlaData) {
   const points = dvlaData.totalPoints || 0;
   const endorsements = dvlaData.endorsements || [];
 
-  // Check for serious offenses
-  const seriousOffenses = ['MS90', 'IN10', 'DR10', 'DR20', 'DR30', 'DR40', 'DR50', 'DR60', 'DR70'];
+  // Markerstudy serious offences list - requires manual referral
+  const seriousOffenses = [
+    'MS90', 'IN10',  // As per Markerstudy guidelines
+    'TT99',  // Totting up ban
+    'DD40', 'DD60', 'DD80', 'DD90',  // Dangerous driving
+    'AC10', 'AC20', 'AC30',  // Causing death
+    'BA10', 'BA30',  // Failing to stop after accident
+    'DR10', 'DR20', 'DR30', 'DR40', 'DR50', 'DR60', 'DR70', 'DR80'  // Drink/drug driving
+  ];
+  
   const hasSeriousOffense = endorsements.some(e => seriousOffenses.includes(e.code));
 
   if (hasSeriousOffense) {
+    decision.approved = false;
     decision.manualReview = true;
-    decision.reasons.push('Serious driving offense detected - requires underwriter review');
+    decision.reasons.push('Serious driving offence detected - requires insurer referral');
+    return decision;
+  }
+  
+  // Check for bans/disqualifications in the text
+  const dvlaText = dvlaData.rawText || '';
+  if (dvlaText.toLowerCase().includes('disqualification') || dvlaText.toLowerCase().includes('disqualified')) {
+    decision.approved = false;
+    decision.manualReview = true;
+    decision.reasons.push('Previous ban/disqualification detected - requires insurer referral');
     return decision;
   }
 
-  // Points-based logic
+  // Markerstudy points-based logic
   if (points === 0) {
     decision.approved = true;
     decision.riskLevel = 'low';
-    decision.reasons.push('Clean license - no points');
-  } else if (points <= 3) {
-    decision.approved = true;
-    decision.riskLevel = 'standard';
-    decision.reasons.push('Minor points - standard approval');
+    decision.reasons.push('Clean licence - no points');
   } else if (points <= 6) {
-    const hasSpeedingOnly = endorsements.every(e => e.code && e.code.startsWith('SP'));
-    if (hasSpeedingOnly) {
-      decision.approved = true;
-      decision.riskLevel = 'medium';
-      decision.reasons.push('Speeding points only - approved');
+    if (points === 6 && endorsements.length === 1) {
+      // Single 6-point offence
+      const code = endorsements[0].code;
+      if (['SP30', 'SP50', 'CU80'].includes(code)) {
+        // Single 6-point SP30, SP50 or CU80 - £1,000 total excess
+        decision.approved = true;
+        decision.excess = 1000;
+        decision.riskLevel = 'medium';
+        decision.reasons.push(`Single 6-point ${code} - approved with £1,000 total excess`);
+      } else {
+        // Other single 6-point offences require referral
+        decision.approved = false;
+        decision.manualReview = true;
+        decision.reasons.push('6-point offence requires insurer referral');
+      }
     } else {
-      decision.manualReview = true;
-      decision.reasons.push('Mixed offenses with 4-6 points - requires review');
+      // Two 3-point offences or less than 6 points - covered as standard
+      decision.approved = true;
+      decision.riskLevel = 'standard';
+      decision.reasons.push('Up to 6 points - standard approval');
     }
-  } else if (points <= 9) {
-    decision.approved = true;
-    decision.excess = 500;
-    decision.riskLevel = 'high';
-    decision.reasons.push('7-9 points - approved with £500 excess');
+  } else if (points === 9) {
+    // Must be exactly three 3-point offences
+    if (endorsements.length === 3 && endorsements.every(e => e.points === 3)) {
+      decision.approved = true;
+      decision.excess = 500;  // Additional £500 (£1,500 total)
+      decision.riskLevel = 'high';
+      decision.reasons.push('9 points from three 3-point offences - approved with additional £500 excess');
+    } else {
+      // 9 points but not 3x3 - requires referral
+      decision.approved = false;
+      decision.manualReview = true;
+      decision.reasons.push('9 points requires insurer referral');
+    }
   } else {
+    // 10+ points - requires referral
     decision.approved = false;
-    decision.reasons.push('10+ points - exceeds insurance limits');
+    decision.manualReview = true;
+    decision.reasons.push('10+ points - requires insurer referral');
   }
 
   return decision;
