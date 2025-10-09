@@ -188,30 +188,65 @@ const handleFileUpload = async (fileType, file) => {
     let imageData;
     
     if (file.type === 'application/pdf') {
-      console.log('📄 Converting PDF to image...');
+      console.log('📄 Converting PDF to images...');
       
-      // Check if PDF.js is loaded
       if (!window.pdfjsLib) {
         throw new Error('PDF.js library not loaded yet. Please try again.');
       }
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
+      const numPages = pdf.numPages;
       
-      const viewport = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      console.log(`📑 PDF has ${numPages} pages - processing all pages`);
       
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
+      // Create a large canvas to hold all pages vertically
+      const scale = 2.0;
+      const canvases = [];
+      let totalHeight = 0;
+      let maxWidth = 0;
       
-      imageData = canvas.toDataURL('image/png');
-      console.log('✅ PDF converted to image');
+      // Render each page
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        const context = canvas.getContext('2d');
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        canvases.push(canvas);
+        totalHeight += viewport.height;
+        maxWidth = Math.max(maxWidth, viewport.width);
+        
+        console.log(`✅ Rendered page ${pageNum}/${numPages}`);
+      }
+      
+      // Combine all pages into one tall image
+      const combinedCanvas = document.createElement('canvas');
+      combinedCanvas.width = maxWidth;
+      combinedCanvas.height = totalHeight;
+      const combinedContext = combinedCanvas.getContext('2d');
+      
+      // White background
+      combinedContext.fillStyle = 'white';
+      combinedContext.fillRect(0, 0, maxWidth, totalHeight);
+      
+      // Draw each page
+      let yOffset = 0;
+      canvases.forEach(canvas => {
+        combinedContext.drawImage(canvas, 0, yOffset);
+        yOffset += canvas.height;
+      });
+      
+      imageData = combinedCanvas.toDataURL('image/png');
+      console.log(`✅ All ${numPages} pages combined into single image`);
       
     } else {
       // Handle regular images
@@ -271,8 +306,23 @@ const handleFileUpload = async (fileType, file) => {
           return; // STOP - don't save anything
         }
         
-        // STEP 2: Check license ending matches (anti-fraud)
-        if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
+        // STEP 1.5: Check document age (must be <30 days)
+        if (dvlaResult.ageInDays && dvlaResult.ageInDays > 30) {
+          setError({
+            issues: [
+              '❌ DVLA check is too old',
+              `This document is ${dvlaResult.ageInDays} days old`,
+              'DVLA checks must be generated within the last 30 days',
+              '',
+              'Please generate a fresh DVLA check and upload again'
+            ]
+          });
+          setLoading(false);
+          return; // REJECT - don't proceed
+        }
+        
+        // STEP 2: Check licence ending matches (anti-fraud)
+          if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
           if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
             console.error('❌ Licence mismatch detected!');
             console.error(`Expected: ${driverData.licenseEnding}, Got: ${dvlaResult.licenseEnding}`);
