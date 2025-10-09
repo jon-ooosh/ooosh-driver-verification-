@@ -178,7 +178,7 @@ const DVLAProcessingPage = () => {
     }
   };
  
-// handleFileUpload function, updated to process PDFs
+// handleFileUpload function, updated to validate BEFORE saving
 const handleFileUpload = async (fileType, file) => {
   try {
     setLoading(true);
@@ -195,7 +195,6 @@ const handleFileUpload = async (fileType, file) => {
       }
       
       const arrayBuffer = await file.arrayBuffer();
-      // Use window.pdfjsLib, not _ or pdfjsLib
       const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const page = await pdf.getPage(1);
       
@@ -241,12 +240,12 @@ const handleFileUpload = async (fileType, file) => {
     if (processingResult.success) {
       console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
 
-    // Check if DVLA validation actually passed
+      // ========== DVLA VALIDATION - DO ALL CHECKS BEFORE SAVING ANYTHING ==========
       if (fileType === 'dvla' && processingResult.result) {
-        const dvlaResult = processingResult.result;  // DECLARE ONCE HERE
+        const dvlaResult = processingResult.result;
         
+        // STEP 1: Check if document structure is valid
         if (!dvlaResult.isValid) {
-         // Build specific error message
           const issues = [];
           
           if (dvlaResult.validationIssues && dvlaResult.validationIssues.length > 0) {
@@ -266,16 +265,76 @@ const handleFileUpload = async (fileType, file) => {
             issues.push('Make sure you upload the FULL PDF from gov.uk, not a screenshot');
           }
           
-          // Set error as object for better rendering
           setError({ issues });
           setLoading(false);
-          return;
+          return; // STOP - don't save anything
         }
         
-        // Clear any previous errors if validation passed
+        // STEP 2: Check license ending matches (anti-fraud)
+        if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
+          if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
+            console.error('❌ License mismatch detected!');
+            console.error(`Expected: ${driverData.licenseEnding}, Got: ${dvlaResult.licenseEnding}`);
+            
+            setError({
+              issues: [
+                '⚠️ Licence number mismatch detected',
+                `The licence ending on this DVLA check (${dvlaResult.licenseEnding}) does not match your verified ID (${driverData.licenseEnding})`,
+                '',
+                'Possible reasons:',
+                '• You uploaded someone else\'s DVLA check by mistake',
+                '• The DVLA check belongs to a different person',
+                '• There was an error during your ID verification',
+                '',
+                'Please check you\'re uploading YOUR OWN DVLA check and try again.',
+                'If the problem persists, contact support at info@oooshtours.co.uk'
+              ]
+            });
+            setLoading(false);
+            return; // STOP - don't save anything
+          }
+        }
+        
+        // STEP 3: Check driver name matches (additional anti-fraud)
+        if (driverData?.name && dvlaResult.driverName) {
+          // Normalize names for comparison (remove extra spaces, convert to uppercase)
+          const normalizedExpected = driverData.name.toUpperCase().replace(/\s+/g, ' ').trim();
+          const normalizedActual = dvlaResult.driverName.toUpperCase().replace(/\s+/g, ' ').trim();
+          
+          // Check if names match (allow for some flexibility with middle names, prefixes)
+          const namesMatch = normalizedActual.includes(normalizedExpected) || 
+                           normalizedExpected.includes(normalizedActual);
+          
+          if (!namesMatch) {
+            console.error('❌ Name mismatch detected!');
+            console.error(`Expected: ${driverData.name}, Got: ${dvlaResult.driverName}`);
+            
+            setError({
+              issues: [
+                '⚠️ Name mismatch detected',
+                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${driverData.name})`,
+                '',
+                'Possible reasons:',
+                '• You uploaded someone else\'s DVLA check by mistake',
+                '• The DVLA check belongs to a different person',
+                '• There was an error during your ID verification',
+                '',
+                'Please check you\'re uploading YOUR OWN DVLA check and try again.',
+                'If the problem persists, contact support at info@oooshtours.co.uk'
+              ]
+            });
+            setLoading(false);
+            return; // STOP - don't save anything
+          }
+        }
+        
+        // ========== ALL VALIDATION PASSED - NOW SAFE TO SAVE ==========
+        console.log('✅ All DVLA validation checks passed - proceeding to save data');
+        
+        // Clear any previous errors
         setError('');
         
-        // IMPORTANT: Save DVLA date and insurance data after successful validation
+        // Save DVLA validity date
         await saveDvlaDate();
         
         // Format endorsements with points
@@ -307,13 +366,6 @@ const handleFileUpload = async (fileType, file) => {
           dvlaCalculatedExcess: calculatedExcess
         });
         
-        // Check license ending matches Idenfy data
-        if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
-          if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
-            setError('⚠️ Licence number mismatch - manual review required');
-          }
-        }
-        
         // Show results to user
         console.log('DVLA Check Results:', {
           name: dvlaResult.driverName,
@@ -324,7 +376,7 @@ const handleFileUpload = async (fileType, file) => {
       }
         
       // Upload DVLA file to Monday.com
-        if (fileType === 'dvla' && imageData) {
+      if (fileType === 'dvla' && imageData) {
         console.log('📤 Uploading DVLA file to Monday.com...');
         
         const uploadResponse = await fetch('/.netlify/functions/monday-integration', {
@@ -348,51 +400,32 @@ const handleFileUpload = async (fileType, file) => {
         }
       }
           
-      // Display and validate DVLA results
-        if (fileType === 'dvla' && processingResult.result) {
-        const dvlaData = processingResult.result;
-        
-        // Check license ending matches Idenfy data
-        if (driverData?.licenseEnding && dvlaData.licenseEnding) {
-          if (driverData.licenseEnding !== dvlaData.licenseEnding) {
-            setError('⚠️ Licence number mismatch - manual review required');
-          }
-        }
-        
-        // Show results to user
-        console.log('DVLA Check Results:', {
-          name: dvlaData.driverName,
-          licenseEnding: dvlaData.licenseEnding,
-          points: dvlaData.totalPoints,
-          insuranceDecision: dvlaData.insuranceDecision
-        });
-      }
-        // Store results
-        setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
+      // Store results
+      setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
 
-        // Update Monday.com with results
-        await updateDriverData({
-          [`${fileType}ProcessingResult`]: JSON.stringify(processingResult.result),
-          [`${fileType}ProcessingDate`]: new Date().toISOString().split('T')[0],
-          [`${fileType}Status`]: processingResult.result.decision || 'Processed'
-        });
+      // Update Monday.com with results
+      await updateDriverData({
+        [`${fileType}ProcessingResult`]: JSON.stringify(processingResult.result),
+        [`${fileType}ProcessingDate`]: new Date().toISOString().split('T')[0],
+        [`${fileType}Status`]: processingResult.result.decision || 'Processed'
+      });
 
-        // Use router to determine next step after DVLA
-        if (fileType === 'dvla') {
-          const nextStep = await callRouter('dvla-complete');
-          if (nextStep) {
-            navigateToNext(nextStep);
-          } else {
-            // Fallback
-            setCurrentStep('poa-validation');
-          }
+      // Use router to determine next step after DVLA
+      if (fileType === 'dvla') {
+        const nextStep = await callRouter('dvla-complete');
+        if (nextStep) {
+          navigateToNext(nextStep);
         } else {
-          await performFinalValidation();
+          // Fallback
+          setCurrentStep('poa-validation');
         }
       } else {
-        throw new Error(processingResult.error || `${fileType.toUpperCase()} processing failed`);
+        await performFinalValidation();
       }
-    } catch (error) {
+    } else {
+      throw new Error(processingResult.error || `${fileType.toUpperCase()} processing failed`);
+    }
+  } catch (error) {
     console.error(`${fileType.toUpperCase()} upload error:`, error);
     setError(`Failed to process ${fileType.toUpperCase()} document: ${error.message}`);
   } finally {
@@ -655,9 +688,9 @@ const handleFileUpload = async (fileType, file) => {
             <div className="flex">
               <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
               <div className="ml-3">
-                <h3 className="text-base font-medium text-green-900">DVLA Check Complete</h3>
+                <h3 className="text-base font-medium text-green-900">DVLA check complete</h3>
                 <p className="text-sm text-green-800 mt-1">
-                  License valid • {processingResults.dvla.points || 0} points • {processingResults.dvla.decision}
+                  Licence valid • {processingResults.dvla.points || 0} points • {processingResults.dvla.decision}
                 </p>
               </div>
             </div>
