@@ -294,6 +294,10 @@ async function updateDriverBoardA(data) {
     // Format updates for Board A columns
     const columnValues = formatBoardAColumnValues(completeUpdates);
 
+    // CRITICAL DEBUG: Show exact payload being sent to Monday.com
+    console.log('🔍 RAW columnValues being sent to Monday.com GraphQL:');
+    console.log(JSON.stringify(columnValues, null, 2));
+
     const mutation = `
       mutation {
         change_multiple_column_values (
