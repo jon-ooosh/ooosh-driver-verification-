@@ -182,6 +182,7 @@ const DVLAProcessingPage = () => {
 const handleFileUpload = async (fileType, file) => {
   try {
     setLoading(true);
+    setError(''); // Clear any previous errors when user uploads new file
     console.log(`📁 Uploading ${fileType} file:`, file.name);
 
     let imageData;
@@ -273,7 +274,7 @@ const handleFileUpload = async (fileType, file) => {
         // STEP 2: Check license ending matches (anti-fraud)
         if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
           if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
-            console.error('❌ License mismatch detected!');
+            console.error('❌ Licence mismatch detected!');
             console.error(`Expected: ${driverData.licenseEnding}, Got: ${dvlaResult.licenseEnding}`);
             
             setError({
@@ -282,9 +283,9 @@ const handleFileUpload = async (fileType, file) => {
                 `The licence ending on this DVLA check (${dvlaResult.licenseEnding}) does not match your verified ID (${driverData.licenseEnding})`,
                 '',
                 'Possible reasons:',
-                '• You uploaded someone else\'s DVLA check by mistake',
-                '• The DVLA check belongs to a different person',
-                '• There was an error during your ID verification',
+                'You uploaded someone else\'s DVLA check by mistake',
+                'The DVLA check belongs to a different person',
+                'There was an error during your ID verification',
                 '',
                 'Please check you\'re uploading YOUR OWN DVLA check and try again.',
                 'If the problem persists, contact support at info@oooshtours.co.uk'
@@ -295,17 +296,14 @@ const handleFileUpload = async (fileType, file) => {
           }
         }
         
-        // STEP 3: Check driver name matches (additional anti-fraud)
+      // STEP 3: Check driver name matches (additional anti-fraud)
         if (driverData?.name && dvlaResult.driverName) {
-          // Normalize names for comparison (remove extra spaces, convert to uppercase)
-          const normalizedExpected = driverData.name.toUpperCase().replace(/\s+/g, ' ').trim();
-          const normalizedActual = dvlaResult.driverName.toUpperCase().replace(/\s+/g, ' ').trim();
+          console.log('🔍 Comparing names:', {
+            expected: driverData.name,
+            actual: dvlaResult.driverName
+          });
           
-          // Check if names match (allow for some flexibility with middle names, prefixes)
-          const namesMatch = normalizedActual.includes(normalizedExpected) || 
-                           normalizedExpected.includes(normalizedActual);
-          
-          if (!namesMatch) {
+          if (!namesMatchFlexible(driverData.name, dvlaResult.driverName)) {
             console.error('❌ Name mismatch detected!');
             console.error(`Expected: ${driverData.name}, Got: ${dvlaResult.driverName}`);
             
@@ -315,16 +313,16 @@ const handleFileUpload = async (fileType, file) => {
                 `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${driverData.name})`,
                 '',
                 'Possible reasons:',
-                '• You uploaded someone else\'s DVLA check by mistake',
-                '• The DVLA check belongs to a different person',
-                '• There was an error during your ID verification',
+                'You uploaded someone else\'s DVLA check by mistake',
+                'The DVLA check belongs to a different person',
+                'There was an error during your ID verification',
                 '',
                 'Please check you\'re uploading YOUR OWN DVLA check and try again.',
                 'If the problem persists, contact support at info@oooshtours.co.uk'
               ]
             });
             setLoading(false);
-            return; // STOP - don't save anything
+            return;
           }
         }
         
@@ -548,6 +546,55 @@ const handleFileUpload = async (fileType, file) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function for flexible name matching
+  const namesMatchFlexible = (expectedName, actualName) => {
+    if (!expectedName || !actualName) return false;
+    
+    // Normalize both names: uppercase, remove extra spaces
+    const normalize = (name) => name.toUpperCase().replace(/\s+/g, ' ').trim();
+    
+    const expected = normalize(expectedName);
+    const actual = normalize(actualName);
+    
+    // Remove common titles from actual name
+    const titles = ['MR', 'MRS', 'MS', 'MISS', 'DR', 'PROF', 'SIR', 'DAME', 'LORD', 'LADY'];
+    let actualWithoutTitle = actual;
+    titles.forEach(title => {
+      actualWithoutTitle = actualWithoutTitle.replace(new RegExp(`^${title}\\s+`, 'i'), '');
+    });
+    
+    console.log('Name comparison:', {
+      expected: expected,
+      actual: actualWithoutTitle
+    });
+    
+    // Split into words
+    const expectedWords = expected.split(' ').filter(w => w.length > 0);
+    const actualWords = actualWithoutTitle.split(' ').filter(w => w.length > 0);
+    
+    // Extract first name and surname
+    const expectedFirst = expectedWords[0];
+    const expectedLast = expectedWords[expectedWords.length - 1];
+    
+    const actualFirst = actualWords[0];
+    const actualLast = actualWords[actualWords.length - 1];
+    
+    // Check if first and last names match
+    const firstNameMatch = expectedFirst === actualFirst;
+    const lastNameMatch = expectedLast === actualLast;
+    
+    console.log('Name parts:', {
+      expectedFirst,
+      expectedLast,
+      actualFirst,
+      actualLast,
+      firstMatch: firstNameMatch,
+      lastMatch: lastNameMatch
+    });
+    
+    return firstNameMatch && lastNameMatch;
   };
 
   const updateDriverData = async (updates) => {
@@ -831,21 +878,21 @@ const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
         />
       </div>
 
-     {error && (
+   {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex">
-            <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
             <div className="ml-3">
               {typeof error === 'string' ? (
                 <p className="text-base text-red-800">{error}</p>
               ) : (
                 <>
                   <p className="text-base font-semibold text-red-900 mb-2">DVLA document validation failed:</p>
-                  <ul className="list-disc list-inside space-y-1 text-base text-red-800 mb-3">
+                  <div className="space-y-1 text-base text-red-800 mb-3">
                     {error.issues.map((issue, i) => (
-                      <li key={i}>{issue}</li>
+                      <p key={i}>{issue}</p>
                     ))}
-                  </ul>
+                  </div>
                   <p className="text-base text-red-900 font-medium">Please generate a fresh DVLA check and upload the complete PDF</p>
                 </>
               )}
