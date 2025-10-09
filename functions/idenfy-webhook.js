@@ -292,7 +292,7 @@ if (hasOnlyAdditionalSteps) {
    // Step 4: Save documents to Monday.com with actual file upload
     await saveIdenfyDocumentsToMonday(email, fullWebhookData);
     
-    // Step 4.5: Process POA documents immediately if present
+   // Step 4.5: Process POA documents immediately if present
     const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
     console.log('📊 POA processing result:', {
       processed: poaProcessingResult.poasProcessed,
@@ -300,8 +300,8 @@ if (hasOnlyAdditionalSteps) {
       isDuplicate: poaProcessingResult.isDuplicate
     });
 
-    // Step 5: Update document validity dates (your existing code)
-    await updateDocumentValidityDates(email, fullWebhookData);
+    // Step 5: Validity dates now set within updateBoardAWithIdenfyResults (removed separate call)
+    console.log('✅ Validity dates set within main Board A update');
 
     // Step 6: Determine next step (modify existing logic)
     let nextStep = 'complete';
@@ -833,7 +833,7 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       }
     }
     
- // Build update data with all available fields
+// Build update data with all available fields
     const updateData = {
       // CRITICAL: Always include email
       email: email,
@@ -844,59 +844,89 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       // SCAN REFERENCE - for deduplication
       idenfyScanRef: fullWebhookData.scanRef || 'unknown',
       
-      // Names - Store separately for COMPARE validation
-      firstName: idenfyData.docFirstName || idenfyResult.firstName || null,
-      lastName: idenfyData.docLastName || idenfyResult.lastName || null,
-      driverName: idenfyResult.fullName || 
-              idenfyData.fullName || 
-              `${idenfyData.docFirstName || ''} ${idenfyData.docLastName || ''}`.trim(),
-      
-      // Personal Info
-      dateOfBirth: idenfyData.docDob,
-      
-      // Nationality
-      nationality: idenfyData.docNationality || 
-                   idenfyData.selectedCountry || 
-                   idenfyData.docIssuingCountry || '',
-      
-      // License Information
-      licenseNumber: idenfyData.docNumber,
-      licenseValidTo: idenfyData.docExpiry,
-      licenseEnding: idenfyResult.licenseEnding,
-      
-      // License Valid From - use preserved datePassedTest from insurance questionnaire
-      licenseValidFrom: preservedDatePassedTest || idenfyData.docDateOfIssue || '',
-      
-      // Authority/Issuer
-      licenseIssuedBy: idenfyData.authority || 
-                       (idenfyData.docIssuingCountry === 'GB' ? 'DVLA' : 
-                        idenfyData.docIssuingCountry || ''),
-      
-      // Addresses - prioritize POA address if available
-      homeAddress: poaAddress || 
-                   idenfyData.address || 
-                   idenfyData.manualAddress || 
-                   idenfyData.docAddress || '',
-
-      licenseAddress: idenfyData.address || 
-                      idenfyData.manualAddress || 
-                      idenfyData.docAddress || 
-                      poaAddress || '',
-      
-      // Status
+      // Status - always update this
       overallStatus: idenfyResult.approved ? 'Working on it' : 'Stuck',
       
       lastUpdated: new Date().toISOString().split('T')[0]
     };
 
-    console.log('📊 Raw updateData BEFORE filtering:', Object.keys(updateData).filter(k => updateData[k]).length, 'fields with values');
+    // Add identity fields ONLY if they have values
+    if (idenfyData.docFirstName || idenfyResult.firstName) {
+      updateData.firstName = idenfyData.docFirstName || idenfyResult.firstName;
+    }
+    if (idenfyData.docLastName || idenfyResult.lastName) {
+      updateData.lastName = idenfyData.docLastName || idenfyResult.lastName;
+    }
+    if (idenfyResult.fullName || idenfyData.fullName || (idenfyData.docFirstName && idenfyData.docLastName)) {
+      updateData.driverName = idenfyResult.fullName || 
+                              idenfyData.fullName || 
+                              `${idenfyData.docFirstName || ''} ${idenfyData.docLastName || ''}`.trim();
+    }
     
-    // Remove empty/null/undefined fields (except email)
-      Object.keys(updateData).forEach(key => {
-      if ((updateData[key] === '' || updateData[key] === null || updateData[key] === undefined) && key !== 'email') {
-    delete updateData[key];
-  }
-});
+    // Add personal info ONLY if it has values
+    if (idenfyData.docDob) updateData.dateOfBirth = idenfyData.docDob;
+    
+    if (idenfyData.docNationality || idenfyData.selectedCountry || idenfyData.docIssuingCountry) {
+      updateData.nationality = idenfyData.docNationality || 
+                               idenfyData.selectedCountry || 
+                               idenfyData.docIssuingCountry;
+    }
+    
+    // Add license info ONLY if it has values
+    if (idenfyData.docNumber) updateData.licenseNumber = idenfyData.docNumber;
+    if (idenfyData.docExpiry) updateData.licenseValidTo = idenfyData.docExpiry;
+    if (idenfyResult.licenseEnding) updateData.licenseEnding = idenfyResult.licenseEnding;
+    
+    // License Valid From - prefer preserved date from insurance questionnaire
+    if (preservedDatePassedTest) {
+      updateData.licenseValidFrom = preservedDatePassedTest;
+    } else if (idenfyData.docDateOfIssue) {
+      updateData.licenseValidFrom = idenfyData.docDateOfIssue;
+    }
+    
+    // Authority/Issuer - only if we have data
+    if (idenfyData.authority || idenfyData.docIssuingCountry) {
+      updateData.licenseIssuedBy = idenfyData.authority || 
+                                   (idenfyData.docIssuingCountry === 'GB' ? 'DVLA' : idenfyData.docIssuingCountry);
+    }
+    
+    // Addresses - only if we have data
+    if (poaAddress || idenfyData.address || idenfyData.manualAddress || idenfyData.docAddress) {
+      updateData.homeAddress = poaAddress || 
+                               idenfyData.address || 
+                               idenfyData.manualAddress || 
+                               idenfyData.docAddress;
+    }
+    
+    if (idenfyData.address || idenfyData.manualAddress || idenfyData.docAddress || poaAddress) {
+      updateData.licenseAddress = idenfyData.address || 
+                                  idenfyData.manualAddress || 
+                                  idenfyData.docAddress || 
+                                  poaAddress;
+    }
+    
+    // ADD VALIDITY DATES HERE 
+    const today = new Date();
+    const addDays = (date, days) => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result.toISOString().split('T')[0];
+    };
+    
+    // Set validity dates based on what was just verified
+    updateData.licenseNextCheckDue = addDays(today, 90);
+    
+    // Only set DVLA validity if this is a UK driver and NOT a license-only revalidation
+    const isUKDriver = idenfyData.authority === 'DVLA' || idenfyData.docIssuingCountry === 'GB';
+    const hasPoaData = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || fullWebhookData.fileUrls?.UTILITY_BILL;
+    
+    // CRITICAL: Only update dvlaValidUntil during FULL verification (with POAs), not license-only
+    if (isUKDriver && hasPoaData) {
+      updateData.dvlaValidUntil = addDays(today, 90);
+    }
+
+    console.log('📊 Final updateData fields:', Object.keys(updateData).length, 'fields');
+    console.log('📋 Fields being updated:', Object.keys(updateData).join(', '));
 
     // Log what we're sending
     console.log('📤 Updating Monday.com with:', {
