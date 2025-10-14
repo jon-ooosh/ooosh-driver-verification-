@@ -347,13 +347,19 @@ const handleFileUpload = async (fileType, file) => {
         }
         
       // STEP 3: Check driver name matches (additional anti-fraud)
-       // Use the full name field from Monday (text_mktry2je)
-         const expectedName = driverData?.name || driverData?.fullName;
-         if (expectedName && dvlaResult.driverName) {
-          console.log('🔍 Comparing names:', {
-            expected: driverData.name,
-            actual: dvlaResult.driverName
-          });
+      // Use the full name field from Monday (text_mktry2je)
+const expectedName = driverData?.name;
+console.log('🔍 Full driverData object keys:', Object.keys(driverData));
+console.log('🔍 driverData.name:', driverData?.name);
+console.log('🔍 dvlaResult.driverName:', dvlaResult.driverName);
+
+if (expectedName && dvlaResult.driverName) {
+  console.log('🔍 Comparing names:', {
+    expected: expectedName,
+    actual: dvlaResult.driverName
+  });
+  
+  if (!namesMatchFlexible(expectedName, dvlaResult.driverName)) {
           
           if (!namesMatchFlexible(driverData.name, dvlaResult.driverName)) {
             console.error('❌ Name mismatch detected!');
@@ -614,7 +620,7 @@ const handleFileUpload = async (fileType, file) => {
     const titles = ['MR', 'MRS', 'MS', 'MISS', 'DR', 'PROF', 'SIR', 'DAME', 'LORD', 'LADY'];
     let actualWithoutTitle = actual;
     titles.forEach(title => {
-      actualWithoutTitle = actualWithoutTitle.replace(new RegExp(`^${title}\\s+`, 'i'), '');
+    actualWithoutTitle = actualWithoutTitle.replace(new RegExp(`^${title}\\s*`, 'i'), '');
     });
     
     console.log('Name comparison:', {
