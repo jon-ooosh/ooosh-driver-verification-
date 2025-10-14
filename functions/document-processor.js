@@ -623,7 +623,15 @@ function calculateInsuranceDecision(dvlaData) {
   ];
   
   const hasSeriousOffense = endorsements.some(e => seriousOffenses.includes(e.code));
-
+  
+// ADD THIS LOGGING:
+console.log('🔍 Insurance decision check:', {
+  points: points,
+  endorsementCount: endorsements.length,
+  endorsementCodes: endorsements.map(e => e.code),
+  hasSeriousOffense: hasSeriousOffense,
+  seriousOffensesList: seriousOffenses
+});
   if (hasSeriousOffense) {
     decision.approved = false;
     decision.manualReview = true;
