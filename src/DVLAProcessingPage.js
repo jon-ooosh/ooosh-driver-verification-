@@ -347,7 +347,9 @@ const handleFileUpload = async (fileType, file) => {
         }
         
       // STEP 3: Check driver name matches (additional anti-fraud)
-        if (driverData?.name && dvlaResult.driverName) {
+       // Use the full name field from Monday (text_mktry2je)
+         const expectedName = driverData?.name || driverData?.fullName;
+         if (expectedName && dvlaResult.driverName) {
           console.log('🔍 Comparing names:', {
             expected: driverData.name,
             actual: dvlaResult.driverName
@@ -360,7 +362,7 @@ const handleFileUpload = async (fileType, file) => {
             setError({
               issues: [
                 '⚠️ Name mismatch detected',
-                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${driverData.name})`,
+                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${expectedName})`,
                 '',
                 'Possible reasons:',
                 'You uploaded someone else\'s DVLA check by mistake',
@@ -368,7 +370,7 @@ const handleFileUpload = async (fileType, file) => {
                 'There was an error during your ID verification',
                 '',
                 'Please check you\'re uploading YOUR OWN DVLA check and try again.',
-                'If the problem persists, contact support at info@oooshtours.co.uk'
+                'If the problem persists, contact us at info@oooshtours.co.uk'
               ]
             });
             setLoading(false);
