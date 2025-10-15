@@ -1005,6 +1005,58 @@ async function setValidityDatesAfterVerification(email, idenfyData) {
   }
 }
 
+// Set validity dates AFTER identity data is confirmed updated
+async function setValidityDatesAfterVerification(email, idenfyData) {
+  try {
+    const today = new Date();
+    const addDays = (date, days) => {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result.toISOString().split('T')[0];
+    };
+    
+    const updates = {
+      email: email,
+      licenseNextCheckDue: addDays(today, 90),
+      lastUpdated: today.toISOString().split('T')[0]
+    };
+    
+    // Set passport validity if this was a passport verification
+    const isPassportVerification = idenfyData.docType === 'PASSPORT';
+    if (isPassportVerification) {
+      updates.passportValidUntil = addDays(today, 90);
+      console.log('📘 Passport validity set to:', updates.passportValidUntil);
+    }
+    
+    console.log('📅 Final validity dates:', {
+      licenseNextCheckDue: updates.licenseNextCheckDue,
+      passportValidUntil: updates.passportValidUntil || 'N/A'
+    });
+    
+    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update-driver-board-a',
+        email: email,
+        updates: updates
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to update validity dates:', errorText);
+      throw new Error(`Validity date update failed: ${response.status}`);
+    }
+    
+    console.log('✅ Validity dates confirmed updated');
+    
+  } catch (error) {
+    console.error('❌ Error setting validity dates:', error);
+    throw error;
+  }
+}
+
 // Check which files need uploading based on existence AND validity dates
 async function checkWhichFilesNeeded(email) {
   try {
