@@ -303,7 +303,7 @@ const handleFileUpload = async (fileType, file) => {
           
           setError({ issues });
           setLoading(false);
-          return; // STOP - don't save anything
+          return;
         }
         
         // STEP 1.5: Check document age (must be <30 days)
@@ -318,11 +318,11 @@ const handleFileUpload = async (fileType, file) => {
             ]
           });
           setLoading(false);
-          return; // REJECT - don't proceed
+          return;
         }
         
         // STEP 2: Check licence ending matches (anti-fraud)
-          if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
+        if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
           if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
             console.error('❌ Licence mismatch detected!');
             console.error(`Expected: ${driverData.licenseEnding}, Got: ${dvlaResult.licenseEnding}`);
@@ -342,33 +342,30 @@ const handleFileUpload = async (fileType, file) => {
               ]
             });
             setLoading(false);
-            return; // STOP - don't save anything
+            return;
           }
         }
         
-      // STEP 3: Check driver name matches (additional anti-fraud)
-      // Use the full name field from Monday (text_mktry2je)
-const expectedName = driverData?.name;
-console.log('🔍 Full driverData object keys:', Object.keys(driverData));
-console.log('🔍 driverData.name:', driverData?.name);
-console.log('🔍 dvlaResult.driverName:', dvlaResult.driverName);
+        // STEP 3: Check driver name matches (additional anti-fraud)
+        const expectedName = driverData?.name;
+        console.log('🔍 Full driverData object keys:', Object.keys(driverData));
+        console.log('🔍 driverData.name:', driverData?.name);
+        console.log('🔍 dvlaResult.driverName:', dvlaResult.driverName);
 
-if (expectedName && dvlaResult.driverName) {
-  console.log('🔍 Comparing names:', {
-    expected: expectedName,
-    actual: dvlaResult.driverName
-  });
-  
-  if (!namesMatchFlexible(expectedName, dvlaResult.driverName)) {
+        if (expectedName && dvlaResult.driverName) {
+          console.log('🔍 Comparing names:', {
+            expected: expectedName,
+            actual: dvlaResult.driverName
+          });
           
-          if (!namesMatchFlexible(driverData.name, dvlaResult.driverName)) {
+          if (!namesMatchFlexible(expectedName, dvlaResult.driverName)) {
             console.error('❌ Name mismatch detected!');
             console.error(`Expected: ${driverData.name}, Got: ${dvlaResult.driverName}`);
             
             setError({
               issues: [
                 '⚠️ Name mismatch detected',
-                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${expectedName})`,
+                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${driverData.name})`,
                 '',
                 'Possible reasons:',
                 'You uploaded someone else\'s DVLA check by mistake',
@@ -387,13 +384,10 @@ if (expectedName && dvlaResult.driverName) {
         // ========== ALL VALIDATION PASSED - NOW SAFE TO SAVE ==========
         console.log('✅ All DVLA validation checks passed - proceeding to save data');
         
-        // Clear any previous errors
         setError('');
         
-        // Save DVLA validity date
         await saveDvlaDate();
         
-        // Format endorsements with points
         let endorsementCodes = 'None';
         if (dvlaResult.endorsements && dvlaResult.endorsements.length > 0) {
           endorsementCodes = dvlaResult.endorsements
@@ -401,7 +395,6 @@ if (expectedName && dvlaResult.driverName) {
             .join(', ');
         }
         
-        // Calculate total excess: base £1,000 + additional + VAT
         const baseExcess = 1000;
         const additionalExcess = dvlaResult.insuranceDecision?.excess || 0;
         const totalBeforeVat = baseExcess + additionalExcess;
@@ -415,21 +408,19 @@ if (expectedName && dvlaResult.driverName) {
           totalExcess: calculatedExcess
         });
         
-        // Update Monday.com with insurance data
         await updateDriverData({
           dvlaPoints: dvlaResult.totalPoints || 0,
           dvlaEndorsements: endorsementCodes,
           dvlaCalculatedExcess: calculatedExcess
         });
         
-        // Show results to user
         console.log('DVLA Check Results:', {
           name: dvlaResult.driverName,
           licenseEnding: dvlaResult.licenseEnding,
           points: dvlaResult.totalPoints,
           insuranceDecision: dvlaResult.insuranceDecision
         });
-      }
+      } 
         
       // Upload DVLA file to Monday.com
       if (fileType === 'dvla' && imageData) {
