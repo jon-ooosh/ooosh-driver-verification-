@@ -1,6 +1,6 @@
 // File: src/DVLAProcessingPage.js
-// UPDATED to use centralized router and set DVLA dates
-// FIXED: Added serious offense check and corrected name field usage
+// UPDATED: Correct validation order - Identity BEFORE offense checks
+// UK English for all client-facing text
 // Handles both UK drivers (DVLA + POA) and Non-UK drivers (POA only)
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -178,8 +178,40 @@ const DVLAProcessingPage = () => {
       console.error('❌ Error saving DVLA date:', error);
     }
   };
+
+  // Upload DVLA file to Monday.com
+  const uploadDvlaFile = async (imageData) => {
+    console.log('📤 Uploading DVLA file to Monday.com...');
+    
+    try {
+      const uploadResponse = await fetch('/.netlify/functions/monday-integration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upload-file-board-a',
+          email: driverEmail,
+          fileType: 'dvla',
+          fileData: imageData.split(',')[1],
+          filename: `dvla_${Date.now()}.png`,
+          contentType: 'image/png'
+        })
+      });
+      
+      const uploadResult = await uploadResponse.json();
+      if (uploadResult.success) {
+        console.log('✅ DVLA file uploaded to Monday.com');
+        return true;
+      } else {
+        console.error('❌ Failed to upload DVLA file:', uploadResult.error);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error uploading DVLA file:', error);
+      return false;
+    }
+  };
  
-// handleFileUpload function, updated to validate BEFORE saving
+// handleFileUpload function with CORRECT validation order
 const handleFileUpload = async (fileType, file) => {
   try {
     setLoading(true);
@@ -277,11 +309,11 @@ const handleFileUpload = async (fileType, file) => {
     if (processingResult.success) {
       console.log(`✅ ${fileType.toUpperCase()} processing successful:`, processingResult.result);
 
-      // ========== DVLA VALIDATION - DO ALL CHECKS BEFORE SAVING ANYTHING ==========
+      // ========== DVLA VALIDATION - CORRECT ORDER ==========
       if (fileType === 'dvla' && processingResult.result) {
         const dvlaResult = processingResult.result;
         
-        // STEP 1: Check if document structure is valid
+        // ===== STEP 1: Check if document structure is valid =====
         if (!dvlaResult.isValid) {
           const issues = [];
           
@@ -304,10 +336,10 @@ const handleFileUpload = async (fileType, file) => {
           
           setError({ issues });
           setLoading(false);
-          return;
+          return; // STOP - Don't save anything
         }
         
-        // STEP 1.5: Check document age (must be <30 days)
+        // ===== STEP 2: Check document age (must be <30 days) =====
         if (dvlaResult.ageInDays && dvlaResult.ageInDays > 30) {
           setError({
             issues: [
@@ -319,49 +351,10 @@ const handleFileUpload = async (fileType, file) => {
             ]
           });
           setLoading(false);
-          return;
+          return; // STOP - Don't save anything
         }
         
-        // ========== STEP 2: CHECK FOR SERIOUS OFFENSES OR MANUAL REVIEW ==========
-        // THIS MUST COME BEFORE LICENSE/NAME VALIDATION
-        if (dvlaResult.insuranceDecision?.manualReview) {
-          console.log('⚠️ Manual review required:', dvlaResult.insuranceDecision.reasons);
-          
-          setError({
-            issues: [
-              '⚠️ Insurance Review Required',
-              '',
-              ...dvlaResult.insuranceDecision.reasons,
-              '',
-              'Your DVLA check has been recorded and will be reviewed by our insurance team.',
-              'We will contact you within 24 hours with next steps.',
-              '',
-              'If you have questions, please contact us at info@oooshtours.co.uk'
-            ]
-          });
-          
-          // Still save the data for manual review
-          await saveDvlaDate();
-          
-          let endorsementCodes = 'None';
-          if (dvlaResult.endorsements && dvlaResult.endorsements.length > 0) {
-            endorsementCodes = dvlaResult.endorsements
-              .map(e => `${e.code} (${e.points} pts)`)
-              .join(', ');
-          }
-          
-          await updateDriverData({
-            dvlaPoints: dvlaResult.totalPoints || 0,
-            dvlaEndorsements: endorsementCodes,
-            dvlaCalculatedExcess: 'Pending Review',
-            overallStatus: 'Insurance Review'
-          });
-          
-          setLoading(false);
-          return; // STOP HERE - don't continue to name/license validation
-        }
-        
-        // STEP 3: Check licence ending matches (anti-fraud)
+        // ===== STEP 3: Check licence ending matches (ANTI-FRAUD) =====
         if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
           if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
             console.error('❌ Licence mismatch detected!');
@@ -382,24 +375,18 @@ const handleFileUpload = async (fileType, file) => {
               ]
             });
             setLoading(false);
-            return;
+            return; // STOP - Don't save anything
           }
         }
         
-        // STEP 4: Check driver name matches (additional anti-fraud)
-        // CRITICAL FIX: Use driverName field, not name field!
+        // ===== STEP 4: Check driver name matches (ANTI-FRAUD) =====
         const expectedName = driverData?.driverName || driverData?.name;
-        console.log('🔍 Full driverData object keys:', Object.keys(driverData));
-        console.log('🔍 driverData.driverName:', driverData?.driverName);
-        console.log('🔍 driverData.name:', driverData?.name);
-        console.log('🔍 dvlaResult.driverName:', dvlaResult.driverName);
+        console.log('🔍 Name validation:', {
+          expectedName: expectedName,
+          dvlaName: dvlaResult.driverName
+        });
 
         if (expectedName && dvlaResult.driverName) {
-          console.log('🔍 Comparing names:', {
-            expected: expectedName,
-            actual: dvlaResult.driverName
-          });
-          
           if (!namesMatchFlexible(expectedName, dvlaResult.driverName)) {
             console.error('❌ Name mismatch detected!');
             console.error(`Expected: ${expectedName}, Got: ${dvlaResult.driverName}`);
@@ -419,17 +406,79 @@ const handleFileUpload = async (fileType, file) => {
               ]
             });
             setLoading(false);
-            return;
+            return; // STOP - Don't save anything
           }
         }
         
-        // ========== ALL VALIDATION PASSED - NOW SAFE TO SAVE ==========
-        console.log('✅ All DVLA validation checks passed - proceeding to save data');
+        // ===== IDENTITY VERIFIED - NOW CHECK FOR SERIOUS OFFENCES =====
+        console.log('✅ Identity verified - checking for serious offences');
         
-        setError('');
+        // ===== STEP 5: Check for serious offences or manual review =====
+        if (dvlaResult.insuranceDecision?.manualReview) {
+          console.log('⚠️ Manual review required:', dvlaResult.insuranceDecision.reasons);
+          
+          // Upload file FIRST
+          await uploadDvlaFile(imageData);
+          
+          // Save endorsement data with Insurance Review status
+          let endorsementCodes = 'None';
+          if (dvlaResult.endorsements && dvlaResult.endorsements.length > 0) {
+            endorsementCodes = dvlaResult.endorsements
+              .map(e => `${e.code} (${e.points} pts)`)
+              .join(', ');
+          }
+          
+          await updateDriverData({
+            dvlaPoints: dvlaResult.totalPoints || 0,
+            dvlaEndorsements: endorsementCodes,
+            dvlaCalculatedExcess: 'Pending Review',
+            overallStatus: 'Insurance Review'
+            // NOTE: We DON'T set dvlaValidUntil here!
+          });
+          
+          // Show user message
+          setError({
+            issues: [
+              '⚠️ Insurance Review Required',
+              '',
+              ...dvlaResult.insuranceDecision.reasons,
+              '',
+              'Your DVLA check has been recorded and will be reviewed by our insurance team.',
+              'We will contact you within 24 hours with the next steps.',
+              '',
+              'You can continue with the verification process now.',
+              'If you have questions, please contact us at info@oooshtours.co.uk'
+            ],
+            isManualReview: true // Flag to show this is not an error but a notice
+          });
+          
+          // Navigate to next step after delay
+          setTimeout(async () => {
+            const nextStep = await callRouter('dvla-complete');
+            if (nextStep) {
+              navigateToNext(nextStep);
+            } else {
+              // Fallback
+              window.location.href = `/?step=signature&email=${encodeURIComponent(driverEmail)}&job=${jobId}`;
+            }
+          }, 5000); // 5 seconds to read the message
+          
+          setLoading(false);
+          return; // STOP - Manual review path
+        }
         
+        // ===== ALL VALIDATION PASSED - SUCCESS PATH =====
+        console.log('✅ All DVLA validation checks passed - automatic approval');
+        
+        setError(''); // Clear any errors
+        
+        // Upload file
+        await uploadDvlaFile(imageData);
+        
+        // Set DVLA validity date (30 days from now)
         await saveDvlaDate();
         
+        // Calculate insurance excess
         let endorsementCodes = 'None';
         if (dvlaResult.endorsements && dvlaResult.endorsements.length > 0) {
           endorsementCodes = dvlaResult.endorsements
@@ -450,44 +499,20 @@ const handleFileUpload = async (fileType, file) => {
           totalExcess: calculatedExcess
         });
         
+        // Save insurance data
         await updateDriverData({
           dvlaPoints: dvlaResult.totalPoints || 0,
           dvlaEndorsements: endorsementCodes,
           dvlaCalculatedExcess: calculatedExcess
         });
         
-        console.log('DVLA Check Results:', {
+        console.log('✅ DVLA Check Results:', {
           name: dvlaResult.driverName,
           licenseEnding: dvlaResult.licenseEnding,
           points: dvlaResult.totalPoints,
           insuranceDecision: dvlaResult.insuranceDecision
         });
       } 
-        
-      // Upload DVLA file to Monday.com
-      if (fileType === 'dvla' && imageData) {
-        console.log('📤 Uploading DVLA file to Monday.com...');
-        
-        const uploadResponse = await fetch('/.netlify/functions/monday-integration', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'upload-file-board-a',
-            email: driverEmail,
-            fileType: 'dvla',
-            fileData: imageData.split(',')[1],
-            filename: `dvla_${Date.now()}.png`,
-            contentType: 'image/png'
-          })
-        });
-        
-        const uploadResult = await uploadResponse.json();
-        if (uploadResult.success) {
-          console.log('✅ DVLA file uploaded to Monday.com');
-        } else {
-          console.error('❌ Failed to upload DVLA file:', uploadResult.error);
-        }
-      }
           
       // Store results
       setProcessingResults(prev => ({ ...prev, [fileType]: processingResult.result }));
@@ -896,7 +921,7 @@ const handleFileUpload = async (fileType, file) => {
   return null;
 };
 
-// DVLA Upload Component (unchanged)
+// DVLA Upload Component with UK English
 const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
   const [dragActive, setDragActive] = useState(false);
 
@@ -970,22 +995,36 @@ const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
       </div>
 
    {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className={`border rounded-lg p-4 ${
+          error.isManualReview 
+            ? 'bg-yellow-50 border-yellow-200' 
+            : 'bg-red-50 border-red-200'
+        }`}>
           <div className="flex">
-            <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+            <AlertCircle className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
+              error.isManualReview ? 'text-yellow-400' : 'text-red-400'
+            }`} />
             <div className="ml-3">
               {typeof error === 'string' ? (
                 <p className="text-base text-red-800">{error}</p>
               ) : (
                 <>
-                  <p className="text-base font-semibold text-red-900 mb-2">DVLA document validation failed:</p>
-                  <div className="space-y-1 text-base text-red-800 mb-3">
+                  <p className={`text-base font-semibold mb-2 ${
+                    error.isManualReview ? 'text-yellow-900' : 'text-red-900'
+                  }`}>
+                    {error.isManualReview ? 'Insurance Review Required' : 'DVLA document validation failed:'}
+                  </p>
+                  <div className={`space-y-1 text-base mb-3 ${
+                    error.isManualReview ? 'text-yellow-800' : 'text-red-800'
+                  }`}>
                     {error.issues.map((issue, i) => (
                       <p key={i}>{issue}</p>
                     ))}
                   </div>
-                  {!error.issues.some(i => i.includes('Insurance Review')) && (
-                    <p className="text-base text-red-900 font-medium">Please generate a fresh DVLA check and upload the complete PDF</p>
+                  {!error.isManualReview && (
+                    <p className="text-base text-red-900 font-medium">
+                      Please generate a fresh DVLA check and upload the complete PDF
+                    </p>
                   )}
                 </>
               )}
