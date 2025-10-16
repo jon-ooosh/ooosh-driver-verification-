@@ -1,5 +1,6 @@
 // File: src/DVLAProcessingPage.js
 // UPDATED to use centralized router and set DVLA dates
+// FIXED: Added serious offense check and corrected name field usage
 // Handles both UK drivers (DVLA + POA) and Non-UK drivers (POA only)
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -321,7 +322,46 @@ const handleFileUpload = async (fileType, file) => {
           return;
         }
         
-        // STEP 2: Check licence ending matches (anti-fraud)
+        // ========== STEP 2: CHECK FOR SERIOUS OFFENSES OR MANUAL REVIEW ==========
+        // THIS MUST COME BEFORE LICENSE/NAME VALIDATION
+        if (dvlaResult.insuranceDecision?.manualReview) {
+          console.log('⚠️ Manual review required:', dvlaResult.insuranceDecision.reasons);
+          
+          setError({
+            issues: [
+              '⚠️ Insurance Review Required',
+              '',
+              ...dvlaResult.insuranceDecision.reasons,
+              '',
+              'Your DVLA check has been recorded and will be reviewed by our insurance team.',
+              'We will contact you within 24 hours with next steps.',
+              '',
+              'If you have questions, please contact us at info@oooshtours.co.uk'
+            ]
+          });
+          
+          // Still save the data for manual review
+          await saveDvlaDate();
+          
+          let endorsementCodes = 'None';
+          if (dvlaResult.endorsements && dvlaResult.endorsements.length > 0) {
+            endorsementCodes = dvlaResult.endorsements
+              .map(e => `${e.code} (${e.points} pts)`)
+              .join(', ');
+          }
+          
+          await updateDriverData({
+            dvlaPoints: dvlaResult.totalPoints || 0,
+            dvlaEndorsements: endorsementCodes,
+            dvlaCalculatedExcess: 'Pending Review',
+            overallStatus: 'Insurance Review'
+          });
+          
+          setLoading(false);
+          return; // STOP HERE - don't continue to name/license validation
+        }
+        
+        // STEP 3: Check licence ending matches (anti-fraud)
         if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
           if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
             console.error('❌ Licence mismatch detected!');
@@ -333,9 +373,9 @@ const handleFileUpload = async (fileType, file) => {
                 `The licence ending on this DVLA check (${dvlaResult.licenseEnding}) does not match your verified ID (${driverData.licenseEnding})`,
                 '',
                 'Possible reasons:',
-                'You uploaded someone else\'s DVLA check by mistake',
-                'The DVLA check belongs to a different person',
-                'There was an error during your ID verification',
+                '• You uploaded someone else\'s DVLA check by mistake',
+                '• The DVLA check belongs to a different person',
+                '• There was an error during your ID verification',
                 '',
                 'Please check you\'re uploading YOUR OWN DVLA check and try again.',
                 'If the problem persists, contact support at info@oooshtours.co.uk'
@@ -346,9 +386,11 @@ const handleFileUpload = async (fileType, file) => {
           }
         }
         
-        // STEP 3: Check driver name matches (additional anti-fraud)
-        const expectedName = driverData?.name;
+        // STEP 4: Check driver name matches (additional anti-fraud)
+        // CRITICAL FIX: Use driverName field, not name field!
+        const expectedName = driverData?.driverName || driverData?.name;
         console.log('🔍 Full driverData object keys:', Object.keys(driverData));
+        console.log('🔍 driverData.driverName:', driverData?.driverName);
         console.log('🔍 driverData.name:', driverData?.name);
         console.log('🔍 dvlaResult.driverName:', dvlaResult.driverName);
 
@@ -360,17 +402,17 @@ const handleFileUpload = async (fileType, file) => {
           
           if (!namesMatchFlexible(expectedName, dvlaResult.driverName)) {
             console.error('❌ Name mismatch detected!');
-            console.error(`Expected: ${driverData.name}, Got: ${dvlaResult.driverName}`);
+            console.error(`Expected: ${expectedName}, Got: ${dvlaResult.driverName}`);
             
             setError({
               issues: [
                 '⚠️ Name mismatch detected',
-                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${driverData.name})`,
+                `The name on this DVLA check (${dvlaResult.driverName}) does not match your verified ID (${expectedName})`,
                 '',
                 'Possible reasons:',
-                'You uploaded someone else\'s DVLA check by mistake',
-                'The DVLA check belongs to a different person',
-                'There was an error during your ID verification',
+                '• You uploaded someone else\'s DVLA check by mistake',
+                '• The DVLA check belongs to a different person',
+                '• There was an error during your ID verification',
                 '',
                 'Please check you\'re uploading YOUR OWN DVLA check and try again.',
                 'If the problem persists, contact us at info@oooshtours.co.uk'
@@ -942,7 +984,9 @@ const DVLAUploadComponent = ({ onFileUpload, loading, error }) => {
                       <p key={i}>{issue}</p>
                     ))}
                   </div>
-                  <p className="text-base text-red-900 font-medium">Please generate a fresh DVLA check and upload the complete PDF</p>
+                  {!error.issues.some(i => i.includes('Insurance Review')) && (
+                    <p className="text-base text-red-900 font-medium">Please generate a fresh DVLA check and upload the complete PDF</p>
+                  )}
                 </>
               )}
             </div>
