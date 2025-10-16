@@ -664,54 +664,132 @@ const handleFileUpload = async (fileType, file) => {
     }
   };
 
-  // Helper function for flexible name matching
-  const namesMatchFlexible = (expectedName, actualName) => {
-    if (!expectedName || !actualName) return false;
-    
-    // Normalize both names: uppercase, remove extra spaces
-    const normalize = (name) => name.toUpperCase().replace(/\s+/g, ' ').trim();
-    
-    const expected = normalize(expectedName);
-    const actual = normalize(actualName);
-    
-    // Remove common titles from actual name
-    const titles = ['MR', 'MRS', 'MS', 'MISS', 'DR', 'PROF', 'SIR', 'DAME', 'LORD', 'LADY'];
-    let actualWithoutTitle = actual;
-    titles.forEach(title => {
-    actualWithoutTitle = actualWithoutTitle.replace(new RegExp(`^${title}\\s*`, 'i'), '');
-    });
-    
-    console.log('Name comparison:', {
-      expected: expected,
-      actual: actualWithoutTitle
-    });
-    
-    // Split into words
-    const expectedWords = expected.split(' ').filter(w => w.length > 0);
-    const actualWords = actualWithoutTitle.split(' ').filter(w => w.length > 0);
-    
-    // Extract first name and surname
-    const expectedFirst = expectedWords[0];
-    const expectedLast = expectedWords[expectedWords.length - 1];
-    
-    const actualFirst = actualWords[0];
-    const actualLast = actualWords[actualWords.length - 1];
-    
-    // Check if first and last names match
-    const firstNameMatch = expectedFirst === actualFirst;
-    const lastNameMatch = expectedLast === actualLast;
-    
-    console.log('Name parts:', {
-      expectedFirst,
-      expectedLast,
-      actualFirst,
-      actualLast,
-      firstMatch: firstNameMatch,
-      lastMatch: lastNameMatch
-    });
-    
-    return firstNameMatch && lastNameMatch;
-  };
+// Helper function for flexible name matching - IMPROVED for OCR errors
+const namesMatchFlexible = (expectedName, actualName) => {
+  if (!expectedName || !actualName) return false;
+  
+  // Normalize both names: uppercase, remove extra spaces
+  const normalize = (name) => name.toUpperCase().replace(/\s+/g, ' ').trim();
+  
+  let expected = normalize(expectedName);
+  let actual = normalize(actualName);
+  
+  console.log('📝 Name matching - Original:', {
+    expected: expected,
+    actual: actual
+  });
+  
+  // CRITICAL FIX: Remove titles from BOTH names, handling OCR errors
+  const titles = ['MR', 'MRS', 'MS', 'MISS', 'DR', 'PROF', 'SIR', 'DAME', 'LORD', 'LADY', 'DR', 'DOC', 'DOCTOR', 'MX', 'CLLR', 'LORD'];
+  
+  // Remove titles from expected name
+  titles.forEach(title => {
+    // Match title at start, optionally followed by space or period
+    expected = expected.replace(new RegExp(`^${title}[\\.\\s]*`, 'i'), '');
+  });
+  
+  // Remove titles from actual name (handling OCR errors where space is missing)
+  titles.forEach(title => {
+    // Match title at start, optionally followed by space, period, or nothing
+    actual = actual.replace(new RegExp(`^${title}[\\.\\s]*`, 'i'), '');
+  });
+  
+  console.log('📝 Name matching - After title removal:', {
+    expected: expected,
+    actual: actual
+  });
+  
+  // If names match exactly after title removal, success!
+  if (expected === actual) {
+    console.log('✅ Exact match after title removal');
+    return true;
+  }
+  
+  // Split into words for first/last name comparison
+  const expectedWords = expected.split(' ').filter(w => w.length > 0);
+  const actualWords = actual.split(' ').filter(w => w.length > 0);
+  
+  // Need at least first and last name
+  if (expectedWords.length < 2 || actualWords.length < 2) {
+    console.log('⚠️ Not enough name parts');
+    return false;
+  }
+  
+  // Extract first name and surname
+  const expectedFirst = expectedWords[0];
+  const expectedLast = expectedWords[expectedWords.length - 1];
+  
+  const actualFirst = actualWords[0];
+  const actualLast = actualWords[actualWords.length - 1];
+  
+  // Check if first and last names match
+  const firstNameMatch = expectedFirst === actualFirst;
+  const lastNameMatch = expectedLast === actualLast;
+  
+  console.log('📝 Name parts comparison:', {
+    expectedFirst,
+    expectedLast,
+    actualFirst,
+    actualLast,
+    firstMatch: firstNameMatch,
+    lastMatch: lastNameMatch
+  });
+  
+  // Both first and last must match
+  if (firstNameMatch && lastNameMatch) {
+    console.log('✅ First and last name match');
+    return true;
+  }
+  
+  // ADDITIONAL FLEXIBILITY: Handle common OCR errors
+  // Check if first names are similar (allowing for single character difference)
+  const firstNameSimilar = 
+    expectedFirst.includes(actualFirst) || 
+    actualFirst.includes(expectedFirst) ||
+    levenshteinDistance(expectedFirst, actualFirst) <= 1;
+  
+  const lastNameSimilar = 
+    expectedLast.includes(actualLast) || 
+    actualLast.includes(expectedLast) ||
+    levenshteinDistance(expectedLast, actualLast) <= 1;
+  
+  if (firstNameSimilar && lastNameSimilar) {
+    console.log('✅ Names are similar (allowing for OCR errors)');
+    return true;
+  }
+  
+  console.log('❌ Names do not match');
+  return false;
+};
+
+// Helper function: Calculate Levenshtein distance (edit distance between strings)
+const levenshteinDistance = (str1, str2) => {
+  const matrix = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+};
 
   const updateDriverData = async (updates) => {
     try {
