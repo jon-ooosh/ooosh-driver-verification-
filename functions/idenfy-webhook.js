@@ -1222,34 +1222,54 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
       }
     }
     
- // Map all possible document URLs with smart filtering
-    const documentMappings = [
-      {
+ // SMART DOCUMENT TYPE DETECTION
+    const isPassportVerification = fullWebhookData.data?.docType === 'PASSPORT';
+    console.log('📋 Document type detected:', isPassportVerification ? 'PASSPORT' : 'DRIVING LICENCE');
+    
+    // Map all possible document URLs with smart filtering
+    const documentMappings = [];
+    
+    // Add FRONT file - passport OR license front based on document type
+    if (fullWebhookData.fileUrls?.FRONT) {
+      documentMappings.push({
         idenfyField: 'FRONT',
-        fileType: 'license_front',
-        url: fullWebhookData.fileUrls?.FRONT,
-        needed: filesNeeded.needFront
-      },
-      {
+        fileType: isPassportVerification ? 'passport' : 'license_front',
+        url: fullWebhookData.fileUrls.FRONT,
+        needed: isPassportVerification ? filesNeeded.needPassport : filesNeeded.needFront
+      });
+      console.log(`📄 FRONT mapped to: ${isPassportVerification ? 'passport' : 'license_front'}`);
+    }
+    
+    // Add BACK file - only for driving licences (passports don't have back)
+    if (!isPassportVerification && fullWebhookData.fileUrls?.BACK) {
+      documentMappings.push({
         idenfyField: 'BACK',
         fileType: 'license_back',
-        url: fullWebhookData.fileUrls?.BACK,
+        url: fullWebhookData.fileUrls.BACK,
         needed: filesNeeded.needBack
-      },
-     {
+      });
+      console.log('📄 BACK mapped to: license_back');
+    }
+    
+    // Add POA documents (both passport and licence verifications can have POAs)
+    if (poa1Url) {
+      documentMappings.push({
         idenfyField: 'UTILITY_BILL',
         fileType: 'poa1',
         url: poa1Url,
         needed: filesNeeded.needPOA1
-      },
-      {
+      });
+    }
+    
+    if (poa2Url) {
+      documentMappings.push({
         idenfyField: 'POA2',
         fileType: 'poa2',
         url: poa2Url,
         needed: filesNeeded.needPOA2
-      }
-    ];
-    
+      });
+    }
+
     // Process each document
     const uploadResults = [];
     for (const mapping of documentMappings) {
