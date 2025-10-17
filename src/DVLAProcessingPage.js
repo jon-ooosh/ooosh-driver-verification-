@@ -356,7 +356,7 @@ const handleFileUpload = async (fileType, file) => {
         
         // ===== STEP 3: Check licence ending matches (ANTI-FRAUD) =====
         if (driverData?.licenseEnding && dvlaResult.licenseEnding) {
-          if (driverData.licenseEnding !== dvlaResult.licenseEnding) {
+          if (!licenseEndingsMatch(driverData.licenseEnding, dvlaResult.licenseEnding)) {
             console.error('❌ Licence mismatch detected!');
             console.error(`Expected: ${driverData.licenseEnding}, Got: ${dvlaResult.licenseEnding}`);
             
@@ -789,6 +789,54 @@ const levenshteinDistance = (str1, str2) => {
   }
   
   return matrix[str2.length][str1.length];
+};
+
+// Helper function for flexible licence ending matching
+const licenseEndingsMatch = (expected, actual) => {
+  if (!expected || !actual) return false;
+  
+  // Normalize: uppercase, remove spaces and special characters
+  const normalize = (str) => str.toUpperCase().replace(/[\s\-_]/g, '');
+  
+  const exp = normalize(expected);
+  const act = normalize(actual);
+  
+  console.log('🔍 Licence ending comparison:', {
+    expected: exp,
+    actual: act
+  });
+  
+  // 1. Exact match
+  if (exp === act) {
+    console.log('✅ Exact licence ending match');
+    return true;
+  }
+  
+  // 2. One contains the other (handles "JM9PX" vs "093JM9PX")
+  if (exp.includes(act) || act.includes(exp)) {
+    console.log('✅ Licence ending contained in other');
+    return true;
+  }
+  
+  // 3. Last 5 characters match (the unique part)
+  if (exp.length >= 5 && act.length >= 5) {
+    const expLast5 = exp.slice(-5);
+    const actLast5 = act.slice(-5);
+    if (expLast5 === actLast5) {
+      console.log('✅ Last 5 characters of licence match');
+      return true;
+    }
+  }
+  
+  // 4. Levenshtein distance ≤ 2 (allows for OCR errors)
+  const distance = levenshteinDistance(exp, act);
+  if (distance <= 2) {
+    console.log(`✅ Licence endings similar (edit distance: ${distance})`);
+    return true;
+  }
+  
+  console.log('❌ Licence endings do not match');
+  return false;
 };
 
   const updateDriverData = async (updates) => {
