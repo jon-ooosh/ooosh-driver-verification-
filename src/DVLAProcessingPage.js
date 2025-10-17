@@ -798,13 +798,26 @@ const licenseEndingsMatch = (expected, actual) => {
   // Normalize: uppercase, remove spaces and special characters
   const normalize = (str) => str.toUpperCase().replace(/[\s\-_]/g, '');
   
-  const exp = normalize(expected);
-  const act = normalize(actual);
+  let exp = normalize(expected);
+  let act = normalize(actual);
   
-  console.log('🔍 Licence ending comparison:', {
+  console.log('🔍 Licence ending comparison (original):', {
     expected: exp,
     actual: act
   });
+  
+  // Strip trailing 2-3 digit numbers (likely issue numbers) from expected
+  const expWithoutIssueNum = exp.replace(/\d{2,3}$/, '');
+  
+  console.log('🔍 After removing issue number:', {
+    expected: expWithoutIssueNum,
+    actual: act
+  });
+  
+  // Use the version without issue number if it was removed
+  if (expWithoutIssueNum !== exp) {
+    exp = expWithoutIssueNum;
+  }
   
   // 1. Exact match
   if (exp === act) {
@@ -818,7 +831,19 @@ const licenseEndingsMatch = (expected, actual) => {
     return true;
   }
   
-  // 3. Last 5 characters match (the unique part)
+  // 3. Common substring of at least 5 alphanumeric characters
+  // Extract alpha parts to find the "core" licence ending
+  const expAlpha = exp.replace(/^\d+/, ''); // Remove leading digits
+  const actAlpha = act.replace(/^\d+/, ''); // Remove leading digits
+  
+  if (expAlpha.length >= 5 && actAlpha.length >= 5) {
+    if (expAlpha.includes(actAlpha) || actAlpha.includes(expAlpha)) {
+      console.log('✅ Core licence ending matches');
+      return true;
+    }
+  }
+  
+  // 4. Last 5 characters match (the unique part)
   if (exp.length >= 5 && act.length >= 5) {
     const expLast5 = exp.slice(-5);
     const actLast5 = act.slice(-5);
@@ -828,7 +853,7 @@ const licenseEndingsMatch = (expected, actual) => {
     }
   }
   
-  // 4. Levenshtein distance ≤ 2 (allows for OCR errors)
+  // 5. Levenshtein distance ≤ 2 (allows for OCR errors)
   const distance = levenshteinDistance(exp, act);
   if (distance <= 2) {
     console.log(`✅ Licence endings similar (edit distance: ${distance})`);
