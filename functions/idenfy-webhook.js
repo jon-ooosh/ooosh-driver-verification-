@@ -258,8 +258,49 @@ if (hasOnlyAdditionalSteps) {
       }
     }  
 
-    // Continue with normal verification processing...
+   // Continue with normal verification processing...
     console.log('📋 Processing as normal verification result');
+
+    // NEW: Check Idenfy's POA validation first (if POAs are present)
+    const hasPoaDocuments = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+                           fullWebhookData.additionalStepPdfUrls?.POA2 ||
+                           fullWebhookData.fileUrls?.UTILITY_BILL ||
+                           fullWebhookData.fileUrls?.POA2;
+    
+    if (hasPoaDocuments) {
+      console.log('🔍 POA documents detected - running Idenfy validation check');
+      const idenfyPoaCheck = checkIdenfyPoaValidation(fullWebhookData);
+      
+      if (!idenfyPoaCheck.approved) {
+        console.log('❌ Idenfy POA validation failed:', idenfyPoaCheck.reason);
+        
+        // Update Monday with failure reason
+        await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-driver-board-a',
+            email: email,
+            updates: {
+              overallStatus: 'Stuck',
+              additionalDetails: `Idenfy POA validation failed: ${idenfyPoaCheck.reason}`,
+              lastUpdated: new Date().toISOString().split('T')[0]
+            }
+          })
+        });
+        
+        return {
+          success: true,
+          boardAUpdated: true,
+          nextStep: 'manual_review',
+          reason: 'Idenfy rejected POA documents'
+        };
+      }
+      
+      console.log('✅ Idenfy POA validation passed:', idenfyPoaCheck.reason);
+    } else {
+      console.log('ℹ️ No POA documents in this verification');
+    }
 
     // Step 1: Analyze Idenfy verification result
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
@@ -1199,6 +1240,22 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
     
     console.log('📍 Extracted URLs:', { poa1Url: !!poa1Url, poa2Url: !!poa2Url });
     
+    // NEW: Extract Idenfy's validation results for both POAs
+    const idenfyPoa1Validation = fullWebhookData.data?.additionalData?.UTILITY_BILL?.address;
+    const idenfyPoa2Validation = fullWebhookData.data?.additionalData?.POA2?.address;
+    
+    console.log('📋 Idenfy POA validation results:', {
+      poa1: {
+        extracted: idenfyPoa1Validation?.value || 'Not extracted',
+        status: idenfyPoa1Validation?.status || 'No status'
+      },
+      poa2: {
+        extracted: idenfyPoa2Validation?.value || 'Not extracted',
+        status: idenfyPoa2Validation?.status || 'No status'
+      },
+      overallStatus: fullWebhookData.status?.additionalSteps
+    });
+    
     if (poa1Url || poa2Url) {
       console.log('📝 Storing POA URLs in text fields FIRST...');
       
@@ -1796,4 +1853,109 @@ async function markWebhookProcessing(scanRef) {
   // ScanRef will be stored during updateBoardAWithIdenfyResults
   // This function is now just for logging
   console.log(`📝 Webhook processing will store scanRef: ${scanRef}`);
+}
+
+// NEW FUNCTION: Check Idenfy's POA validation results
+function checkIdenfyPoaValidation(webhookData) {
+  const status = webhookData.status;
+  const additionalData = webhookData.data?.additionalData;
+  
+  console.log('🔍 Running Idenfy POA validation check...');
+  console.log('📊 Status:', {
+    additionalSteps: status.additionalSteps,
+    fraudTags: status.fraudTags?.length || 0,
+    suspicionReasons: status.suspicionReasons?.length || 0
+  });
+  
+  // 1. Check overall additional steps status
+  if (status.additionalSteps === "INVALID") {
+    console.log('❌ Idenfy marked additional steps as INVALID');
+    return {
+      approved: false,
+      reason: "Idenfy marked additional steps as INVALID"
+    };
+  }
+  
+  // 2. Check for fraud tags related to POAs
+  const poaFraudTags = (status.fraudTags || []).filter(tag => 
+    tag.includes('ADDITIONAL_STEP') || 
+    tag.includes('UTILITY') || 
+    tag.includes('POA') ||
+    tag.includes('ADDRESS') ||
+    tag.includes('DOCUMENT')
+  );
+  
+  if (poaFraudTags.length > 0) {
+    console.log('❌ Fraud tags detected:', poaFraudTags);
+    return {
+      approved: false,
+      reason: `Fraud detected: ${poaFraudTags.join(', ')}`,
+      requiresManualReview: true
+    };
+  }
+  
+  // 3. Check for suspicion reasons
+  const poaSuspicions = (status.suspicionReasons || []).filter(reason =>
+    reason.includes('ADDITIONAL') ||
+    reason.includes('ADDRESS') ||
+    reason.includes('UTILITY')
+  );
+  
+  if (poaSuspicions.length > 0) {
+    console.log('⚠️ Suspicion reasons detected:', poaSuspicions);
+    return {
+      approved: false,
+      reason: `Suspicious: ${poaSuspicions.join(', ')}`,
+      requiresManualReview: true
+    };
+  }
+  
+  // 4. Check POA1 extraction status (if Idenfy attempted extraction)
+  const poa1Status = additionalData?.UTILITY_BILL?.address?.status;
+  if (poa1Status) {
+    console.log('📋 POA1 status:', poa1Status);
+    if (poa1Status !== "MATCH" && poa1Status !== "NO_DATA") {
+      console.log('❌ POA1 validation failed');
+      return {
+        approved: false,
+        reason: `POA1 validation failed: ${poa1Status}`
+      };
+    }
+  }
+  
+  // 5. Check POA2 extraction status (if present)
+  const poa2Status = additionalData?.POA2?.address?.status;
+  if (poa2Status) {
+    console.log('📋 POA2 status:', poa2Status);
+    if (poa2Status !== "MATCH" && poa2Status !== "NO_DATA") {
+      console.log('❌ POA2 validation failed');
+      return {
+        approved: false,
+        reason: `POA2 validation failed: ${poa2Status}`
+      };
+    }
+  }
+  
+  // 6. Check if at least ONE POA was successfully extracted (if Idenfy did extraction)
+  const poa1Extracted = additionalData?.UTILITY_BILL?.address?.value;
+  const poa2Extracted = additionalData?.POA2?.address?.value;
+  
+  if ((poa1Status || poa2Status) && !poa1Extracted && !poa2Extracted) {
+    console.log('❌ Idenfy attempted extraction but failed on both POAs');
+    return {
+      approved: false,
+      reason: "Idenfy could not extract address from either POA document"
+    };
+  }
+  
+  // All Idenfy checks passed!
+  console.log('✅ All Idenfy POA checks passed');
+  return {
+    approved: true,
+    reason: "Idenfy validation passed",
+    poa1Address: poa1Extracted,
+    poa2Address: poa2Extracted,
+    poa1Status: poa1Status || 'Not checked',
+    poa2Status: poa2Status || 'Not checked'
+  };
 }
