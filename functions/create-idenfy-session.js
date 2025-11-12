@@ -1,8 +1,6 @@
 // File: functions/create-idenfy-session.js
 // FIXED VERSION - Client ID includes email for proper webhook processing
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('Create Idenfy session called with method:', event.httpMethod);
   
