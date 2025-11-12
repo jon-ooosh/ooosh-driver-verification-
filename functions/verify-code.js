@@ -2,14 +2,6 @@
 // OOOSH Driver Verification - Verify Email Code Function
 // FIXED VERSION - Restoring test email backdoors that were working
 
-// 🚨 TESTING BACKDOOR - REMOVE BEFORE PRODUCTION! 🚨
-const TEST_EMAILS = [
-  'test@oooshtours.co.uk',
-  'jon@oooshtours.co.uk', // For easy testing
-  'demo@oooshtours.co.uk',
-  'dev@oooshtours.co.uk'
-];
-
 exports.handler = async (event, context) => {
   console.log('Verify code function called with method:', event.httpMethod);
   
@@ -67,27 +59,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // 🚨 TESTING BACKDOOR - RESTORED FROM WORKING VERSION! 🚨
-    if (TEST_EMAILS.includes(email.toLowerCase())) {
-      console.log('🚨 TESTING BACKDOOR: Auto-verifying test email:', email);
-      console.log('🚨 ANY CODE ACCEPTED FOR TEST EMAILS - REMOVE IN PRODUCTION!');
-      
-      // Create driver record for test email (call Google Apps Script)
-      await createTestDriverRecord(email, jobId);
-      
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ 
-          success: true, 
-          verified: true,
-          message: 'Email verified successfully (TEST MODE)',
-          testMode: true
-        })
-      };
-    }
-
-    // FIXED: Ensure code is a string for consistent handling
+        // FIXED: Ensure code is a string for consistent handling
     const codeStr = String(code).trim();
     
     if (codeStr.length !== 6 || !/^\d{6}$/.test(codeStr)) {
