@@ -2,8 +2,6 @@
 // OOOSH Driver Verification - Verify Email Code Function
 // FIXED VERSION - Restoring test email backdoors that were working
 
-const fetch = require('node-fetch');
-
 // 🚨 TESTING BACKDOOR - REMOVE BEFORE PRODUCTION! 🚨
 const TEST_EMAILS = [
   'test@oooshtours.co.uk',
