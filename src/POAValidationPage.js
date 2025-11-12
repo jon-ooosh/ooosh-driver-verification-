@@ -301,27 +301,30 @@ const checkPoaValidationResults = useCallback(async () => {
           setProcessingPDFs(true);
           
           try {
-            let poa1Result, poa2Result;
+          let poa1Result, poa2Result;
+
+// Process POA1 if URL exists AND not already processed
+if (status.poa1URL && !processedDocsRef.current.poa1) {
+  console.log('📄 Processing POA1 from URL...');
+  poa1Result = await processDocument(status.poa1URL, 'poa1');
+  processedDocsRef.current.poa1 = poa1Result; // Store the actual result
+  console.log('✅ POA1 processed and stored:', poa1Result.documentDate);
+} else if (processedDocsRef.current.poa1) {
+  console.log('⏭️ POA1 already processed, using cached result');
+  poa1Result = processedDocsRef.current.poa1; // Reuse the stored result
+}
+
+// Process POA2 if URL exists AND not already processed
+if (status.poa2URL && !processedDocsRef.current.poa2) {
+  console.log('📄 Processing POA2 from URL...');
+  poa2Result = await processDocument(status.poa2URL, 'poa2');
+  processedDocsRef.current.poa2 = poa2Result; // Store the actual result
+  console.log('✅ POA2 processed and stored:', poa2Result.documentDate);
+} else if (processedDocsRef.current.poa2) {
+  console.log('⏭️ POA2 already processed, using cached result');
+  poa2Result = processedDocsRef.current.poa2; // Reuse the stored result
+}
             
-            // Process POA1 if URL exists AND not already processed
-            if (status.poa1URL && !processedDocsRef.current.poa1) {
-              console.log('📄 Processing POA1 from URL...');
-              poa1Result = await processDocument(status.poa1URL, 'poa1');
-              processedDocsRef.current.poa1 = true; // Mark as processed
-              console.log('✅ POA1 processed and marked complete');
-            } else if (processedDocsRef.current.poa1) {
-              console.log('⏭️ POA1 already processed, skipping');
-            }
-            
-            // Process POA2 if URL exists AND not already processed
-            if (status.poa2URL && !processedDocsRef.current.poa2) {
-              console.log('📄 Processing POA2 from URL...');
-              poa2Result = await processDocument(status.poa2URL, 'poa2');
-              processedDocsRef.current.poa2 = true; // Mark as processed
-              console.log('✅ POA2 processed and marked complete');
-            } else if (processedDocsRef.current.poa2) {
-              console.log('⏭️ POA2 already processed, skipping');
-            }
             // Check for duplicates
             const isDuplicate = poa1Result?.providerName && poa2Result?.providerName && 
                                poa1Result.providerName === poa2Result.providerName;
