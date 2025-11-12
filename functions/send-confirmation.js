@@ -1,8 +1,6 @@
 // File: functions/send-confirmation.js
 // Sends confirmation email using Google Apps Script (same as verification emails)
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   const headers = {
     'Content-Type': 'application/json',
