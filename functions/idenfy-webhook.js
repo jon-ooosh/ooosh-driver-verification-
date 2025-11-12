@@ -1,8 +1,6 @@
 // File: functions/idenfy-webhook.js
 // COMPLETE VERSION with all fixes for missing fields and file uploads
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('🔗 Enhanced Idenfy webhook called with method:', event.httpMethod);
   
