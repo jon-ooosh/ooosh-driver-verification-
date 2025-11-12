@@ -48,8 +48,7 @@ exports.handler = async (event, context) => {
       code: code ? `${code.length}-digit code` : 'NO CODE', 
       jobId: jobId,
       actualCode: code, // Log actual code for debugging
-      isTestEmail: TEST_EMAILS.includes(email.toLowerCase())
-    });
+       });
 
     if (!email || !code || !jobId) {
       return {
