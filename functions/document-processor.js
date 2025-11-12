@@ -2,8 +2,6 @@
 // Unified document processing - OCR + image conversion for Monday.com
 // UPDATED: Removed all dangerous fallbacks, improved error handling
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('Document processor called');
   
