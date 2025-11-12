@@ -2,8 +2,6 @@
 // OOOSH Driver Verification - Job Validation with Real Monday.com Dates
 // Updated to pull actual hire dates from Q&H Board 2431480012
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('Job validation function called');
   
