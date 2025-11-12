@@ -2,8 +2,6 @@
 // OOOSH Driver Verification - Get Driver Status Function
 // UPDATED: Now returns licenseIssuedBy and passportValidUntil
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('Driver status function called with method:', event.httpMethod);
   
