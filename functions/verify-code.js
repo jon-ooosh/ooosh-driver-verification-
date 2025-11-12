@@ -88,21 +88,44 @@ exports.handler = async (event, context) => {
     // Call Google Apps Script for real verification
     console.log('Calling Google Apps Script for verification');
     
-    const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'verify-code',
-        email: email,
-        code: codeStr, // FIXED: Use properly defined codeStr
-        jobId: jobId
-      })
-    });
+    // Around line 90, REPLACE the fetch call with this:
+const response = await fetch(process.env.GOOGLE_APPS_SCRIPT_URL, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    action: 'verify-code',
+    email: email,
+    code: codeStr,
+    jobId: jobId
+  })
+});
 
-    const result = await response.json();
-    console.log('Apps Script verification response:', result);
+// ADD THIS BEFORE trying to parse JSON:
+console.log('Response status:', response.status);
+console.log('Response headers:', response.headers.get('content-type'));
+
+// Get the raw text first
+const rawText = await response.text();
+console.log('Raw response (first 500 chars):', rawText.substring(0, 500));
+
+// Now try to parse
+let result;
+try {
+  result = JSON.parse(rawText);
+  console.log('Parsed result:', result);
+} catch (e) {
+  console.error('Failed to parse as JSON. Raw response:', rawText);
+  return {
+    statusCode: 500,
+    headers,
+    body: JSON.stringify({ 
+      error: 'Email verification service error',
+      details: 'Apps Script returned invalid response'
+    })
+  };
+}
 
     // FIXED: Proper error handling for wrong codes
     
