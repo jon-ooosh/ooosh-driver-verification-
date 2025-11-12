@@ -2,8 +2,6 @@
 // OOOSH Driver Verification - Send Email Verification Code Function
 // PRODUCTION VERSION - All test backdoors removed
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('Function called with method:', event.httpMethod);
   console.log('Headers:', event.headers);
