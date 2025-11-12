@@ -1004,7 +1004,8 @@ async function setValidityDatesAfterVerification(email, idenfyData) {
     
     const updates = {
       email: email,
-      licenseNextCheckDue: addDays(today, 90),
+      // NOTE: licenseNextCheckDue is now set immediately after file upload
+      // This function only handles passport validity dates
       lastUpdated: today.toISOString().split('T')[0]
     };
     
@@ -1459,7 +1460,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    // Log summary
+  // Log summary
     const successCount = uploadResults.filter(r => r.success).length;
     const failCount = uploadResults.filter(r => !r.success).length;
     
@@ -1467,7 +1468,36 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
     if (failCount > 0) {
       console.log('Failed uploads:', uploadResults.filter(r => !r.success));
     }
-       
+    
+    // Set licenseNextCheckDue IMMEDIATELY after successful license uploads
+    if (successCount > 0) {
+      const hasLicenseUploads = uploadResults.some(r => 
+        r.success && (r.field === 'FRONT' || r.field === 'BACK')
+      );
+      
+      if (hasLicenseUploads) {
+        console.log('✅ License files uploaded - setting licenseNextCheckDue now');
+        const today = new Date();
+        const validUntil = new Date(today);
+        validUntil.setDate(validUntil.getDate() + 90);
+        
+        await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update-driver-board-a',
+            email: email,
+            updates: {
+              licenseNextCheckDue: validUntil.toISOString().split('T')[0],
+              lastUpdated: today.toISOString().split('T')[0]
+            }
+          })
+        });
+        
+        console.log('✅ licenseNextCheckDue set immediately after upload');
+      }
+    }
+           
     return { 
       success: true, 
       uploadResults: uploadResults,
