@@ -1,8 +1,6 @@
   // File: functions/monday-integration.js
 // COMPLETE VERSION with passport column support (date_mkvxy5t1)
 
-const fetch = require('node-fetch');
-
 // Board IDs
 const BOARD_A_ID = '9798399405'; // Driver Database
 const BOARD_B_ID = '841453886';  // Driver Assignments
