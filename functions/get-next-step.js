@@ -2,8 +2,6 @@
 // OOOSH Driver Verification - Centralized Routing Engine
 // This is the single source of truth for all routing decisions based on document expiry dates
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('🎯 Centralized router called with method:', event.httpMethod);
   
