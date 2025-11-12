@@ -1,8 +1,6 @@
 // File: functions/save-insurance-data.js
 // OOOSH Driver Verification - Save Insurance Data Function
 
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
   console.log('Save insurance data function called with method:', event.httpMethod);
   
