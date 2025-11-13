@@ -516,7 +516,7 @@ try {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-        ...formData.getHeaders()
+       // ...formData.getHeaders() // Native fetch handles FormData automatically
       },
       body: formData
     });
