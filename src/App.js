@@ -82,6 +82,50 @@ const DriverVerificationApp = () => {
     }
   };
 
+  // 🔒 SECURITY: Validate signature page access
+  const validateSignatureAccess = async (email, job) => {
+    try {
+      setLoading(true);
+      console.log('🔒 Validating signature page access');
+      
+      // Check driver status from server
+      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
+      
+      if (!response.ok) {
+        throw new Error('Driver not found');
+      }
+      
+      const driverData = await response.json();
+      setDriverStatus(driverData);
+      
+      // 🔒 SECURITY: Verify all documents are valid
+      const docs = driverData.documents || {};
+      const allDocsValid = 
+        docs.license?.valid &&
+        docs.poa1?.valid &&
+        docs.poa2?.valid &&
+        docs.dvlaCheck?.valid;
+      
+      const hasInsuranceData = !!driverData.insuranceData;
+      
+      if (allDocsValid && hasInsuranceData) {
+        console.log('✅ Driver verified - signature page access granted');
+        handleStepChange('signature');
+      } else {
+        console.warn('⚠️ Driver not fully verified - redirecting to processing-hub');
+        // Redirect to processing hub to complete missing steps
+        window.location.href = `/?step=processing-hub&email=${encodeURIComponent(email)}&job=${job || ''}`;
+      }
+      
+    } catch (error) {
+      console.error('❌ Signature access validation failed:', error.message);
+      setError('Unable to verify driver status. Please complete the verification process.');
+      handleStepChange('email-entry');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ✨ NEW: Session timeout check (30 minutes)
   useEffect(() => {
     const checkSession = () => {
@@ -125,9 +169,16 @@ const DriverVerificationApp = () => {
     const currentIndex = stepOrder.indexOf(currentStep);
     const requestedIndex = stepOrder.indexOf(requestedStep);
     
-    // Special cases that can be accessed anytime
-    if (['processing-hub', 'poa-validation', 'dvla-processing', 'passport-upload', 'signature'].includes(requestedStep)) {
-      return true; // These are often accessed via direct URL from ProcessingHub
+    // 🔒 SECURITY: ProcessingHub routing pages - but NOT signature
+    // These can be accessed via URL from ProcessingHub
+    if (['processing-hub', 'poa-validation', 'dvla-processing', 'passport-upload'].includes(requestedStep)) {
+      return true;
+    }
+    
+    // 🔒 SECURITY: Signature page requires server-side validation
+    // Will be validated in the URL handler before allowing access
+    if (requestedStep === 'signature') {
+      return true; // Validated separately with driver status check
     }
     
     // Can go backward or forward one step at a time
@@ -226,9 +277,11 @@ const DriverVerificationApp = () => {
     }
     
     if (stepParam === 'signature' && emailParam) {
+      console.log('🔒 Signature page access attempt - validating');
       setDriverEmail(decodeURIComponent(emailParam));
       if (jobParam) setJobId(jobParam);
-      handleStepChange('signature');
+      // 🔒 SECURITY: Validate before allowing access
+      validateSignatureAccess(decodeURIComponent(emailParam), jobParam);
       return;
     }
     
