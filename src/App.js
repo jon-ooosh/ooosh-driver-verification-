@@ -23,17 +23,6 @@ const DriverVerificationApp = () => {
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(false);
 
-  // ✨ NEW: Session security - Initialize session token in sessionStorage
-  useEffect(() => {
-    const existing = sessionStorage.getItem('verificationSessionToken');
-    if (!existing) {
-      const newToken = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      sessionStorage.setItem('verificationSessionToken', newToken);
-      sessionStorage.setItem('sessionStartTime', Date.now().toString());
-      console.log('🔒 New session initialized');
-    }
-  }, []);
-
   // Scroll position maintenance
   const scrollPositionRef = useRef(0);
   const formContainerRef = useRef(null);
@@ -82,60 +71,48 @@ const DriverVerificationApp = () => {
     }
   };
 
-  // 🔒 SECURITY: Validate signature page access
-  const validateSignatureAccess = async (email, job) => {
-    try {
-      setLoading(true);
-      console.log('🔒 Validating signature page access');
-      
-      // Check driver status from server
-      const response = await fetch(`/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
-      
-      if (!response.ok) {
-        throw new Error('Driver not found');
-      }
-      
-      const driverData = await response.json();
-      setDriverStatus(driverData);
-      
-      // 🔒 SECURITY: Verify all documents are valid
-      const docs = driverData.documents || {};
-      const allDocsValid = 
-        docs.license?.valid &&
-        docs.poa1?.valid &&
-        docs.poa2?.valid &&
-        docs.dvlaCheck?.valid;
-      
-      const hasInsuranceData = !!driverData.insuranceData;
-      
-      if (allDocsValid && hasInsuranceData) {
-        console.log('✅ Driver verified - signature page access granted');
-        handleStepChange('signature');
-      } else {
-        console.warn('⚠️ Driver not fully verified - redirecting to processing-hub');
-        // Redirect to processing hub to complete missing steps
-        window.location.href = `/?step=processing-hub&email=${encodeURIComponent(email)}&job=${job || ''}`;
-      }
-      
-    } catch (error) {
-      console.error('❌ Signature access validation failed:', error.message);
-      setError('Unable to verify driver status. Please complete the verification process.');
-      handleStepChange('email-entry');
-    } finally {
-      setLoading(false);
+  // 🔒 SECURITY: Validate active session
+  const validateSession = (requiredEmail) => {
+    const sessionToken = sessionStorage.getItem('verificationSessionToken');
+    const sessionEmail = sessionStorage.getItem('sessionDriverEmail');
+    const sessionStart = sessionStorage.getItem('sessionStartTime');
+    
+    // Check 1: Session exists?
+    if (!sessionToken || !sessionEmail || !sessionStart) {
+      console.log('❌ No active session - redirecting to start');
+      return false;
     }
+    
+    // Check 2: Session matches email?
+    if (sessionEmail !== requiredEmail) {
+      console.log('❌ Session email mismatch - redirecting to start');
+      sessionStorage.clear();
+      return false;
+    }
+    
+    // Check 3: Session not expired? (40 mins)
+    const elapsed = Date.now() - parseInt(sessionStart);
+    const fortyMinutes = 40 * 60 * 1000;
+    if (elapsed > fortyMinutes) {
+      console.log('❌ Session expired - redirecting to start');
+      sessionStorage.clear();
+      return false;
+    }
+    
+    console.log('✅ Valid active session');
+    return true;
   };
 
-  // ✨ NEW: Session timeout check (30 minutes)
+  // ✨ NEW: Session timeout check (40 minutes)
   useEffect(() => {
     const checkSession = () => {
       const startTime = sessionStorage.getItem('sessionStartTime');
       if (!startTime) return;
       
       const elapsed = Date.now() - parseInt(startTime);
-      const thirtyMinutes = 30 * 60 * 1000;
+      const fortyMinutes = 40 * 60 * 1000;
       
-      if (elapsed > thirtyMinutes && currentStep !== 'complete') {
+      if (elapsed > fortyMinutes && currentStep !== 'complete') {
         console.log('⏱️ Session expired - resetting');
         sessionStorage.clear();
         setError('Your session has expired for security. Please start again.');
@@ -169,16 +146,16 @@ const DriverVerificationApp = () => {
     const currentIndex = stepOrder.indexOf(currentStep);
     const requestedIndex = stepOrder.indexOf(requestedStep);
     
-    // 🔒 SECURITY: ProcessingHub routing pages - but NOT signature
-    // These can be accessed via URL from ProcessingHub
+    // 🔒 SECURITY: Protected pages accessible via URL
+    // These are validated with session checks in URL handler
     if (['processing-hub', 'poa-validation', 'dvla-processing', 'passport-upload'].includes(requestedStep)) {
       return true;
     }
     
-    // 🔒 SECURITY: Signature page requires server-side validation
-    // Will be validated in the URL handler before allowing access
+    // 🔒 SECURITY: Signature page requires session validation
+    // Session validated in URL handler before allowing access
     if (requestedStep === 'signature') {
-      return true; // Validated separately with driver status check
+      return true; // Session checked in URL handler
     }
     
     // Can go backward or forward one step at a time
@@ -256,32 +233,71 @@ const DriverVerificationApp = () => {
     }
     
     if (stepParam === 'dvla-processing' && emailParam) {
-      setDriverEmail(decodeURIComponent(emailParam));
+      const email = decodeURIComponent(emailParam);
+      
+      // 🔒 SECURITY: Validate session before allowing access
+      if (!validateSession(email)) {
+        sessionStorage.clear();
+        setError('Your session has expired. Please start verification again.');
+        window.location.href = '/';
+        return;
+      }
+      
+      setDriverEmail(email);
       if (jobParam) setJobId(jobParam);
       handleStepChange('dvla-processing');
       return;
     }
 
     if (stepParam === 'poa-validation' && emailParam) {
-      setDriverEmail(decodeURIComponent(emailParam));
+      const email = decodeURIComponent(emailParam);
+      
+      // 🔒 SECURITY: Validate session before allowing access
+      if (!validateSession(email)) {
+        sessionStorage.clear();
+        setError('Your session has expired. Please start verification again.');
+        window.location.href = '/';
+        return;
+      }
+      
+      setDriverEmail(email);
       if (jobParam) setJobId(jobParam);
       handleStepChange('poa-validation');
       return;
     }
     
     if (stepParam === 'passport-upload' && emailParam) {
-      setDriverEmail(decodeURIComponent(emailParam));
+      const email = decodeURIComponent(emailParam);
+      
+      // 🔒 SECURITY: Validate session before allowing access
+      if (!validateSession(email)) {
+        sessionStorage.clear();
+        setError('Your session has expired. Please start verification again.');
+        window.location.href = '/';
+        return;
+      }
+      
+      setDriverEmail(email);
       if (jobParam) setJobId(jobParam);
       handleStepChange('passport-upload');
       return;
     }
     
     if (stepParam === 'signature' && emailParam) {
-      console.log('🔒 Signature page access attempt - validating');
-      setDriverEmail(decodeURIComponent(emailParam));
+      const email = decodeURIComponent(emailParam);
+      
+      // 🔒 SECURITY: Validate session before allowing access
+      if (!validateSession(email)) {
+        sessionStorage.clear();
+        setError('Your session has expired. Please start verification again.');
+        window.location.href = '/';
+        return;
+      }
+      
+      console.log('✅ Valid session - signature page access granted');
+      setDriverEmail(email);
       if (jobParam) setJobId(jobParam);
-      // 🔒 SECURITY: Validate before allowing access
-      validateSignatureAccess(decodeURIComponent(emailParam), jobParam);
+      handleStepChange('signature');
       return;
     }
     
@@ -422,7 +438,12 @@ const DriverVerificationApp = () => {
       if (data.success && data.verified) {
         console.log('✅ Email verified');
         
-        // 🔒 SECURITY: Removed test mode logging
+        // 🔒 SECURITY: Create session after email verification
+        const sessionToken = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        sessionStorage.setItem('verificationSessionToken', sessionToken);
+        sessionStorage.setItem('sessionDriverEmail', driverEmail);
+        sessionStorage.setItem('sessionStartTime', Date.now().toString());
+        console.log('🔒 Session created - 40 minute timeout started');
         
         await checkDriverStatusEarly();
       } else {
