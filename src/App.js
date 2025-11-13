@@ -23,16 +23,16 @@ const DriverVerificationApp = () => {
   const [error, setError] = useState('');
   const [isMobile, setIsMobile] = useState(false);
 
-  // ✨ NEW: Session security
-  const [sessionToken, setSessionToken] = useState(() => {
+  // ✨ NEW: Session security - Initialize session token in sessionStorage
+  useEffect(() => {
     const existing = sessionStorage.getItem('verificationSessionToken');
-    if (existing) return existing;
-    
-    const newToken = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    sessionStorage.setItem('verificationSessionToken', newToken);
-    sessionStorage.setItem('sessionStartTime', Date.now().toString());
-    return newToken;
-  });
+    if (!existing) {
+      const newToken = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem('verificationSessionToken', newToken);
+      sessionStorage.setItem('sessionStartTime', Date.now().toString());
+      console.log('🔒 New session initialized');
+    }
+  }, []);
 
   // Scroll position maintenance
   const scrollPositionRef = useRef(0);
@@ -602,7 +602,6 @@ const DriverVerificationApp = () => {
   const startAgain = () => {
     // 🔒 SECURITY: Clear session on restart
     sessionStorage.clear();
-    setSessionToken('');
     
     setDriverEmail('');
     setPhoneNumber('');
