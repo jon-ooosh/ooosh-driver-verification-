@@ -1,18 +1,44 @@
+const crypto = require('crypto');
 // File: functions/idenfy-webhook.js
 // COMPLETE VERSION with all fixes for missing fields and file uploads
 
+/**
+ * Verify Idenfy webhook signature
+ */
+function verifyIdenfySignature(signature, payload) {
+  try {
+    const signingKey = process.env.IDENFY_CALLBACK_SIGNING_KEY;
+    
+    if (!signingKey) {
+      console.error('❌ IDENFY_CALLBACK_SIGNING_KEY not configured');
+      return false;
+    }
+    
+    const hmac = crypto.createHmac('sha256', signingKey);
+    hmac.update(payload);
+    const expectedSignature = hmac.digest('hex');
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+    
+  } catch (error) {
+    console.error('❌ Signature verification error:', error.message);
+    return false;
+  }
+}
+
 exports.handler = async (event, context) => {
-  console.log('🔗 Enhanced Idenfy webhook called with method:', event.httpMethod);
-  
   const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Idenfy-Signature',
+    'Access-Control-Allow-Origin': 'https://ooosh-driver-verification.netlify.app',
+    'Access-Control-Allow-Headers': 'Content-Type, Idenfy-Signature',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   };
 
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+    return { statusCode: 204, headers, body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
@@ -25,7 +51,7 @@ exports.handler = async (event, context) => {
 
   try {
     if (!event.body) {
-      console.log('No body received in webhook');
+      console.log('❌ No webhook body');
       return {
         statusCode: 400,
         headers,
@@ -33,8 +59,34 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log('📨 Webhook body:', event.body.substring(0, 500) + '...');
-   const webhookData = JSON.parse(event.body);
+    // 🔒 SECURITY: Verify Idenfy signature
+    const signature = event.headers['idenfy-signature'] || 
+                     event.headers['Idenfy-Signature'];
+    
+    if (!signature) {
+      console.log('❌ No Idenfy signature header');
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Unauthorized: No signature' })
+      };
+    }
+    
+    const isValidSignature = verifyIdenfySignature(signature, event.body);
+    
+    if (!isValidSignature) {
+      console.log('❌ Invalid Idenfy signature');
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'Forbidden: Invalid signature' })
+      };
+    }
+    
+    console.log('✅ Signature verified');
+
+    // Parse webhook data AFTER signature verification
+    const webhookData = JSON.parse(event.body);
 
     const { clientId, scanRef, status, data, platform, final } = webhookData;
 
