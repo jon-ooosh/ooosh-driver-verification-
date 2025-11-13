@@ -1,20 +1,63 @@
 // File: functions/create-idenfy-session.js
-// FIXED VERSION - Client ID includes email for proper webhook processing
+// Ooosh Tours Driver Verification - Create Idenfy Session
+// Production-ready version with security hardening
 
-exports.handler = async (event, context) => {
-  console.log('Create Idenfy session called with method:', event.httpMethod);
+/**
+ * Validate email format
+ * @param {string} email - Email address to validate
+ * @returns {boolean} - True if valid format
+ */
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') {
+    return false;
+  }
   
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  
+  return (
+    emailRegex.test(email) &&
+    email.length <= 254 &&
+    email.length >= 6 &&
+    !email.includes('..') &&
+    !email.startsWith('.') &&
+    !email.endsWith('.')
+  );
+}
+
+/**
+ * Sanitize email for use in client ID
+ * @param {string} email - Email to sanitize
+ * @returns {string} - Sanitized email safe for URLs
+ */
+function sanitizeEmailForClientId(email) {
+  return email
+    .toLowerCase()
+    .trim()
+    .replace(/@/g, '_at_')
+    .replace(/\./g, '_dot_')
+    .replace(/[^a-z0-9_]/g, ''); // Remove any other special chars
+}
+
+exports.handler = async (event) => {
+  // 🔒 SECURITY: CORS headers - Allow both domains for future migration
   const headers = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 
+      event.headers.origin === 'https://www.oooshtours.co.uk' || 
+      event.headers.origin === 'https://oooshtours.co.uk'
+        ? event.headers.origin
+        : 'https://ooosh-driver-verification.netlify.app',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json'
   };
 
+  // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+    return { statusCode: 204, headers, body: '' };
   }
 
+  // Only allow POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -24,6 +67,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    // Validate request body exists
     if (!event.body) {
       return {
         statusCode: 400,
@@ -32,16 +76,24 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const { 
-      email, 
-      jobId, 
-      driverName,
-      verificationType = 'full', // full, license, poa1, poa2, poa_both, passport, none
-      isUKDriver = true 
-    } = JSON.parse(event.body);
-    
-    console.log('Creating Idenfy session for:', { email, jobId, verificationType, isUKDriver });
+    // Parse and validate request data
+    let email, jobId, driverName, verificationType, isUKDriver;
+    try {
+      const parsed = JSON.parse(event.body);
+      email = parsed.email;
+      jobId = parsed.jobId;
+      driverName = parsed.driverName;
+      verificationType = parsed.verificationType || 'full';
+      isUKDriver = parsed.isUKDriver !== false; // Default true
+    } catch (parseError) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body' })
+      };
+    }
 
+    // Validate required fields
     if (!email || !jobId) {
       return {
         statusCode: 400,
@@ -50,28 +102,32 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Check if Idenfy credentials are configured
-    if (!process.env.IDENFY_API_KEY || !process.env.IDENFY_API_SECRET) {
-      console.log('Idenfy credentials not configured, using mock response');
-      
-      // FIXED: Include proper client ID with email
-      const encodedEmail = email.replace('@', '_at_').replace(/\./g, '_dot_');
-      const mockResponse = {
-        success: true,
-        sessionToken: `mock_${verificationType}_${Date.now()}`,
-        scanRef: 'MOCK_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-        clientId: `ooosh_${jobId}_${encodedEmail}_${Date.now()}`,
-        redirectUrl: `https://ooosh-driver-verification.netlify.app/?status=mock&job=${jobId}&email=${encodeURIComponent(email)}&type=${verificationType}`,
-        verificationType: verificationType,
-        message: 'Mock Idenfy session created for development'
+    // Validate email format
+    if (!isValidEmail(email)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid email format' })
       };
-      
-      return { statusCode: 200, headers, body: JSON.stringify(mockResponse) };
     }
 
-    // For everything valid, skip Idenfy and go to signature
+    console.log('✅ Creating Idenfy session:', { verificationType, isUKDriver });
+
+    // 🔒 SECURITY: Ensure Idenfy credentials are configured
+    if (!process.env.IDENFY_API_KEY || !process.env.IDENFY_API_SECRET) {
+      console.error('❌ Idenfy credentials not configured');
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Identity verification service temporarily unavailable' 
+        })
+      };
+    }
+
+    // Handle special case: All documents valid, skip to signature
     if (verificationType === 'none') {
-      console.log('All documents valid, skipping Idenfy');
+      console.log('✅ All documents valid, skipping Idenfy');
       return {
         statusCode: 200,
         headers,
@@ -84,14 +140,19 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Create Idenfy session with specific document requirements
-    const idenfyResponse = await createIdenfySession(email, jobId, verificationType, isUKDriver);
+    // Create Idenfy session
+    const idenfyResponse = await createIdenfySession(
+      email, 
+      jobId, 
+      verificationType, 
+      isUKDriver
+    );
     
     if (!idenfyResponse.success) {
       throw new Error(idenfyResponse.error || 'Failed to create Idenfy session');
     }
 
-    // Store session info (keeping your existing function)
+    // Update driver verification status
     await updateDriverVerificationStatus(email, jobId, {
       idenfySessionId: idenfyResponse.scanRef,
       idenfyStatus: 'initiated',
@@ -99,7 +160,7 @@ exports.handler = async (event, context) => {
       status: 'document_upload_started'
     });
 
-    console.log('Idenfy session created successfully:', idenfyResponse.scanRef);
+    console.log('✅ Idenfy session created successfully');
 
     return {
       statusCode: 200,
@@ -117,60 +178,65 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Create Idenfy session error:', error);
+    console.error('❌ Create Idenfy session error:', error.message);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
-        error: 'Internal server error',
+        error: 'Failed to create identity verification session',
         details: error.message 
       })
     };
   }
 };
 
-// FIXED: Include email in client ID for webhook processing
+/**
+ * Create Idenfy verification session with specified document requirements
+ * @param {string} email - Driver email
+ * @param {string} jobId - Job ID
+ * @param {string} verificationType - Type of verification needed
+ * @param {boolean} isUKDriver - Whether driver has UK license
+ * @returns {Promise<Object>} - Session creation result
+ */
 async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   try {
     const apiKey = process.env.IDENFY_API_KEY;
     const apiSecret = process.env.IDENFY_API_SECRET;
-    
     const IDENFY_BASE_URL = 'https://ivs.idenfy.com';
     
-    // CRITICAL FIX: Include email in client ID so webhook can parse it
-    const encodedEmail = email.replace('@', '_at_').replace(/\./g, '_dot_');
+    // Create unique client ID with email for webhook processing
+    const encodedEmail = sanitizeEmailForClientId(email);
     const clientId = `ooosh_${jobId}_${encodedEmail}_${Date.now()}`;
     
     const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
     console.log('🔑 Creating Idenfy session with client ID:', clientId);
 
-    // Fetch existing driver data for COMPARE validation (revalidations only)
+    // Fetch driver data for COMPARE validation (revalidations only)
     let firstName = null;
     let lastName = null;
     let dateOfBirth = null;
     
-    if (verificationType !== 'full') {  // Only for revalidations, not new drivers
+    if (verificationType !== 'full') {
       try {
-        console.log('🔍 Fetching driver data for COMPARE validation...');
-        const driverResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
+        console.log('🔍 Fetching driver data for COMPARE validation');
+        const driverResponse = await fetch(
+          `${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`
+        );
         
         if (driverResponse.ok) {
           const driverData = await driverResponse.json();
           
-          // Use stored firstName/lastName directly - no parsing needed!
           firstName = driverData.firstName;
           lastName = driverData.lastName;
           dateOfBirth = driverData.dateOfBirth;
           
           if (firstName && lastName) {
-            console.log('✅ COMPARE data loaded:', { firstName, lastName, dateOfBirth });
-          } else {
-            console.log('⚠️ No firstName/lastName in driver record - COMPARE skipped');
+            console.log('✅ COMPARE data loaded');
           }
         }
       } catch (error) {
-        console.log('⚠️ Could not fetch driver data (continuing anyway):', error.message);
+        console.log('⚠️ Could not fetch driver data:', error.message);
       }
     }
 
@@ -197,105 +263,100 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       requestBody.dateOfBirth = dateOfBirth;
     }
 
-    
-    // Configure based on verification type
-  switch (verificationType) {
-     case 'full':
-  // Standard flow: Driver license + 2 POAs
-  requestBody.documents = ['DRIVER_LICENSE'];
-  requestBody.additionalSteps = {
-  "ALL": {
-    "ALL": ["UTILITY_BILL", "POA2"]
-  }
-};
-  break;
+    // Configure document requirements based on verification type
+    switch (verificationType) {
+      case 'full':
+        // Standard flow: Driver license + 2 POAs
+        requestBody.documents = ['DRIVER_LICENSE'];
+        requestBody.additionalSteps = {
+          "ALL": {
+            "ALL": ["UTILITY_BILL", "POA2"]
+          }
+        };
+        break;
             
-    case 'license':
-    case 'license_only': 
-  // JUST license, no POAs
-  requestBody.documents = ['DRIVER_LICENSE'];
-  requestBody.additionalSteps = {
-    "ALL": {
-      "ALL": {}
-    }
-  };
-  break;
+      case 'license':
+      case 'license_only': 
+        // Just license, no POAs
+        requestBody.documents = ['DRIVER_LICENSE'];
+        requestBody.additionalSteps = {
+          "ALL": {
+            "ALL": {}
+          }
+        };
+        break;
 
       case 'poa1':
       case 'poa2':
         // Single POA update
-        requestBody.documents = []; // Empty array for no primary document
-       requestBody.additionalSteps = {
-    'UTILITY_BILL': null  // Object format, not array!
-  };
-        requestBody.utilityBillMinCount = 1; // Just 1 POA
-        requestBody.skipFaceMatching = true; // No selfie
+        requestBody.documents = [];
+        requestBody.additionalSteps = {
+          'UTILITY_BILL': null
+        };
+        requestBody.utilityBillMinCount = 1;
+        requestBody.skipFaceMatching = true;
         break;
 
       case 'poa_both':
-  // POA-only re-upload using Additional Steps
-  requestBody.documents = []; // No primary documents
-  requestBody.additionalSteps = {
-    'UTILITY_BILL': null  // Object format, not array!
-  };
-  requestBody.utilityBillMinCount = 2; // Need 2 POAs
-  break;
+        // Both POAs need updating
+        requestBody.documents = [];
+        requestBody.additionalSteps = {
+          'UTILITY_BILL': null
+        };
+        requestBody.utilityBillMinCount = 2;
+        requestBody.skipFaceMatching = true;
+        break;
 
       case 'passport_only':
-  // Passport for non-UK drivers - use COMPARE validation
-  requestBody.documents = ['PASSPORT'];
-  
-  // CRITICAL: Same as license_only - explicitly disable POAs
-  requestBody.additionalSteps = {
-    "ALL": {
-      "ALL": {}
-    }
-  };
-  
-  // Add COMPARE data to validate passport matches license records
-  if (email) {
-    try {
-      console.log('🔍 Fetching driver data for COMPARE validation...');
-      const statusResponse = await fetch(`${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`);
-      
-      if (statusResponse.ok) {
-        const driverData = await statusResponse.json();
+        // Passport for non-UK drivers
+        requestBody.documents = ['PASSPORT'];
+        requestBody.additionalSteps = {
+          "ALL": {
+            "ALL": {}
+          }
+        };
         
-        // Use stored firstName/lastName for COMPARE validation
-        if (driverData.firstName && driverData.lastName) {
-          requestBody.firstName = driverData.firstName;
-          requestBody.lastName = driverData.lastName;
-          console.log('✅ COMPARE data loaded for passport validation:', {
-            firstName: driverData.firstName,
-            lastName: driverData.lastName
-          });
-        } else {
-          console.log('⚠️ No firstName/lastName in driver record - COMPARE skipped');
+        // Fetch COMPARE data for passport validation
+        if (email && verificationType === 'passport_only') {
+          try {
+            const statusResponse = await fetch(
+              `${process.env.URL}/.netlify/functions/driver-status?email=${encodeURIComponent(email)}`
+            );
+            
+            if (statusResponse.ok) {
+              const driverData = await statusResponse.json();
+              
+              if (driverData.firstName && driverData.lastName) {
+                requestBody.firstName = driverData.firstName;
+                requestBody.lastName = driverData.lastName;
+                console.log('✅ COMPARE data loaded for passport validation');
+              }
+              
+              if (driverData.dateOfBirth) {
+                requestBody.dateOfBirth = driverData.dateOfBirth;
+              }
+            }
+          } catch (error) {
+            console.log('⚠️ Could not fetch driver data for COMPARE:', error.message);
+          }
         }
         
-        // Also add DOB if available for extra validation
-        if (driverData.dateOfBirth) {
-          requestBody.dateOfBirth = driverData.dateOfBirth;
-          console.log('✅ DOB added for COMPARE validation');
-        }
-      }
-    } catch (error) {
-      console.log('⚠️ Could not fetch driver data for COMPARE:', error.message);
-    }
-  }
-  
-  // Skip face matching since we're not reusing face data
-  requestBody.skipFaceMatching = true;
-  console.log('📸 Face matching disabled for passport-only verification');
-  break;
+        requestBody.skipFaceMatching = true;
+        break;
       
       default:
         // Default to full verification
         requestBody.documents = ['DRIVER_LICENSE'];
+        requestBody.additionalSteps = {
+          "ALL": {
+            "ALL": ["UTILITY_BILL", "POA2"]
+          }
+        };
     }
 
-    console.log(`📋 Full Idenfy request body for ${verificationType}:`, JSON.stringify(requestBody, null, 2));
+    console.log('📋 Idenfy request for:', verificationType);
      
+    // Call Idenfy API
     const response = await fetch(`${IDENFY_BASE_URL}/api/v2/token`, {
       method: 'POST',
       headers: {
@@ -305,29 +366,33 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
       body: JSON.stringify(requestBody)
     });
 
-    const result = await response.json();
-    console.log('Idenfy API response status:', response.status);
-
+    // Handle Idenfy API response
     if (!response.ok) {
-      console.error('Idenfy API error:', result);
-      throw new Error(`Idenfy API error (${response.status}): ${result.message || result.error || response.statusText}`);
+      const errorText = await response.text();
+      console.error('❌ Idenfy API error:', response.status, errorText);
+      throw new Error(`Idenfy API error (${response.status}): ${errorText}`);
     }
 
+    const result = await response.json();
+
+    // Validate response has required fields
     if (!result.authToken || !result.scanRef) {
-      throw new Error(`Invalid Idenfy response: missing authToken or scanRef`);
+      throw new Error('Invalid Idenfy response: missing authToken or scanRef');
     }
+
+    console.log('✅ Idenfy session created:', result.scanRef);
 
     return {
       success: true,
       sessionToken: result.authToken,
       scanRef: result.scanRef,
-      clientId: clientId,  // This now includes the email!
+      clientId: clientId,
       redirectUrl: `https://ui.idenfy.com/session?authToken=${result.authToken}`,
       documentsRequired: requestBody.documents
     };
 
   } catch (error) {
-    console.error('Idenfy API error:', error);
+    console.error('❌ Idenfy API error:', error.message);
     return {
       success: false,
       error: error.message
@@ -335,11 +400,16 @@ async function createIdenfySession(email, jobId, verificationType, isUKDriver) {
   }
 }
 
-// Keep your existing updateDriverVerificationStatus function unchanged
+/**
+ * Update driver verification status in Google Sheets
+ * @param {string} email - Driver email
+ * @param {string} jobId - Job ID
+ * @param {Object} updates - Status updates
+ */
 async function updateDriverVerificationStatus(email, jobId, updates) {
   try {
     if (!process.env.GOOGLE_APPS_SCRIPT_URL) {
-      console.log('Google Apps Script URL not configured');
+      console.log('⚠️ Google Apps Script URL not configured - skipping status update');
       return;
     }
 
@@ -357,12 +427,12 @@ async function updateDriverVerificationStatus(email, jobId, updates) {
     });
 
     if (response.ok) {
-      console.log('Driver verification status logged');
+      console.log('✅ Driver verification status updated');
     } else {
-      console.error('Failed to update driver verification status');
+      console.error('⚠️ Failed to update driver verification status');
     }
 
   } catch (error) {
-    console.error('Error updating driver verification status:', error);
+    console.error('❌ Error updating driver verification status:', error.message);
   }
 }
