@@ -312,45 +312,32 @@ if (hasOnlyAdditionalSteps) {
     console.log('📋 Processing as normal verification result');
 
     // NEW: Check Idenfy's POA validation first (if POAs are present)
-    const hasPoaDocuments = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
-                           fullWebhookData.additionalStepPdfUrls?.POA2 ||
-                           fullWebhookData.fileUrls?.UTILITY_BILL ||
-                           fullWebhookData.fileUrls?.POA2;
+// BUT continue processing even if validation fails - just flag for manual review
+const hasPoaDocuments = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+                       fullWebhookData.additionalStepPdfUrls?.POA2 ||
+                       fullWebhookData.fileUrls?.UTILITY_BILL ||
+                       fullWebhookData.fileUrls?.POA2;
+
+let poaValidationFailed = false;
+let poaValidationReason = '';
+
+if (hasPoaDocuments) {
+  console.log('🔍 POA documents detected - running Idenfy validation check');
+  const idenfyPoaCheck = checkIdenfyPoaValidation(fullWebhookData);
+  
+  if (!idenfyPoaCheck.approved) {
+    console.log('⚠️ Idenfy POA validation failed:', idenfyPoaCheck.reason);
+    console.log('📋 Continuing with file uploads - will flag for manual review');
     
-    if (hasPoaDocuments) {
-      console.log('🔍 POA documents detected - running Idenfy validation check');
-      const idenfyPoaCheck = checkIdenfyPoaValidation(fullWebhookData);
-      
-      if (!idenfyPoaCheck.approved) {
-        console.log('❌ Idenfy POA validation failed:', idenfyPoaCheck.reason);
-        
-        // Update Monday with failure reason
-        await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'update-driver-board-a',
-            email: email,
-            updates: {
-              overallStatus: 'Stuck',
-              additionalDetails: `Idenfy POA validation failed: ${idenfyPoaCheck.reason}`,
-              lastUpdated: new Date().toISOString().split('T')[0]
-            }
-          })
-        });
-        
-        return {
-          success: true,
-          boardAUpdated: true,
-          nextStep: 'manual_review',
-          reason: 'Idenfy rejected POA documents'
-        };
-      }
-      
-      console.log('✅ Idenfy POA validation passed:', idenfyPoaCheck.reason);
-    } else {
-      console.log('ℹ️ No POA documents in this verification');
-    }
+    // Store validation failure details but DON'T return early
+    poaValidationFailed = true;
+    poaValidationReason = idenfyPoaCheck.reason;
+  } else {
+    console.log('✅ Idenfy POA validation passed:', idenfyPoaCheck.reason);
+  }
+} else {
+  console.log('ℹ️ No POA documents in this verification');
+}
 
     // Step 1: Analyze Idenfy verification result
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
@@ -380,11 +367,52 @@ if (hasOnlyAdditionalSteps) {
 
     console.log('✅ Board A updated successfully');
 
-   // Step 4: Save documents to Monday.com with actual file upload
-    await saveIdenfyDocumentsToMonday(email, fullWebhookData);
+ // Step 4: Save documents to Monday.com with actual file upload
+await saveIdenfyDocumentsToMonday(email, fullWebhookData);
+
+// Step 4.5: Process POA documents immediately if present
+const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
+
+// Step 4.6: Update status based on POA validation
+if (poaValidationFailed) {
+  console.log('⚠️ Updating Monday.com with POA validation failure');
+  
+  await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'update-driver-board-a',
+      email: email,
+      updates: {
+        overallStatus: 'Manual Review Required',
+        additionalDetails: `POA validation issue: ${poaValidationReason}. All documents uploaded for manual review.`,
+        lastUpdated: new Date().toISOString().split('T')[0]
+      }
+    })
+  });
+  
+  // Send email notification
+  console.log('📧 Sending manual review notification to info@oooshtours.co.uk');
+  
+  try {
+    // Simple email notification using webhook-to-email service
+    // You can replace this with SendGrid, Mailgun, or Monday.com automation
+    await fetch(`${process.env.URL}/.netlify/functions/send-notification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: 'info@oooshtours.co.uk',
+        subject: `Driver Verification Needs Manual Review`,
+        message: `Driver requires manual review:\n\nEmail: ${email}\nJob ID: ${jobId}\nReason: ${poaValidationReason}\n\nAll documents have been uploaded to Monday.com for your review.`
+      })
+    });
     
-   // Step 4.5: Process POA documents immediately if present
-    const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
+    console.log('✅ Email notification sent');
+  } catch (emailError) {
+    console.log('⚠️ Could not send email notification:', emailError.message);
+    // Don't fail the whole process if email fails
+  }
+}
     console.log('📊 POA processing result:', {
       processed: poaProcessingResult.poasProcessed,
       approved: poaProcessingResult.approved,
