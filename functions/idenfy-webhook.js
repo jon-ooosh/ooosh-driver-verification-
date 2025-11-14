@@ -385,7 +385,6 @@ if (poaValidationFailed) {
       email: email,
       updates: {
         overallStatus: 'Manual Review Required',
-        additionalDetails: `POA validation issue: ${poaValidationReason}. All documents uploaded for manual review.`,
         lastUpdated: new Date().toISOString().split('T')[0]
       }
     })
