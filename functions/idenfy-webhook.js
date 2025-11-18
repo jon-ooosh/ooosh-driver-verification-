@@ -223,9 +223,7 @@ exports.handler = async (event, context) => {
 // Parse the client ID to extract email and job ID
 function parseClientId(clientId) {
   try {
-    // Format: ooosh_{jobId}_{email}_{timestamp}
-    console.log('🔍 Parsing client ID:', clientId);
-    
+       
     const parts = clientId.split('_');
     if (parts.length >= 4 && parts[0] === 'ooosh') {
       const jobId = parts[1];
@@ -341,8 +339,7 @@ if (hasPoaDocuments) {
 
     // Step 1: Analyze Idenfy verification result
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
-    console.log('📋 Idenfy verification analysis:', idenfyResult);
-
+   
     // Step 2: Check if driver exists, CREATE if not, then UPDATE
     console.log('👤 Checking if driver exists in Board A...');
     const driverExists = await checkDriverExists(email);
@@ -1277,10 +1274,8 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     const filesNeeded = await checkWhichFilesNeeded(email);
     
     // 🔍 DEBUG: Log what Idenfy actually sends
-    console.log('🔍 RAW additionalStepPdfUrls:', 
-      JSON.stringify(fullWebhookData.additionalStepPdfUrls, null, 2));
-    console.log('🔍 RAW fileUrls:', 
-      JSON.stringify(fullWebhookData.fileUrls, null, 2));
+    JSON.stringify(fullWebhookData.additionalStepPdfUrls, null, 2));
+    JSON.stringify(fullWebhookData.fileUrls, null, 2));
     
     // CRITICAL: Store POA URLs FIRST (before slow file uploads)
     // Check BOTH additionalStepPdfUrls (PDFs) AND fileUrls (images)
@@ -1315,9 +1310,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
   console.log('📋 Found POA2 in fileUrls (image upload)');
   poa2Url = fullWebhookData.fileUrls.POA2;
 }
-    
-    console.log('📍 Extracted URLs:', { poa1Url: !!poa1Url, poa2Url: !!poa2Url });
-    
+       
     // NEW: Extract Idenfy's validation results for both POAs
     const idenfyPoa1Validation = fullWebhookData.data?.additionalData?.UTILITY_BILL?.address;
     const idenfyPoa2Validation = fullWebhookData.data?.additionalData?.POA2?.address;
