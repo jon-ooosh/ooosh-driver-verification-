@@ -448,8 +448,8 @@ try {
   // Continue anyway - the column might already be empty
 }
     
-    // Create FormData for file upload
-    const FormData = require('form-data');
+    // Create FormData for file upload - using formdata-node for native fetch compatibility
+    const { FormData, File } = require('formdata-node');
     const formData = new FormData();
 
     // Convert base64 to buffer
@@ -503,11 +503,13 @@ try {
     formData.append('variables', JSON.stringify({ file: null }));
     formData.append('map', JSON.stringify({ "0": ["variables.file"] })); // CRITICAL FOR FILE MAPPING!
     
-    // Append the actual file with detected content type
-    formData.append('0', buffer, { 
-      filename: finalFilename,
-      contentType: detectedContentType
+    // Create File object (formdata-node provides this for native fetch compatibility)
+    const fileBlob = new File([buffer], finalFilename, { 
+      type: detectedContentType 
     });
+    
+    // Append the File object (not raw buffer)
+    formData.append('0', fileBlob);
 
     console.log(`📤 Sending ${fileExtension.toUpperCase()} file to Monday.com API...`);
 
