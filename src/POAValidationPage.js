@@ -1,8 +1,11 @@
 // File: src/POAValidationPage.js
-// UPDATED with client-side PDF processing for deferred documents
+// PRODUCTION VERSION with DEBUG_MODE logging controls
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Loader, Calendar } from 'lucide-react';
+
+// 🔧 DEBUG MODE - Set DEBUG_LOGGING=true in Netlify to enable verbose logs
+const DEBUG_MODE = process.env.REACT_APP_DEBUG_LOGGING === 'true';
 
 const POAValidationPage = ({ driverEmail, jobId }) => {
   const [loading, setLoading] = useState(true);
@@ -53,12 +56,12 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       }
       
       const routerData = await routerResponse.json();
-      console.log('✅ Router response:', routerData);
+      if (DEBUG_MODE) console.log('✅ Router response:', routerData);
       
       const nextStep = routerData.nextStep;
       const reason = routerData.reason;
       
-      console.log(`🚦 POA routing to: ${nextStep} (${reason})`);
+      console.log(`🚦 POA routing to: ${nextStep}`);
       
       // Map router steps to URL steps
       const stepMapping = {
@@ -84,9 +87,9 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     }
   }, [driverEmail, jobId, driverData]);
 
- // Process a document (PDF or image) client-side
+  // Process a document (PDF or image) client-side
   const processDocument = useCallback(async (url, documentType) => {
-    console.log(`📄 Processing document from URL: ${url}`);
+    if (DEBUG_MODE) console.log(`📄 Processing document from URL: ${url}`);
     
     try {
       // Fetch the document
@@ -107,8 +110,8 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       
       if (isPNG || isJPEG) {
         // Already an image - convert to base64 directly
-        console.log(`✅ Document is already an image (${isPNG ? 'PNG' : 'JPEG'})`);
-       // Convert large arrays in chunks to avoid stack overflow
+        if (DEBUG_MODE) console.log(`✅ Document is already an image (${isPNG ? 'PNG' : 'JPEG'})`);
+        // Convert large arrays in chunks to avoid stack overflow
         let binary = '';
         const chunkSize = 8192;
         for (let i = 0; i < uint8Array.length; i += chunkSize) {
@@ -119,7 +122,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         
       } else if (isPDF) {
         // PDF needs conversion using PDF.js
-        console.log('📄 Document is PDF, converting to image...');
+        console.log('📄 Converting PDF to image...');
         
         if (!window.pdfjsLib) {
           throw new Error('PDF.js not loaded yet');
@@ -150,7 +153,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       }
       
       // Process with document-processor
-      console.log('🔄 Sending to document-processor for OCR...');
+      if (DEBUG_MODE) console.log('🔄 Sending to document-processor for OCR...');
       const processingResponse = await fetch('/.netlify/functions/document-processor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,14 +167,14 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       
       if (!processingResponse.ok) {
         const errorText = await processingResponse.text();
-        console.error('Document processor error:', errorText);
+        console.error('❌ Document processor error:', errorText);
         throw new Error('Document processing failed');
       }
       
       const result = await processingResponse.json();
       
       if (result.success && result.result) {
-        console.log('✅ OCR extraction successful:', result.result);
+        console.log('✅ OCR extraction successful');
         return result.result;
       } else {
         throw new Error('Invalid processing result');
@@ -185,7 +188,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
 
   // Function to save POA validation dates after successful processing
   const savePoaDates = useCallback(async (poa1Date, poa2Date) => {
-    console.log('💾 Saving POA validation dates to Monday.com');
+    if (DEBUG_MODE) console.log('💾 Saving POA validation dates to Monday.com');
     
     try {
       // Calculate validity dates
@@ -227,10 +230,12 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
         poa2ValidUntil = defaultDate.toISOString().split('T')[0];
       }
       
-      console.log('📅 Calculated POA validity dates:', {
-        poa1ValidUntil,
-        poa2ValidUntil
-      });
+      if (DEBUG_MODE) {
+        console.log('📅 Calculated POA validity dates:', {
+          poa1ValidUntil,
+          poa2ValidUntil
+        });
+      }
       
       // Update Monday.com with the dates
       const response = await fetch('/.netlify/functions/monday-integration', {
@@ -259,13 +264,13 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
     }
   }, [driverEmail]);
 
-const checkPoaValidationResults = useCallback(async () => {
+  const checkPoaValidationResults = useCallback(async () => {
     const MAX_ATTEMPTS = 20;
     let alreadyProcessed = false; // Track if we've processed in THIS function call
     
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        console.log(`🔍 Checking for POA URLs: ${driverEmail} (attempt ${attempt}/${MAX_ATTEMPTS})`);
+        if (DEBUG_MODE) console.log(`🔍 Checking for POA URLs: ${driverEmail} (attempt ${attempt}/${MAX_ATTEMPTS})`);
         
         // Fetch driver status with cache buster
         const statusResponse = await fetch(
@@ -279,18 +284,20 @@ const checkPoaValidationResults = useCallback(async () => {
         const status = await statusResponse.json();
         setDriverData(status);
         
-        console.log('📊 POA URLs from Monday:', {
-          poa1URL: status.poa1URL ? 'Present' : 'Missing',
-          poa2URL: status.poa2URL ? 'Present' : 'Missing'
-        });
+        if (DEBUG_MODE) {
+          console.log('📊 POA URLs from Monday:', {
+            poa1URL: status.poa1URL ? 'Present' : 'Missing',
+            poa2URL: status.poa2URL ? 'Present' : 'Missing'
+          });
+        }
         
         // Check if we have the URLs we need (webhook has completed)
         if (status.poa1URL || status.poa2URL) {
-          console.log('✅ POA URLs found, checking if already processed...');
+          console.log('✅ POA URLs found, processing documents...');
           
           // Check both ref (across renders) AND local flag (within this loop)
           if (alreadyProcessed || (processedDocsRef.current.poa1 && processedDocsRef.current.poa2)) {
-            console.log('⏭️ Documents already processed - exiting loop completely');
+            if (DEBUG_MODE) console.log('⏭️ Documents already processed - exiting loop completely');
             return; // Exit the entire function
           }
           
@@ -301,35 +308,35 @@ const checkPoaValidationResults = useCallback(async () => {
           setProcessingPDFs(true);
           
           try {
-          let poa1Result, poa2Result;
+            let poa1Result, poa2Result;
 
-// Process POA1 if URL exists AND not already processed
-if (status.poa1URL && !processedDocsRef.current.poa1) {
-  console.log('📄 Processing POA1 from URL...');
-  poa1Result = await processDocument(status.poa1URL, 'poa1');
-  processedDocsRef.current.poa1 = poa1Result; // Store the actual result
-  console.log('✅ POA1 processed and stored:', poa1Result.documentDate);
-} else if (processedDocsRef.current.poa1) {
-  console.log('⏭️ POA1 already processed, using cached result');
-  poa1Result = processedDocsRef.current.poa1; // Reuse the stored result
-}
+            // Process POA1 if URL exists AND not already processed
+            if (status.poa1URL && !processedDocsRef.current.poa1) {
+              console.log('📄 Processing POA1...');
+              poa1Result = await processDocument(status.poa1URL, 'poa1');
+              processedDocsRef.current.poa1 = poa1Result; // Store the actual result
+              if (DEBUG_MODE) console.log('✅ POA1 processed and stored:', poa1Result.documentDate);
+            } else if (processedDocsRef.current.poa1) {
+              if (DEBUG_MODE) console.log('⏭️ POA1 already processed, using cached result');
+              poa1Result = processedDocsRef.current.poa1; // Reuse the stored result
+            }
 
-// Process POA2 if URL exists AND not already processed
-if (status.poa2URL && !processedDocsRef.current.poa2) {
-  console.log('📄 Processing POA2 from URL...');
-  poa2Result = await processDocument(status.poa2URL, 'poa2');
-  processedDocsRef.current.poa2 = poa2Result; // Store the actual result
-  console.log('✅ POA2 processed and stored:', poa2Result.documentDate);
-} else if (processedDocsRef.current.poa2) {
-  console.log('⏭️ POA2 already processed, using cached result');
-  poa2Result = processedDocsRef.current.poa2; // Reuse the stored result
-}
+            // Process POA2 if URL exists AND not already processed
+            if (status.poa2URL && !processedDocsRef.current.poa2) {
+              console.log('📄 Processing POA2...');
+              poa2Result = await processDocument(status.poa2URL, 'poa2');
+              processedDocsRef.current.poa2 = poa2Result; // Store the actual result
+              if (DEBUG_MODE) console.log('✅ POA2 processed and stored:', poa2Result.documentDate);
+            } else if (processedDocsRef.current.poa2) {
+              if (DEBUG_MODE) console.log('⏭️ POA2 already processed, using cached result');
+              poa2Result = processedDocsRef.current.poa2; // Reuse the stored result
+            }
             
             // Check for duplicates
             const isDuplicate = poa1Result?.providerName && poa2Result?.providerName && 
                                poa1Result.providerName === poa2Result.providerName;
             
-           // Build validation result
+            // Build validation result
             const validationResult = {
               isDuplicate: isDuplicate,
               approved: !isDuplicate && poa1Result && poa2Result,
@@ -347,9 +354,9 @@ if (status.poa2URL && !processedDocsRef.current.poa2) {
             
             // Handle different outcomes
             if (validationResult.approved) {
-              console.log('💾 Saving POA dates to Monday.com...');
+              console.log('✅ POA validation complete, saving dates...');
               await savePoaDates(poa1Result.documentDate, poa2Result.documentDate);
-              console.log('✅ POA validation complete, proceeding to next step in 3 seconds');
+              console.log('✅ Proceeding to next step in 3 seconds');
               setTimeout(() => proceedToNext(), 3000);
             } else if (isDuplicate) {
               console.log('⚠️ Duplicate documents detected - flagging for review');
@@ -385,9 +392,9 @@ if (status.poa2URL && !processedDocsRef.current.poa2) {
           }
         }
         
-       // URLs not found yet - wait and retry if we have attempts left
+        // URLs not found yet - wait and retry if we have attempts left
         if (attempt < MAX_ATTEMPTS) {
-          console.log(`⏳ URLs not ready yet, waiting 3 seconds... (${attempt}/${MAX_ATTEMPTS})`);
+          if (DEBUG_MODE) console.log(`⏳ URLs not ready yet, waiting 3 seconds... (${attempt}/${MAX_ATTEMPTS})`);
           setLoading(true);
           await new Promise(resolve => setTimeout(resolve, 3000));
         } else {
@@ -401,8 +408,8 @@ if (status.poa2URL && !processedDocsRef.current.poa2) {
       } catch (err) {
         console.error('❌ Error in POA validation check:', err);
         
-       if (attempt < MAX_ATTEMPTS) {
-          console.log(`⏳ Error occurred, retrying in 3 seconds... (${attempt}/${MAX_ATTEMPTS})`);
+        if (attempt < MAX_ATTEMPTS) {
+          if (DEBUG_MODE) console.log(`⏳ Error occurred, retrying in 3 seconds... (${attempt}/${MAX_ATTEMPTS})`);
           await new Promise(resolve => setTimeout(resolve, 3000));
         } else {
           setError(err.message || 'Failed to check POA validation results');
@@ -565,7 +572,7 @@ if (status.poa2URL && !processedDocsRef.current.poa2) {
         </div>
       </div>
 
-    {/* Action buttons */}
+      {/* Action buttons */}
       <div className="flex flex-col space-y-3">
         {isDuplicate ? (
           <>
@@ -618,7 +625,7 @@ if (status.poa2URL && !processedDocsRef.current.poa2) {
             >
               These ARE different documents - proceed with rest of verification and we will manually review.
             </button>
-            </>
+          </>
         ) : isApproved ? (
           <>
             <button
