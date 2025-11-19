@@ -1,5 +1,8 @@
-  // File: functions/monday-integration.js
-// COMPLETE VERSION with passport column support (date_mkvxy5t1)
+// File: functions/monday-integration.js
+// PRODUCTION VERSION with DEBUG_MODE logging controls
+
+// 🔧 DEBUG MODE - Set DEBUG_LOGGING=true in Netlify to enable verbose logs
+const DEBUG_MODE = process.env.DEBUG_LOGGING === 'true';
 
 // Board IDs
 const BOARD_A_ID = '9798399405'; // Driver Database
@@ -70,7 +73,7 @@ exports.handler = async (event, context) => {
     }
 
   } catch (error) {
-    console.error('Monday.com integration error:', error);
+    console.error('❌ Monday.com integration error:', error);
     return {
       statusCode: 500,
       headers,
@@ -94,7 +97,7 @@ async function callMondayAPI(query) {
     throw new Error('MONDAY_API_TOKEN environment variable not set');
   }
 
-  console.log('Calling Monday.com API...');
+  if (DEBUG_MODE) console.log('🔄 Calling Monday.com API...');
   
   const response = await fetch(MONDAY_API_URL, {
     method: 'POST',
@@ -108,12 +111,12 @@ async function callMondayAPI(query) {
   const result = await response.json();
   
   if (!response.ok) {
-    console.error('Monday.com API error:', response.status, result);
+    console.error('❌ Monday.com API error:', response.status, result);
     throw new Error(`Monday.com API error: ${response.status}`);
   }
 
   if (result.errors) {
-    console.error('Monday.com GraphQL errors:', result.errors);
+    console.error('❌ Monday.com GraphQL errors:', result.errors);
     throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
   }
 
@@ -131,7 +134,7 @@ function escapeJson(str) {
 
 // INTERNAL: Find driver by email (returns driver object or null)
 async function findDriverInternal(email) {
-  console.log('🔍 Internal: Finding driver for email:', email);
+  if (DEBUG_MODE) console.log('🔍 Internal: Finding driver for email:', email);
   
   try {
     if (!email) {
@@ -168,10 +171,10 @@ async function findDriverInternal(email) {
     if (response.data?.items_page_by_column_values?.items?.length > 0) {
       const item = response.data.items_page_by_column_values.items[0];
       const driver = parseBoardAData(item);
-      console.log('✅ Internal: Driver found:', driver.id);
+      if (DEBUG_MODE) console.log('✅ Internal: Driver found:', driver.id);
       return driver;
     } else {
-      console.log('❌ Internal: Driver not found');
+      if (DEBUG_MODE) console.log('❌ Internal: Driver not found');
       return null;
     }
 
@@ -187,7 +190,7 @@ async function findDriverInternal(email) {
 
 // Create or update driver in Board A
 async function createDriverBoardA(data) {
-  console.log('🔄 Creating/updating driver in Board A');
+  if (DEBUG_MODE) console.log('🔄 Creating/updating driver in Board A');
   
   try {
     const { email, driverData } = data;
@@ -215,9 +218,10 @@ async function createDriverBoardA(data) {
     // Prepare column values for Board A
     const columnValues = formatBoardAColumnValues(completeDriverData);
 
-    // DEBUGGING: Log what we're sending to Monday.com
-    console.log('📧 Creating driver with email:', email);
-    console.log('📋 Column values:', JSON.stringify(columnValues, null, 2));
+    if (DEBUG_MODE) {
+      console.log('📧 Creating driver with email:', email);
+      console.log('📋 Column values:', JSON.stringify(columnValues, null, 2));
+    }
 
     const mutation = `
       mutation {
@@ -250,7 +254,7 @@ async function createDriverBoardA(data) {
     }
 
   } catch (error) {
-    console.error('Create driver Board A error:', error);
+    console.error('❌ Create driver Board A error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -264,7 +268,7 @@ async function createDriverBoardA(data) {
 
 // Update existing driver in Board A
 async function updateDriverBoardA(data) {
-  console.log('🔄 Updating driver in Board A');
+  if (DEBUG_MODE) console.log('🔄 Updating driver in Board A');
   
   try {
     const { email, updates } = data;
@@ -281,7 +285,7 @@ async function updateDriverBoardA(data) {
     }
 
     const driverId = existingDriver.id;
-    console.log('📝 Updating driver ID:', driverId);
+    if (DEBUG_MODE) console.log('📝 Updating driver ID:', driverId);
 
     // CRITICAL: Ensure email is always included in updates
     const completeUpdates = {
@@ -292,9 +296,10 @@ async function updateDriverBoardA(data) {
     // Format updates for Board A columns
     const columnValues = formatBoardAColumnValues(completeUpdates);
 
-    // CRITICAL DEBUG: Show exact payload being sent to Monday.com
-    console.log('🔍 RAW columnValues being sent to Monday.com GraphQL:');
-    console.log(JSON.stringify(columnValues, null, 2));
+    if (DEBUG_MODE) {
+      console.log('🔍 RAW columnValues being sent to Monday.com GraphQL:');
+      console.log(JSON.stringify(columnValues, null, 2));
+    }
 
     const mutation = `
       mutation {
@@ -326,7 +331,7 @@ async function updateDriverBoardA(data) {
     }
 
   } catch (error) {
-    console.error('Update driver Board A error:', error);
+    console.error('❌ Update driver Board A error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -340,7 +345,7 @@ async function updateDriverBoardA(data) {
 
 // Find driver in Board A (returns HTTP response)
 async function findDriverBoardA(data) {
-  console.log('🔍 Finding driver in Board A');
+  if (DEBUG_MODE) console.log('🔍 Finding driver in Board A');
   
   try {
     const { email } = data;
@@ -370,7 +375,7 @@ async function findDriverBoardA(data) {
     }
 
   } catch (error) {
-    console.error('Find driver Board A error:', error);
+    console.error('❌ Find driver Board A error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -382,11 +387,9 @@ async function findDriverBoardA(data) {
   }
 }
 
-// Updated uploadFileBoardA function in monday-integration.js
-// Lines 386-443 replacement - HANDLES PDFs WITH PROPER CONTENT TYPE
-
+// Upload file to Board A
 async function uploadFileBoardA(data) {
-  console.log('📁 Uploading file to Board A');
+  if (DEBUG_MODE) console.log('📁 Uploading file to Board A');
   
   try {
     const { email, fileType, fileData, filename, contentType } = data;
@@ -395,7 +398,7 @@ async function uploadFileBoardA(data) {
       throw new Error('Email, fileType, and fileData are required');
     }
 
-    console.log(`🔍 Internal: Finding driver for email: ${email}`);
+    if (DEBUG_MODE) console.log(`🔍 Finding driver for email: ${email}`);
     
     // Find the driver using internal helper
     const existingDriver = await findDriverInternal(email);
@@ -423,30 +426,30 @@ async function uploadFileBoardA(data) {
       throw new Error(`Unknown file type: ${fileType}`);
     }
 
-    console.log(`📊 Using column ID: ${columnId} for ${fileType}`);
+    if (DEBUG_MODE) console.log(`📊 Using column ID: ${columnId} for ${fileType}`);
 
     // CLEAR EXISTING FILE FIRST (if any)
-console.log(`🧹 Clearing existing file in column ${columnId}...`);
-const clearMutation = `
-  mutation {
-    change_column_value(
-      item_id: ${driverId},
-      board_id: ${BOARD_A_ID},
-      column_id: "${columnId}",
-      value: "{\\"clear_all\\": true}"
-    ) {
-      id
-    }
-  }
-`;
+    if (DEBUG_MODE) console.log(`🧹 Clearing existing file in column ${columnId}...`);
+    const clearMutation = `
+      mutation {
+        change_column_value(
+          item_id: ${driverId},
+          board_id: ${BOARD_A_ID},
+          column_id: "${columnId}",
+          value: "{\\"clear_all\\": true}"
+        ) {
+          id
+        }
+      }
+    `;
 
-try {
-  await callMondayAPI(clearMutation);
-  console.log('✅ Column cleared successfully');
-} catch (clearError) {
-  console.warn('⚠️ Could not clear column (might be empty already):', clearError.message);
-  // Continue anyway - the column might already be empty
-}
+    try {
+      await callMondayAPI(clearMutation);
+      if (DEBUG_MODE) console.log('✅ Column cleared successfully');
+    } catch (clearError) {
+      if (DEBUG_MODE) console.warn('⚠️ Could not clear column (might be empty already):', clearError.message);
+      // Continue anyway - the column might already be empty
+    }
     
     // Create FormData for file upload - using formdata-node for native fetch compatibility
     const { FormData, File } = require('formdata-node');
@@ -454,29 +457,29 @@ try {
 
     // Convert base64 to buffer
     const buffer = Buffer.from(fileData, 'base64');
-    console.log(`📦 File buffer size: ${buffer.length} bytes`);
+    if (DEBUG_MODE) console.log(`📦 File buffer size: ${buffer.length} bytes`);
 
     // Detect file type from buffer or use provided contentType
     let detectedContentType = contentType || 'image/jpeg';
     let fileExtension = 'jpg';
     
-   // Check for PDF magic bytes - %PDF = 0x25 0x50 0x44 0x46
+    // Check for PDF magic bytes - %PDF = 0x25 0x50 0x44 0x46
     if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
       detectedContentType = 'application/pdf';
       fileExtension = 'pdf';
-      console.log('📄 PDF detected from magic bytes');
+      if (DEBUG_MODE) console.log('📄 PDF detected from magic bytes');
     } 
     // Check for PNG magic bytes
     else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
       detectedContentType = 'image/png';
       fileExtension = 'png';
-      console.log('🖼️ PNG detected from magic bytes');
+      if (DEBUG_MODE) console.log('🖼️ PNG detected from magic bytes');
     }
     // Check for JPEG magic bytes
     else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
       detectedContentType = 'image/jpeg';
       fileExtension = 'jpg';
-      console.log('🖼️ JPEG detected from magic bytes');
+      if (DEBUG_MODE) console.log('🖼️ JPEG detected from magic bytes');
     }
     
     // Use filename if provided, otherwise generate one
@@ -518,19 +521,19 @@ try {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-       // ✅ No formData.getHeaders() - native fetch handles FormData automatically
+        // ✅ No formData.getHeaders() - native fetch handles FormData automatically
       },
       body: formData
     });
 
     const responseText = await response.text();
-    console.log(`📥 Monday API response status: ${response.status}`);
+    if (DEBUG_MODE) console.log(`📥 Monday API response status: ${response.status}`);
 
     let result;
     try {
       result = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse response:', responseText.substring(0, 200));
+      console.error('❌ Failed to parse response:', responseText.substring(0, 200));
       throw new Error('Invalid response from Monday.com');
     }
 
@@ -543,7 +546,6 @@ try {
     // Check for successful upload
     if (result.data?.add_file_to_column?.id) {
       console.log(`✅ File uploaded successfully: ${result.data.add_file_to_column.name}`);
-      console.log(`📎 File URL: ${result.data.add_file_to_column.url}`);
       
       return {
         statusCode: 200,
@@ -558,7 +560,7 @@ try {
         })
       };
     } else {
-      console.error('Unexpected response structure:', JSON.stringify(result).substring(0, 500));
+      console.error('❌ Unexpected response structure:', JSON.stringify(result).substring(0, 500));
       throw new Error('File upload failed - no file ID returned');
     }
 
@@ -582,7 +584,7 @@ try {
 
 // Find driver in Board B
 async function findDriverBoardB(data) {
-  console.log('🔍 Finding driver in Board B');
+  if (DEBUG_MODE) console.log('🔍 Finding driver in Board B');
   
   try {
     const { email } = data;
@@ -642,7 +644,7 @@ async function findDriverBoardB(data) {
     }
 
   } catch (error) {
-    console.error('Find driver Board B error:', error);
+    console.error('❌ Find driver Board B error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -656,7 +658,7 @@ async function findDriverBoardB(data) {
 
 // Copy driver from Board A to Board B
 async function copyAToB(data) {
-  console.log('🔄 Copying driver from Board A to Board B');
+  if (DEBUG_MODE) console.log('🔄 Copying driver from Board A to Board B');
   
   try {
     const { email, jobId } = data;
@@ -727,7 +729,7 @@ async function copyAToB(data) {
     }
 
   } catch (error) {
-    console.error('Copy A to B error:', error);
+    console.error('❌ Copy A to B error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -745,12 +747,14 @@ async function copyAToB(data) {
 
 // Format data for Board A columns - Ensure email is always included
 function formatBoardAColumnValues(data) {
-  console.log('🔍 formatBoardAColumnValues called with data keys:', Object.keys(data));
-  console.log('🔍 Insurance data present?', {
-    dvlaPoints: data.dvlaPoints,
-    dvlaEndorsements: data.dvlaEndorsements,
-    dvlaCalculatedExcess: data.dvlaCalculatedExcess
-  });
+  if (DEBUG_MODE) {
+    console.log('🔍 formatBoardAColumnValues called with data keys:', Object.keys(data));
+    console.log('🔍 Insurance data present?', {
+      dvlaPoints: data.dvlaPoints,
+      dvlaEndorsements: data.dvlaEndorsements,
+      dvlaCalculatedExcess: data.dvlaCalculatedExcess
+    });
+  }
   
   const columnValues = {};
 
@@ -760,7 +764,7 @@ function formatBoardAColumnValues(data) {
       email: data.email, 
       text: data.email 
     };
-    console.log('✅ Email field added to column values:', data.email);
+    if (DEBUG_MODE) console.log('✅ Email field added to column values:', data.email);
   } else {
     console.error('❌ CRITICAL: Email missing from driver data!');
   }
@@ -768,7 +772,7 @@ function formatBoardAColumnValues(data) {
   // Identity & Contact
   if (data.driverName) columnValues.text_mktry2je = data.driverName;
   if (data.firstName) columnValues.text_mkwhc7a = data.firstName; 
-if (data.lastName) columnValues.text_mkwhm2n5 = data.lastName;
+  if (data.lastName) columnValues.text_mkwhm2n5 = data.lastName;
   if (data.phoneCountry) columnValues.text_mkty5hzk = data.phoneCountry;
   if (data.phoneNumber) columnValues.text_mktrfqe2 = data.phoneNumber;
   if (data.dateOfBirth) columnValues.date_mktr2x01 = { date: data.dateOfBirth };
@@ -816,8 +820,9 @@ if (data.lastName) columnValues.text_mkwhm2n5 = data.lastName;
   if (data.poa2URL) columnValues.text_mkw3d9ye = data.poa2URL;
   if (data.idenfyScanRef) columnValues.text_mkwbn8bx = data.idenfyScanRef; // Idenfy Scan Reference - for deduplication
 
-  // DEBUGGING: Log final column values
-  console.log('📋 Final column values for Monday.com:', Object.keys(columnValues));
+  if (DEBUG_MODE) {
+    console.log('📋 Final column values for Monday.com:', Object.keys(columnValues));
+  }
 
   return columnValues;
 }
@@ -901,7 +906,7 @@ function parseBoardAData(item) {
       case 'text_mkwhc7a': // First Name 
         driver.firstName = col.text || '';
         break;
-     case 'text_mkwhm2n5': // Last Name
+      case 'text_mkwhm2n5': // Last Name
         driver.lastName = col.text || '';
         break;
       case 'email_mktrgzj': // Email Address
@@ -966,36 +971,30 @@ function parseBoardAData(item) {
         break;
       case 'text_mkw3d9ye': // POA2 URL
         driver.poa2URL = col.text || '';
-      break;
-      // Parse insurance questions with detailed logging
+        break;
+      // Parse insurance questions
       case 'status': // Has Disability
-        console.log('Disability column - value:', JSON.stringify(value), 'text:', col.text);
         driver.hasDisability = value?.label === 'Yes' || col.text === 'Yes';
         break;
       case 'color_mktr4w0': // Has Convictions
-        console.log('Convictions column - value:', JSON.stringify(value), 'text:', col.text);
         driver.hasConvictions = value?.label === 'Yes' || col.text === 'Yes';
         break;
       case 'color_mktrbt3x': // Has Prosecution
-        console.log('Prosecution column - value:', JSON.stringify(value), 'text:', col.text);
         driver.hasProsecution = value?.label === 'Yes' || 
                                 col.text === 'Yes' || 
                                 value?.index === 1;
         break;
       case 'color_mktraeas': // Has Accidents  
-        console.log('Accidents column - value:', JSON.stringify(value), 'text:', col.text);
         driver.hasAccidents = value?.label === 'Yes' || 
                              col.text === 'Yes' || 
                              value?.index === 1;
         break;
       case 'color_mktrpe6q': // Has Insurance Issues
-        console.log('Insurance Issues column - value:', JSON.stringify(value), 'text:', col.text);
         driver.hasInsuranceIssues = value?.label === 'Yes' || 
                                     col.text === 'Yes' || 
                                     value?.index === 1;
         break;
       case 'color_mktr2t8a': // Has Driving Ban
-        console.log('Driving Ban column - value:', JSON.stringify(value), 'text:', col.text);
         driver.hasDrivingBan = value?.label === 'Yes' || 
                               col.text === 'Yes' || 
                               value?.index === 1;
@@ -1007,7 +1006,6 @@ function parseBoardAData(item) {
         driver.lastUpdated = value?.date || '';
         break;
       case 'text_mkvv2z8p': // Idenfy Check Date
-        console.log('📍 FOUND idenfyCheckDate field! Value:', col.text); 
         driver.idenfyCheckDate = col.text || '';
         break;
       case 'text_mkwbn8bx': // Idenfy Scan Reference
@@ -1086,7 +1084,7 @@ async function testConnection() {
     };
 
   } catch (error) {
-    console.error('Connection test error:', error);
+    console.error('❌ Connection test error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -1103,7 +1101,7 @@ async function testTwoBoardSystem(data) {
   try {
     const testEmail = data.email || 'test@example.com';
     
-    console.log('🧪 Testing two-board system with email:', testEmail);
+    if (DEBUG_MODE) console.log('🧪 Testing two-board system with email:', testEmail);
     
     // Test 1: Create driver in Board A
     const createResult = await createDriverBoardA({
@@ -1151,7 +1149,7 @@ async function testTwoBoardSystem(data) {
     };
 
   } catch (error) {
-    console.error('Two-board system test error:', error);
+    console.error('❌ Two-board system test error:', error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -1165,7 +1163,7 @@ async function testTwoBoardSystem(data) {
 
 // Save Idenfy documents (placeholder for now)
 async function saveIdenfyDocuments(requestData) {
-  console.log('📄 Saving Idenfy documents to Monday.com');
+  if (DEBUG_MODE) console.log('📄 Saving Idenfy documents to Monday.com');
   
   try {
     // This is a placeholder - the actual implementation is in the webhook
