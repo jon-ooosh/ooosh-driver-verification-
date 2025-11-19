@@ -61,7 +61,7 @@ const POAValidationPage = ({ driverEmail, jobId }) => {
       const nextStep = routerData.nextStep;
       const reason = routerData.reason;
       
-      console.log(`🚦 POA routing to: ${nextStep}`);
+      console.log(`🚦 POA routing to: ${nextStep} (${reason})`);
       
       // Map router steps to URL steps
       const stepMapping = {
