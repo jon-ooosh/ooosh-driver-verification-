@@ -1,6 +1,9 @@
 // File: functions/document-processor.js 
+// PRODUCTION VERSION with DEBUG_MODE logging controls
 // Unified document processing - OCR + image conversion for Monday.com
-// UPDATED: Removed all dangerous fallbacks, improved error handling
+
+// 🔧 DEBUG MODE - Set DEBUG_LOGGING=true in Netlify to enable verbose logs
+const DEBUG_MODE = process.env.DEBUG_LOGGING === 'true';
 
 exports.handler = async (event, context) => {
   console.log('Document processor called');
@@ -48,7 +51,7 @@ exports.handler = async (event, context) => {
     let processedImageData2 = imageData2;
     
     if (typeof imageData === 'string' && imageData.startsWith('http')) {
-      console.log('📥 Fetching document from URL:', imageData.substring(0, 100) + '...');
+      if (DEBUG_MODE) console.log('📥 Fetching document from URL:', imageData.substring(0, 100) + '...');
       const response = await fetch(imageData);
       if (!response.ok) {
         throw new Error(`Failed to fetch document from URL: ${response.status}`);
@@ -57,15 +60,18 @@ exports.handler = async (event, context) => {
       const buffer = await response.arrayBuffer();
       const uint8Array = new Uint8Array(buffer);
       
-      // Log first bytes to verify file type
-      const first4Hex = Array.from(uint8Array.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-      const first4ASCII = new TextDecoder().decode(uint8Array.slice(0, 4));
-      console.log('First 4 bytes (hex):', first4Hex);
-      console.log('First 4 bytes (ASCII):', first4ASCII);
+      if (DEBUG_MODE) {
+        // Log first bytes to verify file type
+        const first4Hex = Array.from(uint8Array.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+        const first4ASCII = new TextDecoder().decode(uint8Array.slice(0, 4));
+        console.log('First 4 bytes (hex):', first4Hex);
+        console.log('First 4 bytes (ASCII):', first4ASCII);
+      }
       
       // Check if it's actually a PDF
+      const first4ASCII = new TextDecoder().decode(uint8Array.slice(0, 4));
       if (first4ASCII === '%PDF') {
-        console.log('✅ Confirmed PDF format');
+        if (DEBUG_MODE) console.log('✅ Confirmed PDF format');
       }
       
       processedImageData = Buffer.from(buffer).toString('base64');
@@ -73,7 +79,7 @@ exports.handler = async (event, context) => {
     }
     
     if (imageData2 && typeof imageData2 === 'string' && imageData2.startsWith('http')) {
-      console.log('📥 Fetching second document from URL:', imageData2.substring(0, 100) + '...');
+      if (DEBUG_MODE) console.log('📥 Fetching second document from URL:', imageData2.substring(0, 100) + '...');
       const response = await fetch(imageData2);
       if (!response.ok) {
         throw new Error(`Failed to fetch second document from URL: ${response.status}`);
@@ -119,7 +125,7 @@ exports.handler = async (event, context) => {
               }
             }
           } catch (error) {
-            console.log('⚠️ Could not check processing status, proceeding with OCR:', error.message);
+            if (DEBUG_MODE) console.log('⚠️ Could not check processing status, proceeding with OCR:', error.message);
             // Continue with processing if check fails - don't block on this
           }
         }
@@ -145,7 +151,7 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Document processing error:', error);
+    console.error('❌ Document processing error:', error);
     return {
       statusCode: 500,
       headers,
@@ -159,7 +165,7 @@ exports.handler = async (event, context) => {
 
 // AWS TEXTRACT: DVLA processing
 async function testDvlaExtractionWithTextract(imageData) {
-  console.log('🚗 Processing DVLA document with AWS Textract');
+  if (DEBUG_MODE) console.log('🚗 Processing DVLA document with AWS Textract');
   
   if (!process.env.OOOSH_AWS_ACCESS_KEY_ID || !process.env.OOOSH_AWS_SECRET_ACCESS_KEY) {
     console.error('⚠️ AWS credentials not configured');
@@ -178,7 +184,7 @@ async function testDvlaExtractionWithTextract(imageData) {
   }
 
   try {
-    console.log('Attempting AWS Textract for DVLA analysis...');
+    if (DEBUG_MODE) console.log('Attempting AWS Textract for DVLA analysis...');
     
     // Call AWS Textract
     const textractResult = await callAwsTextract(imageData);
@@ -211,7 +217,7 @@ async function testDvlaExtractionWithTextract(imageData) {
 
 // AWS TEXTRACT: Call the API
 async function callAwsTextract(imageData, fileType) {
-  console.log('📞 Calling AWS Textract API...');
+  if (DEBUG_MODE) console.log('📞 Calling AWS Textract API...');
   
   const region = process.env.OOOSH_AWS_REGION || 'eu-west-2';
   const endpoint = `https://textract.${region}.amazonaws.com/`;
@@ -220,17 +226,17 @@ async function callAwsTextract(imageData, fileType) {
   const cleanBase64 = imageData.replace(/^data:.*?base64,/, '');
 
   // Check if PDF
-const buffer = Buffer.from(cleanBase64, 'base64');
-const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+  const buffer = Buffer.from(cleanBase64, 'base64');
+  const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
 
-if (isPDF) {
-  throw new Error('PDF format detected. Please convert to JPG/PNG before processing.');
-}
+  if (isPDF) {
+    throw new Error('PDF format detected. Please convert to JPG/PNG before processing.');
+  }
   
   // Validate size
   const imageSizeBytes = (cleanBase64.length * 3) / 4;
   const sizeMB = imageSizeBytes / (1024 * 1024);
-  console.log(`📏 Document size: ${sizeMB.toFixed(2)}MB`);
+  if (DEBUG_MODE) console.log(`📏 Document size: ${sizeMB.toFixed(2)}MB`);
   
   if (imageSizeBytes > 5242880) {
     throw new Error(`Document too large (${sizeMB.toFixed(2)}MB, max 5MB)`);
@@ -261,7 +267,7 @@ if (isPDF) {
   const responseText = await response.text();
   
   if (!response.ok) {
-    console.error('AWS Textract error:', response.status, responseText);
+    console.error('❌ AWS Textract error:', response.status, responseText);
     try {
       const errorData = JSON.parse(responseText);
       throw new Error(`AWS Textract: ${errorData.Message || responseText}`);
@@ -271,7 +277,7 @@ if (isPDF) {
   }
 
   const result = JSON.parse(responseText);
-  console.log('📄 AWS Textract response received');
+  if (DEBUG_MODE) console.log('📄 AWS Textract response received');
   
   // Extract all text from the response
   const extractedText = extractTextFromTextractResponse(result);
@@ -298,7 +304,7 @@ function extractTextFromTextractResponse(textractResponse) {
     .map(block => block.Text)
     .join('\n');
     
-  console.log('📝 Extracted text length:', textBlocks.length);
+  if (DEBUG_MODE) console.log('📝 Extracted text length:', textBlocks.length);
   return textBlocks;
 }
 
@@ -320,7 +326,7 @@ function calculateAverageConfidence(textractResponse) {
 
 // Extract license ending for anti-fraud validation
 function extractLicenseEnding(text) {
-  console.log('🔍 Extracting license ending from DVLA text...');
+  if (DEBUG_MODE) console.log('🔍 Extracting license ending from DVLA text...');
   
   // Look for DVLA pattern: "Driving licence number XXXXXXXX162JD9GA"
   const licensePatterns = [
@@ -333,18 +339,18 @@ function extractLicenseEnding(text) {
     const match = text.match(pattern);
     if (match && match[1]) {
       const ending = match[1];
-      console.log('✅ License ending extracted:', ending);
+      if (DEBUG_MODE) console.log('✅ License ending extracted:', ending);
       return ending;
     }
   }
   
-  console.log('⚠️ No license ending found');
+  if (DEBUG_MODE) console.log('⚠️ No license ending found');
   return null;
 }
 
 // Parse DVLA-specific information from extracted text
 function parseDvlaFromText(text) {
-  console.log('🔍 Parsing DVLA data from extracted text...');
+  if (DEBUG_MODE) console.log('🔍 Parsing DVLA data from extracted text...');
   
   // Check if this looks like a DVLA document
   const isDvlaDocument = text.toLowerCase().includes('check code') || 
@@ -353,7 +359,7 @@ function parseDvlaFromText(text) {
                          text.includes('XXXXXXXX');
   
   if (!isDvlaDocument) {
-    console.log('⚠️ Document does not appear to be a DVLA check');
+    if (DEBUG_MODE) console.log('⚠️ Document does not appear to be a DVLA check');
   }
   
   const dvlaData = {
@@ -382,7 +388,7 @@ function parseDvlaFromText(text) {
   const licenseMatch = text.match(/([A-Z]{2,5}[0-9]{6}[A-Z0-9]{2}[A-Z]{2})/);
   if (licenseMatch) {
     dvlaData.licenseNumber = licenseMatch[1];
-    console.log('✅ Found license number:', dvlaData.licenseNumber);
+    if (DEBUG_MODE) console.log('✅ Found license number:', dvlaData.licenseNumber);
   }
 
   // Extract driver name
@@ -396,7 +402,7 @@ function parseDvlaFromText(text) {
     const nameMatch = text.match(pattern);
     if (nameMatch && nameMatch[1].length > 5 && nameMatch[1].length < 50) {
       dvlaData.driverName = nameMatch[1].trim();
-      console.log('✅ Found driver name:', dvlaData.driverName);
+      if (DEBUG_MODE) console.log('✅ Found driver name:', dvlaData.driverName);
       break;
     }
   }
@@ -405,7 +411,7 @@ function parseDvlaFromText(text) {
   const checkCodeMatch = text.match(/check code[:\s]*([A-Za-z0-9]{2}\s+[A-Za-z0-9]{2}\s+[A-Za-z0-9]{2}\s+[A-Za-z0-9]{2})/i);
   if (checkCodeMatch) {
     dvlaData.checkCode = checkCodeMatch[1];
-    console.log('✅ Found check code:', dvlaData.checkCode);
+    if (DEBUG_MODE) console.log('✅ Found check code:', dvlaData.checkCode);
   }
 
   // Extract dates
@@ -413,7 +419,7 @@ function parseDvlaFromText(text) {
   const dvlaDateMatch = text.match(dvlaDatePattern);
   if (dvlaDateMatch) {
     dvlaData.dateGenerated = parseDvlaDate(dvlaDateMatch[1]);
-    console.log('✅ Found DVLA date:', dvlaData.dateGenerated);
+    if (DEBUG_MODE) console.log('✅ Found DVLA date:', dvlaData.dateGenerated);
   }
 
   // Extract total points
@@ -438,7 +444,7 @@ function parseDvlaFromText(text) {
 
 // Extract endorsements without double-counting
 function extractEndorsementsNoDuplicates(text) {
-  console.log('🔍 Extracting endorsements (no duplicates)...');
+  if (DEBUG_MODE) console.log('🔍 Extracting endorsements (no duplicates)...');
   
   const endorsements = [];
   const seenCodes = new Set();
@@ -459,7 +465,7 @@ function extractEndorsementsNoDuplicates(text) {
           source: 'specific'
         });
         seenCodes.add(code);
-        console.log('✅ Found specific endorsement:', code, points, 'points');
+        if (DEBUG_MODE) console.log('✅ Found specific endorsement:', code, points, 'points');
       }
     }
   });
@@ -469,13 +475,13 @@ function extractEndorsementsNoDuplicates(text) {
 
 // Calculate total points without double-counting
 function extractTotalPointsNoDuplicates(text) {
-  console.log('🔍 Calculating total points...');
+  if (DEBUG_MODE) console.log('🔍 Calculating total points...');
   
   // Look for explicit point statements first
   const pointsMatch = text.match(/(\d+)\s+Points?/i);
   if (pointsMatch) {
     const points = parseInt(pointsMatch[1]);
-    console.log('✅ Points found:', points);
+    if (DEBUG_MODE) console.log('✅ Points found:', points);
     return points;
   }
   
@@ -483,11 +489,11 @@ function extractTotalPointsNoDuplicates(text) {
   const endorsements = extractEndorsementsNoDuplicates(text);
   if (endorsements.length > 0) {
     const calculatedPoints = endorsements.reduce((sum, endorsement) => sum + endorsement.points, 0);
-    console.log('✅ Points from endorsements:', calculatedPoints);
+    if (DEBUG_MODE) console.log('✅ Points from endorsements:', calculatedPoints);
     return calculatedPoints;
   }
   
-  console.log('ℹ️ No points found - clean license');
+  if (DEBUG_MODE) console.log('ℹ️ No points found - clean license');
   return 0;
 }
 
@@ -517,14 +523,14 @@ function parseDvlaDate(dateStr) {
       return date.toISOString().split('T')[0];
     }
   } catch (e) {
-    console.warn('Could not parse DVLA date:', dateStr);
+    console.warn('⚠️ Could not parse DVLA date:', dateStr);
   }
   return dateStr;
 }
 
 // Validate DVLA data
 function validateDvlaData(dvlaData) {
-  console.log('🔍 Validating DVLA data...');
+  if (DEBUG_MODE) console.log('🔍 Validating DVLA data...');
   
   // Must have check code to be valid DVLA document
   if (!dvlaData.checkCode) {
@@ -587,7 +593,7 @@ function validateDvlaData(dvlaData) {
   
   dvlaData.extractionSuccess = dvlaData.isValid;
   
-  console.log(`🚗 DVLA validation complete: Valid=${dvlaData.isValid}, Issues=${dvlaData.issues.length}, Points=${dvlaData.totalPoints}`);
+  console.log(`✅ DVLA validation complete: Valid=${dvlaData.isValid}, Points=${dvlaData.totalPoints}`);
   return dvlaData;
 }
 
@@ -622,14 +628,15 @@ function calculateInsuranceDecision(dvlaData) {
   
   const hasSeriousOffense = endorsements.some(e => seriousOffenses.includes(e.code));
   
-// ADD THIS LOGGING:
-console.log('🔍 Insurance decision check:', {
-  points: points,
-  endorsementCount: endorsements.length,
-  endorsementCodes: endorsements.map(e => e.code),
-  hasSeriousOffense: hasSeriousOffense,
-  seriousOffensesList: seriousOffenses
-});
+  // KEEP THIS LOG - it's useful for production debugging of insurance decisions
+  console.log('🔍 Insurance decision check:', {
+    points: points,
+    endorsementCount: endorsements.length,
+    endorsementCodes: endorsements.map(e => e.code),
+    hasSeriousOffense: hasSeriousOffense,
+    seriousOffensesList: seriousOffenses
+  });
+  
   if (hasSeriousOffense) {
     decision.approved = false;
     decision.manualReview = true;
@@ -781,7 +788,7 @@ function getSignatureKey(key, dateStamp, regionName, serviceName) {
 
 // POA processing functions
 async function testSinglePoaExtraction(imageData, documentType = 'unknown', licenseAddress = '') {
-  console.log('Processing POA with AWS Textract...');
+  if (DEBUG_MODE) console.log('Processing POA with AWS Textract...');
   
   try {
     // Use AWS Textract to extract text
@@ -799,11 +806,11 @@ async function testSinglePoaExtraction(imageData, documentType = 'unknown', lice
       extractionSuccess: true
     };
     
-    console.log('POA extraction result:', poaData);
+    if (DEBUG_MODE) console.log('POA extraction result:', poaData);
     return poaData;
     
   } catch (error) {
-    console.error('POA extraction error:', error);
+    console.error('❌ POA extraction error:', error);
     return {
       success: false,
       error: error.message,
@@ -894,7 +901,7 @@ function extractAccountNumber(text) {
 
 // Dual POA cross-validation
 async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress) {
-  console.log('🔄 Testing DUAL POA cross-validation workflow');
+  if (DEBUG_MODE) console.log('🔄 Testing DUAL POA cross-validation workflow');
   
   try {
     // Process both with AWS Textract
@@ -950,7 +957,7 @@ async function testDualPoaCrossValidation(imageData1, imageData2, licenseAddress
     };
     
   } catch (error) {
-    console.error('Dual POA error:', error);
+    console.error('❌ Dual POA error:', error);
     return {
       success: false,
       error: error.message,
