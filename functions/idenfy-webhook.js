@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 // File: functions/idenfy-webhook.js
-// COMPLETE VERSION with all fixes for missing fields and file uploads
+// PRODUCTION VERSION with DEBUG_MODE logging controls
+
+// 🔧 DEBUG MODE - Set DEBUG_LOGGING=true in Netlify to enable verbose logs
+const DEBUG_MODE = process.env.DEBUG_LOGGING === 'true';
 
 /**
  * Verify Idenfy webhook signature
@@ -51,7 +54,7 @@ exports.handler = async (event, context) => {
 
   try {
     if (!event.body) {
-      console.log('❌ No webhook body');
+      console.error('❌ No webhook body received');
       return {
         statusCode: 400,
         headers,
@@ -64,7 +67,7 @@ exports.handler = async (event, context) => {
                      event.headers['Idenfy-Signature'];
     
     if (!signature) {
-      console.log('❌ No Idenfy signature header');
+      console.error('❌ No Idenfy signature header');
       return {
         statusCode: 401,
         headers,
@@ -75,7 +78,7 @@ exports.handler = async (event, context) => {
     const isValidSignature = verifyIdenfySignature(signature, event.body);
     
     if (!isValidSignature) {
-      console.log('❌ Invalid Idenfy signature');
+      console.error('❌ Invalid Idenfy signature');
       return {
         statusCode: 403,
         headers,
@@ -90,29 +93,29 @@ exports.handler = async (event, context) => {
 
     const { clientId, scanRef, status, data, platform, final } = webhookData;
 
-// CRITICAL: Prevent duplicate webhook processing
+    // CRITICAL: Prevent duplicate webhook processing
     // BUT allow file completion on retries
     const lastProcessed = await checkRecentProcessing(scanRef);
     
     if (lastProcessed && lastProcessed.isDuplicate) {
-      console.log(`⚠️ DUPLICATE WEBHOOK - Idenfy retry detected!`);
-      console.log(`   ScanRef: ${scanRef}`);
-      console.log(`   Previously processed: ${lastProcessed.minutesAgo} minutes ago`);
+      if (DEBUG_MODE) {
+        console.log(`⚠️ DUPLICATE WEBHOOK - Idenfy retry detected!`);
+        console.log(`   ScanRef: ${scanRef}`);
+        console.log(`   Previously processed: ${lastProcessed.minutesAgo} minutes ago`);
+      }
       
       // Check if we need to complete file uploads
       const clientInfo = parseClientId(clientId);
       if (clientInfo) {
-        console.log(`🔍 Checking if file uploads need completion...`);
+        if (DEBUG_MODE) console.log(`🔍 Checking if file uploads need completion...`);
         const filesNeeded = await checkWhichFilesNeeded(clientInfo.email);
         
         const anyFilesNeeded = Object.values(filesNeeded).some(needed => needed === true);
         
         if (anyFilesNeeded) {
-          console.log(`📁 Files still needed - completing upload:`, filesNeeded);
-          // Don't return - let it continue to upload missing files
-          console.log(`⏭️ Allowing webhook to continue for file completion`);
+          console.log(`📁 Files still needed - completing upload for ${clientInfo.email}`);
         } else {
-          console.log(`✅ All files already uploaded - safe to skip`);
+          if (DEBUG_MODE) console.log(`✅ All files already uploaded - safe to skip`);
           return {
             statusCode: 200,
             headers,
@@ -131,7 +134,7 @@ exports.handler = async (event, context) => {
     await markWebhookProcessing(scanRef);
 
     if (!clientId || !scanRef || !status) {
-      console.log('❌ Missing required webhook data');
+      console.error('❌ Missing required webhook data');
       return {
         statusCode: 400,
         headers,
@@ -141,7 +144,7 @@ exports.handler = async (event, context) => {
 
     // Only process final results
     if (!final) {
-      console.log('⏳ Ignoring non-final webhook result');
+      if (DEBUG_MODE) console.log('⏳ Ignoring non-final webhook result');
       return {
         statusCode: 200,
         headers,
@@ -152,17 +155,13 @@ exports.handler = async (event, context) => {
     console.log('✅ Processing final Idenfy result:', {
       clientId,
       scanRef,
-      overall: status.overall,
-      autoDocument: status.autoDocument,
-      autoFace: status.autoFace,
-      hasAdditionalSteps: !!status.additionalSteps,
-      hasAdditionalPdfs: !!webhookData.additionalStepPdfUrls
+      overall: status.overall
     });
 
     // Extract client info from clientId
     const clientInfo = parseClientId(clientId);
     if (!clientInfo) {
-      console.log('❌ Could not parse client ID:', clientId);
+      console.error('❌ Could not parse client ID:', clientId);
       return {
         statusCode: 400,
         headers,
@@ -170,7 +169,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    console.log('👤 Client info parsed:', clientInfo);
+    if (DEBUG_MODE) console.log('👤 Client info parsed:', clientInfo);
 
     // Process the enhanced verification result with Additional Steps support
     const processResult = await processEnhancedVerificationResult(
@@ -183,7 +182,7 @@ exports.handler = async (event, context) => {
     );
 
     if (processResult.success) {
-      console.log('🎉 Enhanced verification result processed successfully');
+      console.log('🎉 Verification result processed successfully');
       return {
         statusCode: 200,
         headers,
@@ -223,7 +222,9 @@ exports.handler = async (event, context) => {
 // Parse the client ID to extract email and job ID
 function parseClientId(clientId) {
   try {
-       
+    // Format: ooosh_{jobId}_{email}_{timestamp}
+    if (DEBUG_MODE) console.log('🔍 Parsing client ID:', clientId);
+    
     const parts = clientId.split('_');
     if (parts.length >= 4 && parts[0] === 'ooosh') {
       const jobId = parts[1];
@@ -251,14 +252,14 @@ function parseClientId(clientId) {
       // Convert _dot_ to .
       email = email.replace(/_dot_/g, '.');
       
-      console.log('✅ Parsed client ID:', { jobId, email, timestamp });
+      if (DEBUG_MODE) console.log('✅ Parsed client ID:', { jobId, email, timestamp });
       return { email, jobId };
     }
     
-    console.log('❌ Invalid client ID format');
+    console.error('❌ Invalid client ID format');
     return null;
   } catch (error) {
-    console.error('Error parsing client ID:', error);
+    console.error('❌ Error parsing client ID:', error);
     return null;
   }
 }
@@ -266,24 +267,23 @@ function parseClientId(clientId) {
 // Process verification with Additional Steps support
 async function processEnhancedVerificationResult(email, jobId, scanRef, status, data, fullWebhookData) {
   try {
-    console.log('🔄 Processing enhanced verification for:', { email, jobId, scanRef });
+    if (DEBUG_MODE) console.log('🔄 Processing enhanced verification for:', { email, jobId, scanRef });
 
-   // Check if this is Additional Steps re-upload (only if NOT the initial verification)
-// Must have NO primary document data AND have actual POA documents
-const hasOnlyAdditionalSteps = !data?.docFirstName && 
-                               !data?.docLastName && 
-                               !fullWebhookData.fileUrls?.FRONT &&
-                               (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
-                                fullWebhookData.additionalStepPdfUrls?.POA2);
+    // Check if this is Additional Steps re-upload (only if NOT the initial verification)
+    // Must have NO primary document data AND have actual POA documents
+    const hasOnlyAdditionalSteps = !data?.docFirstName && 
+                                   !data?.docLastName && 
+                                   !fullWebhookData.fileUrls?.FRONT &&
+                                   (fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+                                    fullWebhookData.additionalStepPdfUrls?.POA2);
 
-if (hasOnlyAdditionalSteps) {
+    if (hasOnlyAdditionalSteps) {
       const additionalStepsResult = await handleAdditionalStepsReupload(fullWebhookData, { email, jobId });
       
       if (additionalStepsResult.isAdditionalSteps) {
         console.log('🔄 Handling as Additional Steps re-upload');
         
         if (additionalStepsResult.success && additionalStepsResult.poaValidated) {
-          // POA re-validation successful - continue normal workflow
           console.log('✅ POA re-validation successful, continuing to DVLA processing');
           return {
             success: true,
@@ -293,7 +293,6 @@ if (hasOnlyAdditionalSteps) {
             reason: 'POA re-validation successful'
           };
         } else {
-          // POA re-validation failed - send to manual review
           console.log('❌ POA re-validation failed, flagging for manual review');
           return {
             success: true,
@@ -306,46 +305,46 @@ if (hasOnlyAdditionalSteps) {
       }
     }  
 
-   // Continue with normal verification processing...
-    console.log('📋 Processing as normal verification result');
+    // Continue with normal verification processing...
+    if (DEBUG_MODE) console.log('📋 Processing as normal verification result');
 
     // NEW: Check Idenfy's POA validation first (if POAs are present)
-// BUT continue processing even if validation fails - just flag for manual review
-const hasPoaDocuments = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
-                       fullWebhookData.additionalStepPdfUrls?.POA2 ||
-                       fullWebhookData.fileUrls?.UTILITY_BILL ||
-                       fullWebhookData.fileUrls?.POA2;
+    // BUT continue processing even if validation fails - just flag for manual review
+    const hasPoaDocuments = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL || 
+                           fullWebhookData.additionalStepPdfUrls?.POA2 ||
+                           fullWebhookData.fileUrls?.UTILITY_BILL ||
+                           fullWebhookData.fileUrls?.POA2;
 
-let poaValidationFailed = false;
-let poaValidationReason = '';
+    let poaValidationFailed = false;
+    let poaValidationReason = '';
 
-if (hasPoaDocuments) {
-  console.log('🔍 POA documents detected - running Idenfy validation check');
-  const idenfyPoaCheck = checkIdenfyPoaValidation(fullWebhookData);
-  
-  if (!idenfyPoaCheck.approved) {
-    console.log('⚠️ Idenfy POA validation failed:', idenfyPoaCheck.reason);
-    console.log('📋 Continuing with file uploads - will flag for manual review');
-    
-    // Store validation failure details but DON'T return early
-    poaValidationFailed = true;
-    poaValidationReason = idenfyPoaCheck.reason;
-  } else {
-    console.log('✅ Idenfy POA validation passed:', idenfyPoaCheck.reason);
-  }
-} else {
-  console.log('ℹ️ No POA documents in this verification');
-}
+    if (hasPoaDocuments) {
+      if (DEBUG_MODE) console.log('🔍 POA documents detected - running Idenfy validation check');
+      const idenfyPoaCheck = checkIdenfyPoaValidation(fullWebhookData);
+      
+      if (!idenfyPoaCheck.approved) {
+        console.log('⚠️ Idenfy POA validation failed:', idenfyPoaCheck.reason);
+        
+        // Store validation failure details but DON'T return early
+        poaValidationFailed = true;
+        poaValidationReason = idenfyPoaCheck.reason;
+      } else {
+        if (DEBUG_MODE) console.log('✅ Idenfy POA validation passed:', idenfyPoaCheck.reason);
+      }
+    } else {
+      if (DEBUG_MODE) console.log('ℹ️ No POA documents in this verification');
+    }
 
     // Step 1: Analyze Idenfy verification result
     const idenfyResult = analyzeIdenfyVerificationResult(status, data);
-   
+    if (DEBUG_MODE) console.log('📋 Idenfy verification analysis:', idenfyResult);
+
     // Step 2: Check if driver exists, CREATE if not, then UPDATE
-    console.log('👤 Checking if driver exists in Board A...');
+    if (DEBUG_MODE) console.log('👤 Checking if driver exists in Board A...');
     const driverExists = await checkDriverExists(email);
     
     if (!driverExists) {
-      console.log('📝 Creating new driver in Board A...');
+      console.log('📝 Creating new driver in Board A for:', email);
       const createResult = await createDriverInBoardA(email, jobId, idenfyResult);
       
       if (!createResult.success) {
@@ -355,7 +354,7 @@ if (hasPoaDocuments) {
     }
 
     // Step 3: Update Board A with Idenfy results (includes all extra fields)
-    console.log('💾 Updating Board A with Idenfy results...');
+    if (DEBUG_MODE) console.log('💾 Updating Board A with Idenfy results...');
     const boardAUpdateResult = await updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData);
 
     if (!boardAUpdateResult.success) {
@@ -364,59 +363,61 @@ if (hasPoaDocuments) {
 
     console.log('✅ Board A updated successfully');
 
- // Step 4: Save documents to Monday.com with actual file upload
-await saveIdenfyDocumentsToMonday(email, fullWebhookData);
+    // Step 4: Save documents to Monday.com with actual file upload
+    await saveIdenfyDocumentsToMonday(email, fullWebhookData);
 
-// Step 4.5: Process POA documents immediately if present
-const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
+    // Step 4.5: Process POA documents immediately if present
+    const poaProcessingResult = await processPoaDocumentsImmediately(email, fullWebhookData);
 
-// Step 4.6: Update status based on POA validation
-if (poaValidationFailed) {
-  console.log('⚠️ Updating Monday.com with POA validation failure');
-  
-  await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'update-driver-board-a',
-      email: email,
-      updates: {
-        overallStatus: 'Manual Review Required',
-        lastUpdated: new Date().toISOString().split('T')[0]
+    // Step 4.6: Update status based on POA validation
+    if (poaValidationFailed) {
+      console.log('⚠️ Updating Monday.com with POA validation failure');
+      
+      await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-driver-board-a',
+          email: email,
+          updates: {
+            overallStatus: 'Manual Review Required',
+            lastUpdated: new Date().toISOString().split('T')[0]
+          }
+        })
+      });
+      
+      // Send email notification
+      console.log('📧 Sending manual review notification to info@oooshtours.co.uk');
+      
+      try {
+        // Simple email notification using webhook-to-email service
+        await fetch(`${process.env.URL}/.netlify/functions/send-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: 'info@oooshtours.co.uk',
+            subject: `Driver Verification Needs Manual Review`,
+            message: `Driver requires manual review:\n\nEmail: ${email}\nJob ID: ${jobId}\nReason: ${poaValidationReason}\n\nAll documents have been uploaded to Monday.com for your review.`
+          })
+        });
+        
+        console.log('✅ Email notification sent');
+      } catch (emailError) {
+        console.error('⚠️ Could not send email notification:', emailError.message);
+        // Don't fail the whole process if email fails
       }
-    })
-  });
-  
-  // Send email notification
-  console.log('📧 Sending manual review notification to info@oooshtours.co.uk');
-  
-  try {
-    // Simple email notification using webhook-to-email service
-    // You can replace this with SendGrid, Mailgun, or Monday.com automation
-    await fetch(`${process.env.URL}/.netlify/functions/send-notification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: 'info@oooshtours.co.uk',
-        subject: `Driver Verification Needs Manual Review`,
-        message: `Driver requires manual review:\n\nEmail: ${email}\nJob ID: ${jobId}\nReason: ${poaValidationReason}\n\nAll documents have been uploaded to Monday.com for your review.`
-      })
-    });
+    }
     
-    console.log('✅ Email notification sent');
-  } catch (emailError) {
-    console.log('⚠️ Could not send email notification:', emailError.message);
-    // Don't fail the whole process if email fails
-  }
-}
-    console.log('📊 POA processing result:', {
-      processed: poaProcessingResult.poasProcessed,
-      approved: poaProcessingResult.approved,
-      isDuplicate: poaProcessingResult.isDuplicate
-    });
+    if (DEBUG_MODE) {
+      console.log('📊 POA processing result:', {
+        processed: poaProcessingResult.poasProcessed,
+        approved: poaProcessingResult.approved,
+        isDuplicate: poaProcessingResult.isDuplicate
+      });
+    }
 
-   // Step 5: NOW update validity dates as final confirmation
-    console.log('📅 Setting validity dates as final step...');
+    // Step 5: NOW update validity dates as final confirmation
+    if (DEBUG_MODE) console.log('📅 Setting validity dates as final step...');
     await setValidityDatesAfterVerification(email, data);
     console.log('✅ Validity dates updated - verification complete');
 
@@ -466,14 +467,14 @@ if (poaValidationFailed) {
 // Detect and handle Additional Steps (selective POA re-upload)
 async function handleAdditionalStepsReupload(webhookData, clientInfo) {
   try {
-    console.log('🔍 Checking for Additional Steps re-upload...');
+    if (DEBUG_MODE) console.log('🔍 Checking for Additional Steps re-upload...');
     
     // Check if this is an Additional Steps callback
     const hasAdditionalSteps = webhookData.status?.additionalSteps;
     const hasAdditionalPdfs = webhookData.additionalStepPdfUrls;
     
     if (!hasAdditionalSteps && !hasAdditionalPdfs) {
-      console.log('📋 No Additional Steps detected - regular verification');
+      if (DEBUG_MODE) console.log('📋 No Additional Steps detected - regular verification');
       return { isAdditionalSteps: false };
     }
 
@@ -511,7 +512,7 @@ async function handleAdditionalStepsReupload(webhookData, clientInfo) {
 // Process Additional Steps re-upload
 async function processAdditionalStepsReupload(email, additionalPdfs, additionalStatus, scanRef) {
   try {
-    console.log('📄 Processing Additional Steps re-upload for:', email);
+    if (DEBUG_MODE) console.log('📄 Processing Additional Steps re-upload for:', email);
 
     // Extract new POA document URLs
     const newPoaDocs = [];
@@ -524,17 +525,17 @@ async function processAdditionalStepsReupload(email, additionalPdfs, additionalS
     }
 
     if (newPoaDocs.length === 0) {
-      console.log('⚠️ No POA documents found in Additional Steps');
+      console.error('⚠️ No POA documents found in Additional Steps');
       return { success: false, error: 'No POA documents in re-upload' };
     }
 
-    console.log(`📋 Found ${newPoaDocs.length} new POA documents`);
+    if (DEBUG_MODE) console.log(`📋 Found ${newPoaDocs.length} new POA documents`);
 
     // Download and process new POA with AWS OCR
     const ocrResult = await processNewPoaWithOcr(newPoaDocs[0]);
     
     if (!ocrResult.success) {
-      console.log('❌ OCR processing failed for new POA');
+      console.error('❌ OCR processing failed for new POA');
       return { 
         success: true, // Still success from webhook perspective
         poaValidated: false,
@@ -593,7 +594,7 @@ async function processAdditionalStepsReupload(email, additionalPdfs, additionalS
 // Process new POA with AWS OCR
 async function processNewPoaWithOcr(poaDoc) {
   try {
-    console.log('🔍 Running OCR on new POA document...');
+    if (DEBUG_MODE) console.log('🔍 Running OCR on new POA document...');
 
     // Call your existing AWS Textract function
     const response = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
@@ -634,7 +635,7 @@ async function processNewPoaWithOcr(poaDoc) {
 // Validate POA source diversity against existing documents
 async function validatePoaSourceDiversity(email, newPoaData) {
   try {
-    console.log('🔍 Validating source diversity for new POA...');
+    if (DEBUG_MODE) console.log('🔍 Validating source diversity for new POA...');
 
     // Get existing driver data from Monday.com
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
@@ -664,8 +665,10 @@ async function validatePoaSourceDiversity(email, newPoaData) {
       driverData.driver.poa2SourceType || 'unknown'
     ];
 
-    console.log('📋 Existing POA sources:', existingPoaSources);
-    console.log('📋 New POA source:', newPoaData.sourceType);
+    if (DEBUG_MODE) {
+      console.log('📋 Existing POA sources:', existingPoaSources);
+      console.log('📋 New POA source:', newPoaData.sourceType);
+    }
 
     // Check if new POA is different source type
     const isDifferentSource = !existingPoaSources.includes(newPoaData.sourceType);
@@ -691,7 +694,7 @@ async function validatePoaSourceDiversity(email, newPoaData) {
 // Update Monday.com with re-validation results
 async function updateMondayWithRevalidation(email, revalidationData) {
   try {
-    console.log('📊 Updating Monday.com with re-validation results...');
+    if (DEBUG_MODE) console.log('📊 Updating Monday.com with re-validation results...');
 
     const updateData = {
       // WEBHOOK TIMESTAMP - for ProcessingHub detection
@@ -874,18 +877,20 @@ function analyzeIdenfyVerificationResult(status, data) {
       break;
       
     default:
-      console.log('❓ Unknown verification status:', status.overall);
+      console.error('❓ Unknown verification status:', status.overall);
       result.denied = true;
   }
 
   return result;
 }
 
-//updateBoardAWithIdenfyResults function
+// Update Board A with Idenfy results
 async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWebhookData) {
   try {
-    console.log('💾 Updating Board A with Idenfy data...');
-    console.log('📊 Idenfy data fields:', Object.keys(fullWebhookData.data || {}));
+    if (DEBUG_MODE) {
+      console.log('💾 Updating Board A with Idenfy data...');
+      console.log('📊 Idenfy data fields:', Object.keys(fullWebhookData.data || {}));
+    }
 
     const idenfyData = fullWebhookData.data || {};
 
@@ -901,18 +906,18 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
 
     const existingDriverData = await existingDriverResponse.json();
     const preservedDatePassedTest = existingDriverData.driver?.datePassedTest || '';
-    console.log('📅 Preserved datePassedTest:', preservedDatePassedTest);
+    if (DEBUG_MODE) console.log('📅 Preserved datePassedTest:', preservedDatePassedTest);
 
     // Extract POA address data if present (for cross-validation)
     let poaAddress = '';
     if (fullWebhookData.additionalData?.UTILITY_BILL?.address) {
       const addressData = fullWebhookData.additionalData.UTILITY_BILL.address;
       poaAddress = addressData.value || addressData || '';
-      console.log('📍 POA Address extracted:', poaAddress);
+      if (DEBUG_MODE) console.log('📍 POA Address extracted:', poaAddress);
     } else if (fullWebhookData.additionalData?.POA2?.address) {
       const addressData = fullWebhookData.additionalData.POA2.address;
       poaAddress = addressData.value || addressData || '';
-      console.log('📍 POA2 Address extracted:', poaAddress);
+      if (DEBUG_MODE) console.log('📍 POA2 Address extracted:', poaAddress);
     }
     
     // Check for provisional license only (no date checking)
@@ -932,7 +937,7 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
           lastUpdated: new Date().toISOString().split('T')[0]
         };
         
-        const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
+        await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -950,7 +955,7 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
       }
     }
     
-// Build update data with all available fields
+    // Build update data with all available fields
     const updateData = {
       // CRITICAL: Always include email
       email: email,
@@ -1022,24 +1027,16 @@ async function updateBoardAWithIdenfyResults(email, jobId, idenfyResult, fullWeb
                                   poaAddress;
     }
     
-   // NOTE: Validity dates are now set AFTER identity data confirms updated
+    // NOTE: Validity dates are now set AFTER identity data confirms updated
     // This prevents race conditions with webhook retries
 
-// NOTE: DVLA validity is set separately in DVLAProcessingPage.js when DVLA check completes
-// Do NOT set dvlaValidUntil here during license verification
+    // NOTE: DVLA validity is set separately in DVLAProcessingPage.js when DVLA check completes
+    // Do NOT set dvlaValidUntil here during license verification
 
-    console.log('📊 Final updateData fields:', Object.keys(updateData).length, 'fields');
-    console.log('📋 Fields being updated:', Object.keys(updateData).join(', '));
-
-    // Log what we're sending
-    console.log('📤 Updating Monday.com with:', {
-      email: updateData.email,
-      hasLicenseValidFrom: !!updateData.licenseValidFrom,
-      hasAuthority: !!updateData.licenseIssuedBy,
-      hasNationality: !!updateData.nationality,
-      hasHomeAddress: !!updateData.homeAddress,
-      fieldsIncluded: Object.keys(updateData)
-    });
+    if (DEBUG_MODE) {
+      console.log('📊 Final updateData fields:', Object.keys(updateData).length, 'fields');
+      console.log('📋 Fields being updated:', Object.keys(updateData).join(', '));
+    }
 
     // Update Monday.com
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
@@ -1089,13 +1086,15 @@ async function setValidityDatesAfterVerification(email, idenfyData) {
     const isPassportVerification = idenfyData.docType === 'PASSPORT';
     if (isPassportVerification) {
       updates.passportValidUntil = addDays(today, 90);
-      console.log('📘 Passport validity set to:', updates.passportValidUntil);
+      if (DEBUG_MODE) console.log('📘 Passport validity set to:', updates.passportValidUntil);
     }
     
-    console.log('📅 Final validity dates:', {
-      licenseNextCheckDue: updates.licenseNextCheckDue,
-      passportValidUntil: updates.passportValidUntil || 'N/A'
-    });
+    if (DEBUG_MODE) {
+      console.log('📅 Final validity dates:', {
+        licenseNextCheckDue: updates.licenseNextCheckDue,
+        passportValidUntil: updates.passportValidUntil || 'N/A'
+      });
+    }
     
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
       method: 'POST',
@@ -1113,59 +1112,7 @@ async function setValidityDatesAfterVerification(email, idenfyData) {
       throw new Error(`Validity date update failed: ${response.status}`);
     }
     
-    console.log('✅ Validity dates confirmed updated');
-    
-  } catch (error) {
-    console.error('❌ Error setting validity dates:', error);
-    throw error;
-  }
-}
-
-// Set validity dates AFTER identity data is confirmed updated
-async function setValidityDatesAfterVerification(email, idenfyData) {
-  try {
-    const today = new Date();
-    const addDays = (date, days) => {
-      const result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result.toISOString().split('T')[0];
-    };
-    
-    const updates = {
-      email: email,
-      licenseNextCheckDue: addDays(today, 90),
-      lastUpdated: today.toISOString().split('T')[0]
-    };
-    
-    // Set passport validity if this was a passport verification
-    const isPassportVerification = idenfyData.docType === 'PASSPORT';
-    if (isPassportVerification) {
-      updates.passportValidUntil = addDays(today, 90);
-      console.log('📘 Passport validity set to:', updates.passportValidUntil);
-    }
-    
-    console.log('📅 Final validity dates:', {
-      licenseNextCheckDue: updates.licenseNextCheckDue,
-      passportValidUntil: updates.passportValidUntil || 'N/A'
-    });
-    
-    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'update-driver-board-a',
-        email: email,
-        updates: updates
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Failed to update validity dates:', errorText);
-      throw new Error(`Validity date update failed: ${response.status}`);
-    }
-    
-    console.log('✅ Validity dates confirmed updated');
+    if (DEBUG_MODE) console.log('✅ Validity dates confirmed updated');
     
   } catch (error) {
     console.error('❌ Error setting validity dates:', error);
@@ -1176,7 +1123,7 @@ async function setValidityDatesAfterVerification(email, idenfyData) {
 // Check which files need uploading based on existence AND validity dates
 async function checkWhichFilesNeeded(email) {
   try {
-    console.log('🔍 Checking which files need uploading for:', email);
+    if (DEBUG_MODE) console.log('🔍 Checking which files need uploading for:', email);
     
     // Get driver data from Monday.com
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
@@ -1189,7 +1136,7 @@ async function checkWhichFilesNeeded(email) {
     });
     
     if (!response.ok) {
-      console.log('📋 Driver not found - will upload all files');
+      if (DEBUG_MODE) console.log('📋 Driver not found - will upload all files');
       return {
         needFront: true,
         needBack: true,
@@ -1204,7 +1151,7 @@ async function checkWhichFilesNeeded(email) {
     const driver = result.driver;
     
     if (!driver) {
-      console.log('📋 No driver data - will upload all files');
+      if (DEBUG_MODE) console.log('📋 No driver data - will upload all files');
       return {
         needFront: true,
         needBack: true,
@@ -1241,14 +1188,16 @@ async function checkWhichFilesNeeded(email) {
       needPassport: !isStillValid(driver.passportValidUntil)
     };
     
-    console.log('📊 File upload requirements:', filesNeeded);
-    console.log('📅 Validity dates:', {
-      licenseNextCheckDue: driver.licenseNextCheckDue,
-      poa1ValidUntil: driver.poa1ValidUntil,
-      poa2ValidUntil: driver.poa2ValidUntil,
-      dvlaValidUntil: driver.dvlaValidUntil,
-      passportValidUntil: driver.passportValidUntil
-    });
+    if (DEBUG_MODE) {
+      console.log('📊 File upload requirements:', filesNeeded);
+      console.log('📅 Validity dates:', {
+        licenseNextCheckDue: driver.licenseNextCheckDue,
+        poa1ValidUntil: driver.poa1ValidUntil,
+        poa2ValidUntil: driver.poa2ValidUntil,
+        dvlaValidUntil: driver.dvlaValidUntil,
+        passportValidUntil: driver.passportValidUntil
+      });
+    }
     
     return filesNeeded;
     
@@ -1268,14 +1217,17 @@ async function checkWhichFilesNeeded(email) {
 
 async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
   try {
-    console.log('📸 Saving Idenfy documents to Monday.com...');
+    if (DEBUG_MODE) console.log('📸 Saving Idenfy documents to Monday.com...');
     
     // SMART CHECK: Which files actually need uploading?
     const filesNeeded = await checkWhichFilesNeeded(email);
     
-    // 🔍 DEBUG: Log what Idenfy actually sends
-    JSON.stringify(fullWebhookData.additionalStepPdfUrls, null, 2));
-    JSON.stringify(fullWebhookData.fileUrls, null, 2));
+    if (DEBUG_MODE) {
+      console.log('🔍 RAW additionalStepPdfUrls:', 
+        JSON.stringify(fullWebhookData.additionalStepPdfUrls, null, 2));
+      console.log('🔍 RAW fileUrls:', 
+        JSON.stringify(fullWebhookData.fileUrls, null, 2));
+    }
     
     // CRITICAL: Store POA URLs FIRST (before slow file uploads)
     // Check BOTH additionalStepPdfUrls (PDFs) AND fileUrls (images)
@@ -1285,50 +1237,54 @@ async function saveIdenfyDocumentsToMonday(email, fullWebhookData) {
     // First check additionalStepPdfUrls (PDF uploads via Additional Steps)
     const utilityBills = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL;
     
-   if (Array.isArray(utilityBills)) {
-  console.log('📋 Found UTILITY_BILL as ARRAY in additionalStepPdfUrls:', utilityBills.length, 'items');
-  poa1Url = utilityBills[0] || '';
-  poa2Url = utilityBills[1] || '';
-} else if (utilityBills) {
-  console.log('📋 Found UTILITY_BILL as single value in additionalStepPdfUrls');
-  poa1Url = utilityBills;
-}
+    if (Array.isArray(utilityBills)) {
+      if (DEBUG_MODE) console.log('📋 Found UTILITY_BILL as ARRAY in additionalStepPdfUrls:', utilityBills.length, 'items');
+      poa1Url = utilityBills[0] || '';
+      poa2Url = utilityBills[1] || '';
+    } else if (utilityBills) {
+      if (DEBUG_MODE) console.log('📋 Found UTILITY_BILL as single value in additionalStepPdfUrls');
+      poa1Url = utilityBills;
+    }
 
-// Check for POA2 in additionalStepPdfUrls independently
-if (!poa2Url && fullWebhookData.additionalStepPdfUrls?.POA2) {
-  console.log('📋 Found POA2 in additionalStepPdfUrls (PDF upload)');
-  poa2Url = fullWebhookData.additionalStepPdfUrls.POA2;
-}
+    // Check for POA2 in additionalStepPdfUrls independently
+    if (!poa2Url && fullWebhookData.additionalStepPdfUrls?.POA2) {
+      if (DEBUG_MODE) console.log('📋 Found POA2 in additionalStepPdfUrls (PDF upload)');
+      poa2Url = fullWebhookData.additionalStepPdfUrls.POA2;
+    }
 
-// If not found in additionalStepPdfUrls, check fileUrls (image uploads)
-if (!poa1Url && fullWebhookData.fileUrls?.UTILITY_BILL) {
-  console.log('📋 Found UTILITY_BILL in fileUrls (image upload)');
-  poa1Url = fullWebhookData.fileUrls.UTILITY_BILL;
-}
+    // If not found in additionalStepPdfUrls, check fileUrls (image uploads)
+    if (!poa1Url && fullWebhookData.fileUrls?.UTILITY_BILL) {
+      if (DEBUG_MODE) console.log('📋 Found UTILITY_BILL in fileUrls (image upload)');
+      poa1Url = fullWebhookData.fileUrls.UTILITY_BILL;
+    }
 
-if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
-  console.log('📋 Found POA2 in fileUrls (image upload)');
-  poa2Url = fullWebhookData.fileUrls.POA2;
-}
-       
+    if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
+      if (DEBUG_MODE) console.log('📋 Found POA2 in fileUrls (image upload)');
+      poa2Url = fullWebhookData.fileUrls.POA2;
+    }
+    
+    if (DEBUG_MODE) console.log('📍 Extracted URLs:', { poa1Url: !!poa1Url, poa2Url: !!poa2Url });
+    
     // NEW: Extract Idenfy's validation results for both POAs
     const idenfyPoa1Validation = fullWebhookData.data?.additionalData?.UTILITY_BILL?.address;
     const idenfyPoa2Validation = fullWebhookData.data?.additionalData?.POA2?.address;
     
-    console.log('📋 Idenfy POA validation results:', {
-      poa1: {
-        extracted: idenfyPoa1Validation?.value || 'Not extracted',
-        status: idenfyPoa1Validation?.status || 'No status'
-      },
-      poa2: {
-        extracted: idenfyPoa2Validation?.value || 'Not extracted',
-        status: idenfyPoa2Validation?.status || 'No status'
-      },
-      overallStatus: fullWebhookData.status?.additionalSteps
-    });
+    if (DEBUG_MODE) {
+      console.log('📋 Idenfy POA validation results:', {
+        poa1: {
+          extracted: idenfyPoa1Validation?.value || 'Not extracted',
+          status: idenfyPoa1Validation?.status || 'No status'
+        },
+        poa2: {
+          extracted: idenfyPoa2Validation?.value || 'Not extracted',
+          status: idenfyPoa2Validation?.status || 'No status'
+        },
+        overallStatus: fullWebhookData.status?.additionalSteps
+      });
+    }
     
     if (poa1Url || poa2Url) {
-      console.log('📝 Storing POA URLs in text fields FIRST...');
+      if (DEBUG_MODE) console.log('📝 Storing POA URLs in text fields FIRST...');
       
       try {
         await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
@@ -1344,15 +1300,15 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
           })
         });
         
-        console.log('✅ POA URLs stored successfully BEFORE file uploads');
+        console.log('✅ POA URLs stored successfully');
       } catch (urlError) {
         console.error('⚠️ Failed to store URLs (continuing anyway):', urlError.message);
       }
     }
     
- // SMART DOCUMENT TYPE DETECTION
+    // SMART DOCUMENT TYPE DETECTION
     const isPassportVerification = fullWebhookData.data?.docType === 'PASSPORT';
-    console.log('📋 Document type detected:', isPassportVerification ? 'PASSPORT' : 'DRIVING LICENCE');
+    if (DEBUG_MODE) console.log('📋 Document type detected:', isPassportVerification ? 'PASSPORT' : 'DRIVING LICENCE');
     
     // Map all possible document URLs with smart filtering
     const documentMappings = [];
@@ -1365,7 +1321,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         url: fullWebhookData.fileUrls.FRONT,
         needed: isPassportVerification ? filesNeeded.needPassport : filesNeeded.needFront
       });
-      console.log(`📄 FRONT mapped to: ${isPassportVerification ? 'passport' : 'license_front'}`);
+      if (DEBUG_MODE) console.log(`📄 FRONT mapped to: ${isPassportVerification ? 'passport' : 'license_front'}`);
     }
     
     // Add BACK file - only for driving licences (passports don't have back)
@@ -1376,7 +1332,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         url: fullWebhookData.fileUrls.BACK,
         needed: filesNeeded.needBack
       });
-      console.log('📄 BACK mapped to: license_back');
+      if (DEBUG_MODE) console.log('📄 BACK mapped to: license_back');
     }
     
     // Add POA documents (both passport and licence verifications can have POAs)
@@ -1402,12 +1358,12 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
     const uploadResults = [];
     for (const mapping of documentMappings) {
       if (!mapping.url) {
-        console.log(`⏭️ Skipping ${mapping.idenfyField} - no URL provided`);
+        if (DEBUG_MODE) console.log(`⏭️ Skipping ${mapping.idenfyField} - no URL provided`);
         continue;
       }
       
       if (!mapping.needed) {
-        console.log(`✅ Skipping ${mapping.idenfyField} - file still valid, no upload needed`);
+        console.log(`✅ Skipping ${mapping.idenfyField} - file still valid`);
         uploadResults.push({ 
           field: mapping.idenfyField, 
           success: true, 
@@ -1417,13 +1373,11 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         continue;
       }
       
-      console.log(`📤 Processing ${mapping.idenfyField} - file needed (expired or missing)`);
-      
-      console.log(`📤 Processing ${mapping.idenfyField} from URL: ${mapping.url.substring(0, 50)}...`);
+      console.log(`📤 Processing ${mapping.idenfyField} - file upload needed`);
       
       try {
         // Download the file from Idenfy
-        console.log(`⬇️ Downloading ${mapping.idenfyField} from Idenfy...`);
+        if (DEBUG_MODE) console.log(`⬇️ Downloading ${mapping.idenfyField} from Idenfy...`);
         const fileResponse = await fetch(mapping.url);
 
         if (!fileResponse.ok) {
@@ -1441,7 +1395,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         const buffer = Buffer.from(arrayBuffer);
         const base64Data = buffer.toString('base64');
         
-        console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
+        if (DEBUG_MODE) console.log(`📦 Downloaded ${mapping.idenfyField}: ${buffer.length} bytes`);
 
         // Check actual file content using magic bytes
         const isPDF = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
@@ -1449,13 +1403,13 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
         const isWEBP = buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
 
-        // Log what we actually found for debugging
-        console.log(`🔍 Magic bytes for ${mapping.idenfyField}:`, 
-          buffer.slice(0, 12).toString('hex').toUpperCase());
-        
-        // Also log ASCII representation for first 4 bytes to verify PDF
-        const asciiCheck = buffer.slice(0, 4).toString('ascii');
-        console.log(`📝 First 4 bytes as ASCII: "${asciiCheck}"`);
+        if (DEBUG_MODE) {
+          console.log(`🔍 Magic bytes for ${mapping.idenfyField}:`, 
+            buffer.slice(0, 12).toString('hex').toUpperCase());
+          
+          const asciiCheck = buffer.slice(0, 4).toString('ascii');
+          console.log(`📝 First 4 bytes as ASCII: "${asciiCheck}"`);
+        }
         
         let extension = 'jpg'; // default
         let mimeType = 'image/jpeg';
@@ -1463,30 +1417,32 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
         if (isPDF) {
           extension = 'pdf';
           mimeType = 'application/pdf';
-          console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
+          if (DEBUG_MODE) console.log(`📄 Verified PDF format for ${mapping.idenfyField}`);
         } else if (isPNG) {
           extension = 'png';
           mimeType = 'image/png';
-          console.log(`🖼️ Verified PNG format for ${mapping.idenfyField}`);
+          if (DEBUG_MODE) console.log(`🖼️ Verified PNG format for ${mapping.idenfyField}`);
         } else if (isJPEG) {
           extension = 'jpg';
           mimeType = 'image/jpeg';
-          console.log(`📸 Verified JPEG format for ${mapping.idenfyField}`);
+          if (DEBUG_MODE) console.log(`📸 Verified JPEG format for ${mapping.idenfyField}`);
         } else if (isWEBP) {
           // Convert WEBP to JPEG for Monday.com compatibility
           extension = 'jpg';
           mimeType = 'image/jpeg';
-          console.log(`🌐 WEBP detected for ${mapping.idenfyField} - will upload as JPEG`);
+          if (DEBUG_MODE) console.log(`🌐 WEBP detected for ${mapping.idenfyField} - will upload as JPEG`);
         } else {
           // FALLBACK - assume JPEG if we can't identify
-          console.log(`⚠️ Unknown format for ${mapping.idenfyField}, defaulting to JPEG`);
-          console.log(`   First 20 bytes:`, buffer.slice(0, 20).toString('hex'));
+          if (DEBUG_MODE) {
+            console.log(`⚠️ Unknown format for ${mapping.idenfyField}, defaulting to JPEG`);
+            console.log(`   First 20 bytes:`, buffer.slice(0, 20).toString('hex'));
+          }
           extension = 'jpg';
           mimeType = 'image/jpeg';
         }
                    
         // Upload to Monday.com via monday-integration
-        console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
+        if (DEBUG_MODE) console.log(`⬆️ Uploading ${mapping.idenfyField} to Monday.com as ${mapping.fileType}.${extension}...`);
         const uploadResponse = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1532,7 +1488,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-  // Log summary
+    // Log summary
     const successCount = uploadResults.filter(r => r.success).length;
     const failCount = uploadResults.filter(r => !r.success).length;
     
@@ -1548,7 +1504,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
       );
       
       if (hasLicenseUploads) {
-        console.log('✅ License files uploaded - setting licenseNextCheckDue now');
+        console.log('✅ License files uploaded - setting licenseNextCheckDue');
         const today = new Date();
         const validUntil = new Date(today);
         validUntil.setDate(validUntil.getDate() + 90);
@@ -1566,7 +1522,7 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
           })
         });
         
-        console.log('✅ licenseNextCheckDue set immediately after upload');
+        if (DEBUG_MODE) console.log('✅ licenseNextCheckDue set immediately after upload');
       }
     }
            
@@ -1585,9 +1541,9 @@ if (!poa2Url && fullWebhookData.fileUrls?.POA2) {
 // Process POA documents immediately for validation
 async function processPoaDocumentsImmediately(email, fullWebhookData) {
   try {
-    console.log('🔍 Checking for POA documents to process...');
+    if (DEBUG_MODE) console.log('🔍 Checking for POA documents to process...');
     
-   // Extract POA URLs from webhook data (handle array format)
+    // Extract POA URLs from webhook data (handle array format)
     const utilityBills = fullWebhookData.additionalStepPdfUrls?.UTILITY_BILL;
     let poa1Url, poa2Url;
     
@@ -1604,15 +1560,17 @@ async function processPoaDocumentsImmediately(email, fullWebhookData) {
                 fullWebhookData.fileUrls?.BANK_STATEMENT;
     }
     
-    console.log('📋 POA URLs extracted:', { 
-      hasPoa1: !!poa1Url, 
-      hasPoa2: !!poa2Url,
-      wasArray: Array.isArray(utilityBills)
-    });
+    if (DEBUG_MODE) {
+      console.log('📋 POA URLs extracted:', { 
+        hasPoa1: !!poa1Url, 
+        hasPoa2: !!poa2Url,
+        wasArray: Array.isArray(utilityBills)
+      });
+    }
     
     // No POAs? That's fine - might be license-only revalidation
     if (!poa1Url && !poa2Url) {
-      console.log('ℹ️ No POA documents in this verification - likely license-only');
+      if (DEBUG_MODE) console.log('ℹ️ No POA documents in this verification - likely license-only');
       return {
         success: true,
         poasProcessed: false,
@@ -1638,7 +1596,7 @@ async function processPoaDocumentsImmediately(email, fullWebhookData) {
       };
     }
     
-   console.log('📋 Found both POA documents - checking if they are PDFs...');
+    if (DEBUG_MODE) console.log('📋 Found both POA documents - checking if they are PDFs...');
     
     // Check if these are PDFs (they usually are from Idenfy Additional Steps)
     const isPDF1 = poa1Url && (poa1Url.includes('.pdf') || poa1Url.includes('UTILITY_BILL'));
@@ -1665,7 +1623,7 @@ async function processPoaDocumentsImmediately(email, fullWebhookData) {
     }
     
     // Only continue with OCR if we have non-PDF images
-    console.log('📋 Processing image POA documents for validation...');
+    if (DEBUG_MODE) console.log('📋 Processing image POA documents for validation...');
     
     // Call document-processor for dual POA validation
     const validationResponse = await fetch(`${process.env.URL}/.netlify/functions/document-processor`, {
@@ -1755,72 +1713,19 @@ async function updatePoaValidationResults(email, updates) {
     });
     
     if (!response.ok) {
-      console.error('Failed to update POA validation results');
+      console.error('❌ Failed to update POA validation results');
     }
     
     return response.json();
   } catch (error) {
-    console.error('Error updating Monday with POA results:', error);
-  }
-}
-
-// Update document validity dates with email included
-async function updateDocumentValidityDates(email, webhookData) {
-  try {
-    console.log('📅 Updating document validity dates...');
-    
-    const today = new Date();
-    const addDays = (date, days) => {
-      const result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result.toISOString().split('T')[0];
-    };
-    
-    // Set validity dates AFTER file uploads complete
-    // This way retry webhooks know which files still need uploading
-    const updates = {
-      email: email,
-      
-      // License validity (set after license files upload)
-      licenseNextCheckDue: addDays(today, 90),
-      
-      // DVLA validity (set after DVLA file uploads if applicable)
-      dvlaValidUntil: addDays(today, 90),
-      
-      lastUpdated: today.toISOString().split('T')[0]
-    };
-    
-    console.log('📅 Setting validity dates:', {
-      dvla: updates.dvlaValidUntil,
-      nextCheck: updates.licenseNextCheckDue
-    });
-    
-    const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'update-driver-board-a',
-        email: email,
-        updates: updates
-      })
-    });
-    
-    if (response.ok) {
-      console.log('✅ Document validity dates updated');
-    } else {
-      const errorText = await response.text();
-      console.error('❌ Failed to update validity dates:', errorText);
-    }
-    
-  } catch (error) {
-    console.error('❌ Error updating validity dates:', error);
+    console.error('❌ Error updating Monday with POA results:', error);
   }
 }
 
 // Process POA validation for UK drivers (LEGACY - kept for backward compatibility)
 async function processPoaValidation(idenfyData, fullWebhookData) {
   try {
-    console.log('🔍 Processing POA validation for UK driver...');
+    if (DEBUG_MODE) console.log('🔍 Processing POA validation for UK driver...');
 
     // Extract POA document URLs from Idenfy data
     const poaDocs = [];
@@ -1840,10 +1745,10 @@ async function processPoaValidation(idenfyData, fullWebhookData) {
       }
     }
 
-    console.log(`📄 Found ${poaDocs.length} POA documents for validation`);
+    if (DEBUG_MODE) console.log(`📄 Found ${poaDocs.length} POA documents for validation`);
 
     if (poaDocs.length < 2) {
-      console.log('⚠️ Insufficient POA documents for validation');
+      console.error('⚠️ Insufficient POA documents for validation');
       return { 
         success: false, 
         error: 'Need 2 POA documents for validation',
@@ -1851,7 +1756,7 @@ async function processPoaValidation(idenfyData, fullWebhookData) {
       };
     }
 
-    console.log('✅ POA validation passed (mock for now)');
+    if (DEBUG_MODE) console.log('✅ POA validation passed (mock for now)');
     
     return {
       success: true,
@@ -1868,7 +1773,7 @@ async function processPoaValidation(idenfyData, fullWebhookData) {
 // Track webhook processing to prevent duplicates
 async function checkRecentProcessing(scanRef) {
   try {
-    console.log(`🔍 Checking if scanRef already processed: ${scanRef}`);
+    if (DEBUG_MODE) console.log(`🔍 Checking if scanRef already processed: ${scanRef}`);
     
     // Query Monday.com Board A for this scanRef
     const query = `
@@ -1918,7 +1823,7 @@ async function checkRecentProcessing(scanRef) {
         const now = new Date();
         const minutesAgo = (now - lastProcessedTime) / (1000 * 60);
         
-        console.log(`📊 ScanRef found! Last processed ${minutesAgo.toFixed(1)} minutes ago`);
+        if (DEBUG_MODE) console.log(`📊 ScanRef found! Last processed ${minutesAgo.toFixed(1)} minutes ago`);
         
         // If processed within last 5 minutes, consider it a duplicate
         if (minutesAgo < 5) {
@@ -1929,17 +1834,17 @@ async function checkRecentProcessing(scanRef) {
             minutesAgo: minutesAgo.toFixed(1)
           };
         } else {
-          console.log(`✅ Old processing (${minutesAgo.toFixed(1)} min ago) - allowing reprocessing`);
+          if (DEBUG_MODE) console.log(`✅ Old processing (${minutesAgo.toFixed(1)} min ago) - allowing reprocessing`);
           return null;
         }
       } else {
         // ScanRef exists but no timestamp - allow processing
-        console.log(`⚠️ ScanRef found but no timestamp - allowing processing`);
+        if (DEBUG_MODE) console.log(`⚠️ ScanRef found but no timestamp - allowing processing`);
         return null;
       }
     }
     
-    console.log(`✅ ScanRef not found - this is a new verification`);
+    if (DEBUG_MODE) console.log(`✅ ScanRef not found - this is a new verification`);
     return null;
     
   } catch (error) {
@@ -1952,7 +1857,7 @@ async function checkRecentProcessing(scanRef) {
 async function markWebhookProcessing(scanRef) {
   // ScanRef will be stored during updateBoardAWithIdenfyResults
   // This function is now just for logging
-  console.log(`📝 Webhook processing will store scanRef: ${scanRef}`);
+  if (DEBUG_MODE) console.log(`📝 Webhook processing will store scanRef: ${scanRef}`);
 }
 
 // NEW FUNCTION: Check Idenfy's POA validation results
@@ -1960,12 +1865,14 @@ function checkIdenfyPoaValidation(webhookData) {
   const status = webhookData.status;
   const additionalData = webhookData.data?.additionalData;
   
-  console.log('🔍 Running Idenfy POA validation check...');
-  console.log('📊 Status:', {
-    additionalSteps: status.additionalSteps,
-    fraudTags: status.fraudTags?.length || 0,
-    suspicionReasons: status.suspicionReasons?.length || 0
-  });
+  if (DEBUG_MODE) {
+    console.log('🔍 Running Idenfy POA validation check...');
+    console.log('📊 Status:', {
+      additionalSteps: status.additionalSteps,
+      fraudTags: status.fraudTags?.length || 0,
+      suspicionReasons: status.suspicionReasons?.length || 0
+    });
+  }
   
   // 1. Check overall additional steps status
   if (status.additionalSteps === "INVALID") {
@@ -2013,7 +1920,7 @@ function checkIdenfyPoaValidation(webhookData) {
   // 4. Check POA1 extraction status (if Idenfy attempted extraction)
   const poa1Status = additionalData?.UTILITY_BILL?.address?.status;
   if (poa1Status) {
-    console.log('📋 POA1 status:', poa1Status);
+    if (DEBUG_MODE) console.log('📋 POA1 status:', poa1Status);
     if (poa1Status !== "MATCH" && poa1Status !== "NO_DATA") {
       console.log('❌ POA1 validation failed');
       return {
@@ -2026,7 +1933,7 @@ function checkIdenfyPoaValidation(webhookData) {
   // 5. Check POA2 extraction status (if present)
   const poa2Status = additionalData?.POA2?.address?.status;
   if (poa2Status) {
-    console.log('📋 POA2 status:', poa2Status);
+    if (DEBUG_MODE) console.log('📋 POA2 status:', poa2Status);
     if (poa2Status !== "MATCH" && poa2Status !== "NO_DATA") {
       console.log('❌ POA2 validation failed');
       return {
