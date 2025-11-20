@@ -424,6 +424,29 @@ async function updateDriverBoardA(data) {
     
     if (response.data?.change_multiple_column_values?.id) {
       console.log('✅ Driver updated in Board A');
+      
+      // Update item name if driver name is provided
+      if (completeUpdates.driverName) {
+        try {
+          const nameMutation = `
+            mutation {
+              change_item_name (
+                item_id: ${driverId},
+                board_id: ${BOARD_A_ID},
+                name: "${completeUpdates.driverName}"
+              ) {
+                id
+              }
+            }
+          `;
+          await callMondayAPI(nameMutation);
+          console.log('✅ Item name updated to:', completeUpdates.driverName);
+        } catch (nameError) {
+          // Don't fail the whole update if name update fails
+          console.error('⚠️ Failed to update item name:', nameError.message);
+        }
+      }
+      
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
