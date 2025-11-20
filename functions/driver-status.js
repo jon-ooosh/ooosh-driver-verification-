@@ -1,6 +1,9 @@
 // File: functions/driver-status.js
 // OOOSH Driver Verification - Get Driver Status Function
-// UPDATED: Now returns licenseIssuedBy and passportValidUntil
+// UPDATED: Production-ready with DEBUG_MODE logging and new status fields
+
+// 🔧 DEBUG MODE - Set DEBUG_LOGGING=true in Netlify to enable verbose logs
+const DEBUG_MODE = process.env.DEBUG_LOGGING === 'true';
 
 exports.handler = async (event, context) => {
   console.log('Driver status function called with method:', event.httpMethod);
@@ -30,7 +33,7 @@ exports.handler = async (event, context) => {
 
   try {
     const email = event.queryStringParameters?.email;
-    console.log('Driver status request for email:', email);
+    if (DEBUG_MODE) console.log('Driver status request for email:', email);
 
     if (!email) {
       return {
@@ -42,7 +45,7 @@ exports.handler = async (event, context) => {
 
     const driverStatus = await getDriverStatusFromBoardA(email);
     
-    console.log('Driver status retrieved:', driverStatus);
+    console.log('✅ Driver status retrieved');
 
     return {
       statusCode: 200,
@@ -51,7 +54,7 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Driver status error:', error);
+    console.error('❌ Driver status error:', error);
     return {
       statusCode: 500,
       headers,
@@ -64,7 +67,7 @@ exports.handler = async (event, context) => {
 };
 
 async function getDriverStatusFromBoardA(email) {
-  console.log('🔍 Looking up driver in Board A:', email);
+  if (DEBUG_MODE) console.log('🔍 Looking up driver in Board A:', email);
   
   try {
     const response = await fetch(`${process.env.URL}/.netlify/functions/monday-integration`, {
@@ -79,14 +82,14 @@ async function getDriverStatusFromBoardA(email) {
     });
 
     if (!response.ok) {
-      console.log('Driver not found in Board A, treating as new driver');
+      if (DEBUG_MODE) console.log('Driver not found in Board A, treating as new driver');
       return createNewDriverStatus(email);
     }
 
     const result = await response.json();
     
     if (!result.success || !result.driver) {
-      console.log('No driver data returned, treating as new driver');
+      if (DEBUG_MODE) console.log('No driver data returned, treating as new driver');
       return createNewDriverStatus(email);
     }
 
@@ -109,7 +112,7 @@ async function getDriverStatusFromBoardA(email) {
       additionalDetails: driver.additionalDetails || ''
     };
     
-    // UPDATED: Return complete data including licenseIssuedBy and passport dates
+    // Return complete data including all status fields
     return {
       status: documentStatus.overallStatus,
       email: email,
@@ -122,7 +125,7 @@ async function getDriverStatusFromBoardA(email) {
       licenseNumber: driver.licenseNumber || null, 
       homeAddress: driver.homeAddress || null, 
       licenseAddress: driver.licenseAddress || null,   
-      licenseIssuedBy: driver.licenseIssuedBy || null, // CRITICAL FOR UK DETECTION
+      licenseIssuedBy: driver.licenseIssuedBy || null,
       nationality: driver.nationality || null,
       documents: documentStatus.documents,
       insuranceData: insuranceData,
@@ -145,34 +148,37 @@ async function getDriverStatusFromBoardA(email) {
     };
 
   } catch (error) {
-    console.error('Error getting driver status from Board A:', error);
+    console.error('❌ Error getting driver status from Board A:', error);
     return createNewDriverStatus(email);
   }
 }
 
 function analyzeDocumentStatus(driver) {
-  console.log('📊 Analyzing document status for driver');
+  if (DEBUG_MODE) console.log('📊 Analyzing document status for driver');
   
   const documents = {
     license: { valid: false },
     poa1: { valid: false },
     poa2: { valid: false },
     dvlaCheck: { valid: false },
-    passportCheck: { valid: false },  // Added passport
+    passportCheck: { valid: false },
     licenseCheck: { valid: true }
   };
 
   const today = new Date();
 
-  // Check License Status
-  if (driver.licenseValidTo) {
+  // Check License last checked Status
+  if (driver.licenseNextCheckDue && driver.licenseValidTo) {
     const licenseExpiry = new Date(driver.licenseValidTo);
+    const licenseCheckDue = new Date(driver.licenseNextCheckDue);
     documents.license = {
-      valid: licenseExpiry > today,
+      valid: licenseExpiry > today && licenseCheckDue > today,  // Both must be valid
       expiryDate: driver.licenseValidTo,
       type: 'Driving License',
-      status: licenseExpiry > today ? 'valid' : 'expired'
+      status: licenseExpiry > today && licenseCheckDue > today ? 'valid' : 'expired'
     };
+  } else {
+    documents.license = { valid: false, status: 'required' };
   }
 
   // Check POA1 Status
@@ -239,31 +245,19 @@ function analyzeDocumentStatus(driver) {
     };
   }
 
- // Check License last checked Status
-if (driver.licenseNextCheckDue && driver.licenseValidTo) {
-  const licenseExpiry = new Date(driver.licenseValidTo);
-  const licenseCheckDue = new Date(driver.licenseNextCheckDue);
-  documents.license = {
-    valid: licenseExpiry > today && licenseCheckDue > today,  // Both must be valid
-    expiryDate: driver.licenseValidTo,
-    type: 'Driving License',
-    status: licenseExpiry > today && licenseCheckDue > today ? 'valid' : 'expired'
-  };
-} else {
-  documents.license = { valid: false, status: 'required' };
-}
-
   const overallStatus = determineOverallStatus(documents, driver);
 
-  console.log('📊 Document analysis complete:', {
-    overallStatus,
-    licenseIssuedBy: driver.licenseIssuedBy,
-    license: documents.license.valid,
-    poa1: documents.poa1.valid,
-    poa2: documents.poa2.valid,
-    dvlaCheck: documents.dvlaCheck.valid,
-    passportCheck: documents.passportCheck.valid
-  });
+  if (DEBUG_MODE) {
+    console.log('📊 Document analysis complete:', {
+      overallStatus,
+      licenseIssuedBy: driver.licenseIssuedBy,
+      license: documents.license.valid,
+      poa1: documents.poa1.valid,
+      poa2: documents.poa2.valid,
+      dvlaCheck: documents.dvlaCheck.valid,
+      passportCheck: documents.passportCheck.valid
+    });
+  }
 
   return { overallStatus, documents };
 }
@@ -328,7 +322,7 @@ function determineOverallStatus(documents, driver) {
 }
 
 function createNewDriverStatus(email) {
-  console.log('👤 Creating new driver status for:', email);
+  if (DEBUG_MODE) console.log('👤 Creating new driver status for:', email);
   
   return {
     status: 'new',
