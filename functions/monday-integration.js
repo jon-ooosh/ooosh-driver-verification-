@@ -1,5 +1,5 @@
 // File: functions/monday-integration.js
-// PRODUCTION VERSION with DEBUG_MODE logging controls
+// PRODUCTION VERSION with Status Fields and DEBUG_MODE logging controls
 
 // 🔧 DEBUG MODE - Set DEBUG_LOGGING=true in Netlify to enable verbose logs
 const DEBUG_MODE = process.env.DEBUG_LOGGING === 'true';
@@ -129,6 +129,104 @@ function escapeJson(str) {
 }
 
 // ========================================
+// STATUS CALCULATION HELPER
+// ========================================
+
+// Calculate all 5 status fields based on driver data
+function calculateStatusFields(driverData) {
+  const today = new Date();
+  const statuses = {};
+
+  // LICENSE STATUS
+  const licenseExpiry = driverData.licenseValidTo ? new Date(driverData.licenseValidTo) : null;
+  const licenseCheckDue = driverData.licenseNextCheckDue ? new Date(driverData.licenseNextCheckDue) : null;
+  
+  if (licenseExpiry && licenseExpiry <= today) {
+    statuses.licenseStatus = 'Expired';
+  } else if (licenseCheckDue && licenseCheckDue <= today) {
+    statuses.licenseStatus = 'Check Due';
+  } else if (licenseExpiry && licenseExpiry > today) {
+    statuses.licenseStatus = 'Valid';
+  } else {
+    statuses.licenseStatus = 'Missing';
+  }
+
+  // POA STATUS
+  const poa1Valid = driverData.poa1ValidUntil ? new Date(driverData.poa1ValidUntil) > today : false;
+  const poa2Valid = driverData.poa2ValidUntil ? new Date(driverData.poa2ValidUntil) > today : false;
+  const poa1Exists = !!driverData.poa1ValidUntil;
+  const poa2Exists = !!driverData.poa2ValidUntil;
+
+  if (poa1Valid && poa2Valid) {
+    statuses.poaStatus = 'Valid';
+  } else if (!poa1Exists || !poa2Exists) {
+    statuses.poaStatus = 'Missing';
+  } else {
+    statuses.poaStatus = 'Expired';
+  }
+
+  // DVLA STATUS (UK drivers only)
+  const isUkDriver = driverData.licenseIssuedBy === 'DVLA';
+  if (isUkDriver) {
+    const dvlaValid = driverData.dvlaValidUntil ? new Date(driverData.dvlaValidUntil) > today : false;
+    statuses.dvlaStatus = dvlaValid ? 'Valid' : 'Expired';
+  } else {
+    statuses.dvlaStatus = 'Not Required';
+  }
+
+  // PASSPORT STATUS (Non-UK drivers only)
+  if (!isUkDriver) {
+    const passportValid = driverData.passportValidUntil ? new Date(driverData.passportValidUntil) > today : false;
+    statuses.passportStatus = passportValid ? 'Valid' : 'Expired';
+  } else {
+    statuses.passportStatus = 'Not Required';
+  }
+
+  // INSURANCE STATUS
+  const points = driverData.dvlaPoints || 0;
+  const overallStatus = driverData.overallStatus || '';
+  
+  if (points >= 10) {
+    statuses.insuranceStatus = 'Failed';
+  } else if (points >= 7 || overallStatus === 'Insurance Review' || overallStatus === 'Manual Review Required') {
+    statuses.insuranceStatus = 'Referral';
+  } else {
+    statuses.insuranceStatus = 'Approved';
+  }
+
+  if (DEBUG_MODE) {
+    console.log('📊 Calculated statuses:', statuses);
+  }
+
+  return statuses;
+}
+
+// Calculate Board B overall status from Board A data
+function calculateBoardBStatus(driverData) {
+  const statuses = calculateStatusFields(driverData);
+  
+  // Check for hard fails
+  if (statuses.insuranceStatus === 'Failed' || 
+      statuses.poaStatus === 'Missing' ||
+      driverData.overallStatus === 'Stuck') {
+    return 'Not Approved';
+  }
+  
+  // Check for any yellow flags
+  if (statuses.licenseStatus === 'Expired' ||
+      statuses.licenseStatus === 'Check Due' ||
+      statuses.poaStatus === 'Expired' ||
+      statuses.dvlaStatus === 'Expired' ||
+      statuses.passportStatus === 'Expired' ||
+      statuses.insuranceStatus === 'Referral') {
+    return 'Action Required';
+  }
+  
+  // All green
+  return 'Approved';
+}
+
+// ========================================
 // INTERNAL HELPER FUNCTIONS (return data directly)
 // ========================================
 
@@ -215,8 +313,12 @@ async function createDriverBoardA(data) {
       email: email  // Ensure email is always included
     };
 
+    // Calculate status fields before saving
+    const statusFields = calculateStatusFields(completeDriverData);
+    const driverDataWithStatuses = { ...completeDriverData, ...statusFields };
+
     // Prepare column values for Board A
-    const columnValues = formatBoardAColumnValues(completeDriverData);
+    const columnValues = formatBoardAColumnValues(driverDataWithStatuses);
 
     if (DEBUG_MODE) {
       console.log('📧 Creating driver with email:', email);
@@ -285,7 +387,7 @@ async function updateDriverBoardA(data) {
     }
 
     const driverId = existingDriver.id;
-    if (DEBUG_MODE) console.log('📝 Updating driver ID:', driverId);
+    console.log('📝 Updating driver ID:', driverId);
 
     // CRITICAL: Ensure email is always included in updates
     const completeUpdates = {
@@ -293,8 +395,13 @@ async function updateDriverBoardA(data) {
       email: email
     };
 
+    // Calculate status fields based on updated data
+    const mergedData = { ...existingDriver, ...completeUpdates };
+    const statusFields = calculateStatusFields(mergedData);
+    const updatesWithStatuses = { ...completeUpdates, ...statusFields };
+
     // Format updates for Board A columns
-    const columnValues = formatBoardAColumnValues(completeUpdates);
+    const columnValues = formatBoardAColumnValues(updatesWithStatuses);
 
     if (DEBUG_MODE) {
       console.log('🔍 RAW columnValues being sent to Monday.com GraphQL:');
@@ -389,7 +496,7 @@ async function findDriverBoardA(data) {
 
 // Upload file to Board A
 async function uploadFileBoardA(data) {
-  if (DEBUG_MODE) console.log('📁 Uploading file to Board A');
+  console.log('📁 Uploading file to Board A');
   
   try {
     const { email, fileType, fileData, filename, contentType } = data;
@@ -397,8 +504,6 @@ async function uploadFileBoardA(data) {
     if (!email || !fileType || !fileData) {
       throw new Error('Email, fileType, and fileData are required');
     }
-
-    if (DEBUG_MODE) console.log(`🔍 Finding driver for email: ${email}`);
     
     // Find the driver using internal helper
     const existingDriver = await findDriverInternal(email);
@@ -426,8 +531,6 @@ async function uploadFileBoardA(data) {
       throw new Error(`Unknown file type: ${fileType}`);
     }
 
-    if (DEBUG_MODE) console.log(`📊 Using column ID: ${columnId} for ${fileType}`);
-
     // CLEAR EXISTING FILE FIRST (if any)
     if (DEBUG_MODE) console.log(`🧹 Clearing existing file in column ${columnId}...`);
     const clearMutation = `
@@ -447,8 +550,7 @@ async function uploadFileBoardA(data) {
       await callMondayAPI(clearMutation);
       if (DEBUG_MODE) console.log('✅ Column cleared successfully');
     } catch (clearError) {
-      if (DEBUG_MODE) console.warn('⚠️ Could not clear column (might be empty already):', clearError.message);
-      // Continue anyway - the column might already be empty
+      if (DEBUG_MODE) console.warn('⚠️ Could not clear column (might be empty already)');
     }
     
     // Create FormData for file upload - using formdata-node for native fetch compatibility
@@ -457,7 +559,6 @@ async function uploadFileBoardA(data) {
 
     // Convert base64 to buffer
     const buffer = Buffer.from(fileData, 'base64');
-    if (DEBUG_MODE) console.log(`📦 File buffer size: ${buffer.length} bytes`);
 
     // Detect file type from buffer or use provided contentType
     let detectedContentType = contentType || 'image/jpeg';
@@ -484,7 +585,7 @@ async function uploadFileBoardA(data) {
     
     // Use filename if provided, otherwise generate one
     const finalFilename = filename || `${fileType}_${Date.now()}.${fileExtension}`;
-    console.log(`📝 Uploading as: ${finalFilename} (${detectedContentType})`);
+    console.log(`📤 Uploading: ${finalFilename} (${detectedContentType})`);
 
     // GraphQL mutation for file upload
     const mutation = `
@@ -514,20 +615,16 @@ async function uploadFileBoardA(data) {
     // Append the File object (not raw buffer)
     formData.append('0', fileBlob);
 
-    console.log(`📤 Sending ${fileExtension.toUpperCase()} file to Monday.com API...`);
-
     // Send to Monday.com file upload endpoint
     const response = await fetch('https://api.monday.com/v2/file', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.MONDAY_API_TOKEN}`,
-        // ✅ No formData.getHeaders() - native fetch handles FormData automatically
       },
       body: formData
     });
 
     const responseText = await response.text();
-    if (DEBUG_MODE) console.log(`📥 Monday API response status: ${response.status}`);
 
     let result;
     try {
@@ -545,7 +642,7 @@ async function uploadFileBoardA(data) {
 
     // Check for successful upload
     if (result.data?.add_file_to_column?.id) {
-      console.log(`✅ File uploaded successfully: ${result.data.add_file_to_column.name}`);
+      console.log(`✅ File uploaded: ${result.data.add_file_to_column.name}`);
       
       return {
         statusCode: 200,
@@ -658,7 +755,7 @@ async function findDriverBoardB(data) {
 
 // Copy driver from Board A to Board B
 async function copyAToB(data) {
-  if (DEBUG_MODE) console.log('🔄 Copying driver from Board A to Board B');
+  console.log('🔄 Copying driver from Board A to Board B');
   
   try {
     const { email, jobId } = data;
@@ -674,15 +771,18 @@ async function copyAToB(data) {
       throw new Error('Driver not found in Board A');
     }
 
-    console.log('📋 Found driver in Board A, copying to Board B');
+    console.log('📋 Found driver in Board A, preparing Board B data');
 
-    // Map Board A data to Board B columns (14 essential fields)
+    // Calculate Board B status from Board A data
+    const boardBStatus = calculateBoardBStatus(driverA);
+    console.log(`✅ Board B status calculated: ${boardBStatus}`);
+
+    // Map Board A data to Board B columns (15 fields + overall status)
     const boardBData = {
       driverName: driverA.driverName,
       email: driverA.email,
       phoneNumber: driverA.phoneNumber,
       phoneCountry: driverA.phoneCountry, 
-      licenseValidFrom: driverA.licenseValidFrom,
       dateOfBirth: driverA.dateOfBirth,
       nationality: driverA.nationality,
       licenseNumber: driverA.licenseNumber,
@@ -693,7 +793,8 @@ async function copyAToB(data) {
       homeAddress: driverA.homeAddress,
       licenseAddress: driverA.licenseAddress,
       jobNumber: jobId || '',
-      signatureDate: new Date().toISOString().split('T')[0]
+      signatureDate: new Date().toISOString().split('T')[0],
+      overallStatus: boardBStatus  // NEW: Overall status for Board B
     };
 
     // Format for Board B columns
@@ -721,6 +822,7 @@ async function copyAToB(data) {
         body: JSON.stringify({
           success: true,
           boardBId: response.data.create_item.id,
+          overallStatus: boardBStatus,
           message: 'Driver copied from Board A to Board B'
         })
       };
@@ -749,11 +851,6 @@ async function copyAToB(data) {
 function formatBoardAColumnValues(data) {
   if (DEBUG_MODE) {
     console.log('🔍 formatBoardAColumnValues called with data keys:', Object.keys(data));
-    console.log('🔍 Insurance data present?', {
-      dvlaPoints: data.dvlaPoints,
-      dvlaEndorsements: data.dvlaEndorsements,
-      dvlaCalculatedExcess: data.dvlaCalculatedExcess
-    });
   }
   
   const columnValues = {};
@@ -794,9 +891,9 @@ function formatBoardAColumnValues(data) {
   if (data.poa1ValidUntil) columnValues.date_mktr1keg = { date: data.poa1ValidUntil };
   if (data.poa2ValidUntil) columnValues.date_mktra1a6 = { date: data.poa2ValidUntil };
   if (data.dvlaValidUntil) columnValues.date_mktrmjfr = { date: data.dvlaValidUntil };
-  if (data.passportValidUntil) columnValues.date_mkvxy5t1 = { date: data.passportValidUntil }; // PASSPORT ADDED
+  if (data.passportValidUntil) columnValues.date_mkvxy5t1 = { date: data.passportValidUntil };
   if (data.licenseNextCheckDue) columnValues.date_mktsbgpy = { date: data.licenseNextCheckDue };
-  if (data.signatureDate) columnValues.date_mkw4apb7 = { date: data.signatureDate }; // SIGNATURE DATE ADDED
+  if (data.signatureDate) columnValues.date_mkw4apb7 = { date: data.signatureDate };
 
   // Insurance Questions (Yes/No status columns)
   if (data.hasDisability !== undefined) columnValues.status = { label: data.hasDisability ? 'Yes' : 'No' };
@@ -815,10 +912,17 @@ function formatBoardAColumnValues(data) {
   if (data.additionalDetails) columnValues.long_text_mktr1a66 = data.additionalDetails;
   if (data.overallStatus) columnValues.color_mktrwatg = { label: data.overallStatus };
   if (data.lastUpdated) columnValues.date_mktrk8kv = { date: data.lastUpdated };
-  if (data.idenfyCheckDate) columnValues.text_mkvv2z8p = data.idenfyCheckDate; // WEBHOOK TIMESTAMP - for ProcessingHub detection
+  if (data.idenfyCheckDate) columnValues.text_mkvv2z8p = data.idenfyCheckDate;
   if (data.poa1URL) columnValues.text_mkw34ksx = data.poa1URL;
   if (data.poa2URL) columnValues.text_mkw3d9ye = data.poa2URL;
-  if (data.idenfyScanRef) columnValues.text_mkwbn8bx = data.idenfyScanRef; // Idenfy Scan Reference - for deduplication
+  if (data.idenfyScanRef) columnValues.text_mkwbn8bx = data.idenfyScanRef;
+
+  // NEW: Status Fields (5 calculated statuses)
+  if (data.licenseStatus) columnValues.color_mkxvmz0a = { label: data.licenseStatus };
+  if (data.poaStatus) columnValues.color_mkxvkc9h = { label: data.poaStatus };
+  if (data.dvlaStatus) columnValues.color_mkxvhf62 = { label: data.dvlaStatus };
+  if (data.passportStatus) columnValues.color_mkxv9218 = { label: data.passportStatus };
+  if (data.insuranceStatus) columnValues.color_mkxvxskq = { label: data.insuranceStatus };
 
   if (DEBUG_MODE) {
     console.log('📋 Final column values for Monday.com:', Object.keys(columnValues));
@@ -831,7 +935,7 @@ function formatBoardAColumnValues(data) {
 function formatBoardBColumnValues(driverData) {
   const columnValues = {};
   
-  // Essential fields for Board B (15 fields)
+  // Essential fields for Board B (15 fields + overall status)
   if (driverData.driverName) columnValues.text8 = driverData.driverName;
   if (driverData.email) columnValues.email = { email: driverData.email, text: driverData.email };
   if (driverData.phoneNumber) columnValues.text9__1 = driverData.phoneNumber;
@@ -847,6 +951,9 @@ function formatBoardBColumnValues(driverData) {
   if (driverData.licenseAddress) columnValues.long_text8 = driverData.licenseAddress;
   if (driverData.jobNumber) columnValues.text86 = driverData.jobNumber;
   if (driverData.signatureDate) columnValues.date4 = { date: driverData.signatureDate };
+  
+  // NEW: Overall Status for Board B
+  if (driverData.overallStatus) columnValues.color_mkwtaftc = { label: driverData.overallStatus };
   
   return columnValues;
 }
@@ -893,133 +1000,52 @@ function parseBoardAData(item) {
     signatureDate: '',
     dvlaPoints: 0,              
     dvlaEndorsements: '', 
-    dvlaCalculatedExcess: ''
+    dvlaCalculatedExcess: '',
+    overallStatus: ''
   };
 
   item.column_values.forEach(col => {
     const value = col.value ? JSON.parse(col.value) : null;
     
     switch (col.id) {
-      case 'text_mktry2je': // Driver Name
-        driver.driverName = col.text || '';
-        break;
-      case 'text_mkwhc7a': // First Name 
-        driver.firstName = col.text || '';
-        break;
-      case 'text_mkwhm2n5': // Last Name
-        driver.lastName = col.text || '';
-        break;
-      case 'email_mktrgzj': // Email Address
-        driver.email = value?.email || col.text || '';
-        break;
-      case 'text_mktrfqe2': // Phone Number
-        driver.phoneNumber = col.text || '';
-        break;
-      case 'text_mkty5hzk': // Phone Country
-        driver.phoneCountry = col.text || '';
-        break;
-      case 'date_mktr2x01': // Date of Birth
-        driver.dateOfBirth = value?.date || '';
-        break;
-      case 'text_mktrdh72': // Nationality
-        driver.nationality = col.text || '';
-        break;
-      case 'text_mktrrv38': // License Number
-        driver.licenseNumber = col.text || '';
-        break;
-      case 'date_mktrmdx5': // License Valid From
-        driver.licenseValidFrom = value?.date || '';
-        break;
-      case 'text_mktrz69': // License Issued By
-        driver.licenseIssuedBy = col.text || '';
-        break;
-      case 'date_mktr93jq': // Date Passed Test 
-        driver.datePassedTest = value?.date || '';
-        break;
-      case 'date_mktrwk94': // License Valid To
-        driver.licenseValidTo = value?.date || '';
-        break;
-      case 'text_mktr8kvs': // License Ending
-        driver.licenseEnding = col.text || '';
-        break;
-      case 'long_text_mktr2jhb': // Home Address
-        driver.homeAddress = col.text || '';
-        break;
-      case 'long_text_mktrs5a0': // License Address
-        driver.licenseAddress = col.text || '';
-        break;
-      case 'date_mktr1keg': // POA1 Valid Until
-        driver.poa1ValidUntil = value?.date || '';
-        break;
-      case 'date_mktra1a6': // POA2 Valid Until
-        driver.poa2ValidUntil = value?.date || '';
-        break;
-      case 'date_mktrmjfr': // DVLA Valid Until
-        driver.dvlaValidUntil = value?.date || '';
-        break;
-      case 'date_mkvxy5t1': // Passport Valid Until - PASSPORT ADDED
-        driver.passportValidUntil = value?.date || '';
-        break;
-      case 'date_mktsbgpy': // License Next Check Due
-        driver.licenseNextCheckDue = value?.date || '';
-        break;
-      case 'date_mkw4apb7': // Signature Date
-        driver.signatureDate = value?.date || '';
-        break;
-      case 'text_mkw34ksx': // POA1 URL
-        driver.poa1URL = col.text || '';
-        break;
-      case 'text_mkw3d9ye': // POA2 URL
-        driver.poa2URL = col.text || '';
-        break;
-      // Parse insurance questions
-      case 'status': // Has Disability
-        driver.hasDisability = value?.label === 'Yes' || col.text === 'Yes';
-        break;
-      case 'color_mktr4w0': // Has Convictions
-        driver.hasConvictions = value?.label === 'Yes' || col.text === 'Yes';
-        break;
-      case 'color_mktrbt3x': // Has Prosecution
-        driver.hasProsecution = value?.label === 'Yes' || 
-                                col.text === 'Yes' || 
-                                value?.index === 1;
-        break;
-      case 'color_mktraeas': // Has Accidents  
-        driver.hasAccidents = value?.label === 'Yes' || 
-                             col.text === 'Yes' || 
-                             value?.index === 1;
-        break;
-      case 'color_mktrpe6q': // Has Insurance Issues
-        driver.hasInsuranceIssues = value?.label === 'Yes' || 
-                                    col.text === 'Yes' || 
-                                    value?.index === 1;
-        break;
-      case 'color_mktr2t8a': // Has Driving Ban
-        driver.hasDrivingBan = value?.label === 'Yes' || 
-                              col.text === 'Yes' || 
-                              value?.index === 1;
-        break;
-      case 'long_text_mktr1a66': // Additional Details
-        driver.additionalDetails = col.text || '';
-        break;
-      case 'date_mktrk8kv': // Last Updated
-        driver.lastUpdated = value?.date || '';
-        break;
-      case 'text_mkvv2z8p': // Idenfy Check Date
-        driver.idenfyCheckDate = col.text || '';
-        break;
-      case 'text_mkwbn8bx': // Idenfy Scan Reference
-        driver.idenfyScanRef = col.text || '';
-        break;
-      case 'text_mkwfhvve': // DVLA Points
-        driver.dvlaPoints = col.text ? parseInt(col.text) : 0;
-        break;
-      case 'text_mkwf6e1n': // DVLA Endorsements
-        driver.dvlaEndorsements = col.text || '';
-        break;
-      case 'text_mkwf6595': // DVLA Calculated Excess
-        driver.dvlaCalculatedExcess = col.text || '';
-        break;
+      case 'text_mktry2je': driver.driverName = col.text || ''; break;
+      case 'text_mkwhc7a': driver.firstName = col.text || ''; break;
+      case 'text_mkwhm2n5': driver.lastName = col.text || ''; break;
+      case 'email_mktrgzj': driver.email = value?.email || col.text || ''; break;
+      case 'text_mktrfqe2': driver.phoneNumber = col.text || ''; break;
+      case 'text_mkty5hzk': driver.phoneCountry = col.text || ''; break;
+      case 'date_mktr2x01': driver.dateOfBirth = value?.date || ''; break;
+      case 'text_mktrdh72': driver.nationality = col.text || ''; break;
+      case 'text_mktrrv38': driver.licenseNumber = col.text || ''; break;
+      case 'date_mktrmdx5': driver.licenseValidFrom = value?.date || ''; break;
+      case 'text_mktrz69': driver.licenseIssuedBy = col.text || ''; break;
+      case 'date_mktr93jq': driver.datePassedTest = value?.date || ''; break;
+      case 'date_mktrwk94': driver.licenseValidTo = value?.date || ''; break;
+      case 'text_mktr8kvs': driver.licenseEnding = col.text || ''; break;
+      case 'long_text_mktr2jhb': driver.homeAddress = col.text || ''; break;
+      case 'long_text_mktrs5a0': driver.licenseAddress = col.text || ''; break;
+      case 'date_mktr1keg': driver.poa1ValidUntil = value?.date || ''; break;
+      case 'date_mktra1a6': driver.poa2ValidUntil = value?.date || ''; break;
+      case 'date_mktrmjfr': driver.dvlaValidUntil = value?.date || ''; break;
+      case 'date_mkvxy5t1': driver.passportValidUntil = value?.date || ''; break;
+      case 'date_mktsbgpy': driver.licenseNextCheckDue = value?.date || ''; break;
+      case 'date_mkw4apb7': driver.signatureDate = value?.date || ''; break;
+      case 'text_mkw34ksx': driver.poa1URL = col.text || ''; break;
+      case 'text_mkw3d9ye': driver.poa2URL = col.text || ''; break;
+      case 'status': driver.hasDisability = value?.label === 'Yes' || col.text === 'Yes'; break;
+      case 'color_mktr4w0': driver.hasConvictions = value?.label === 'Yes' || col.text === 'Yes'; break;
+      case 'color_mktrbt3x': driver.hasProsecution = value?.label === 'Yes' || col.text === 'Yes' || value?.index === 1; break;
+      case 'color_mktraeas': driver.hasAccidents = value?.label === 'Yes' || col.text === 'Yes' || value?.index === 1; break;
+      case 'color_mktrpe6q': driver.hasInsuranceIssues = value?.label === 'Yes' || col.text === 'Yes' || value?.index === 1; break;
+      case 'color_mktr2t8a': driver.hasDrivingBan = value?.label === 'Yes' || col.text === 'Yes' || value?.index === 1; break;
+      case 'long_text_mktr1a66': driver.additionalDetails = col.text || ''; break;
+      case 'date_mktrk8kv': driver.lastUpdated = value?.date || ''; break;
+      case 'text_mkvv2z8p': driver.idenfyCheckDate = col.text || ''; break;
+      case 'text_mkwbn8bx': driver.idenfyScanRef = col.text || ''; break;
+      case 'text_mkwfhvve': driver.dvlaPoints = col.text ? parseInt(col.text) : 0; break;
+      case 'text_mkwf6e1n': driver.dvlaEndorsements = col.text || ''; break;
+      case 'text_mkwf6595': driver.dvlaCalculatedExcess = col.text || ''; break;
+      case 'color_mktrwatg': driver.overallStatus = value?.label || col.text || ''; break;
     }
   });
 
@@ -1033,22 +1059,18 @@ function parseBoardBData(item) {
     name: item.name,
     email: '',
     jobNumber: '',
-    signatureDate: ''
+    signatureDate: '',
+    overallStatus: ''
   };
 
   item.column_values.forEach(col => {
     const value = col.value ? JSON.parse(col.value) : null;
     
     switch (col.id) {
-      case 'email':
-        assignment.email = value?.email || col.text || '';
-        break;
-      case 'text86': // Job Number
-        assignment.jobNumber = col.text || '';
-        break;
-      case 'date4': // Signature Date
-        assignment.signatureDate = value?.date || '';
-        break;
+      case 'email': assignment.email = value?.email || col.text || ''; break;
+      case 'text86': assignment.jobNumber = col.text || ''; break;
+      case 'date4': assignment.signatureDate = value?.date || ''; break;
+      case 'color_mkwtaftc': assignment.overallStatus = value?.label || col.text || ''; break;
     }
   });
 
@@ -1101,7 +1123,7 @@ async function testTwoBoardSystem(data) {
   try {
     const testEmail = data.email || 'test@example.com';
     
-    if (DEBUG_MODE) console.log('🧪 Testing two-board system with email:', testEmail);
+    console.log('🧪 Testing two-board system with email:', testEmail);
     
     // Test 1: Create driver in Board A
     const createResult = await createDriverBoardA({
